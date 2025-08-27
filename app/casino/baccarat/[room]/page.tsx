@@ -10,15 +10,17 @@ type BetSide = "PLAYER" | "BANKER" | "TIE" | "PLAYER_PAIR" | "BANKER_PAIR" | "AN
 type RoomCode = "R30" | "R60" | "R90";
 type RoomInfo = { code: RoomCode; name: string; durationSeconds: number };
 
+type Card = { rank: number; suit: number };
+
 type StatePayload = {
   room: RoomInfo;
-  day: string;                 // UTC（台北切日）
-  roundSeq: number;            // 當日局序
+  day: string;
+  roundSeq: number;
   phase: Phase;
   secLeft: number;
   result: null | {
-    playerCards: { rank: number; suit: number }[];
-    bankerCards: { rank: number; suit: number }[];
+    playerCards: Card[];
+    bankerCards: Card[];
     playerTotal: number;
     bankerTotal: number;
     outcome: "PLAYER" | "BANKER" | "TIE";
@@ -46,6 +48,18 @@ const CHIPS = [10, 50, 100, 500, 1000];
 function suitIcon(s: number) { return ["♠","♥","♦","♣"][s] || "?"; }
 function isRedSuit(s: number) { return s === 1 || s === 2; }
 function rankText(r: number) { return ["","A","2","3","4","5","6","7","8","9","10","J","Q","K"][r] || "?"; }
+
+/** 百家樂點數（A=1；2~9=面值；10/J/Q/K=0；總和取尾數） */
+function baccaratValue(rank: number) {
+  if (rank === 1) return 1;        // A
+  if (rank >= 2 && rank <= 9) return rank;
+  return 0;                         // 10/J/Q/K
+}
+function baccaratTotal(cards: Card[], count?: number) {
+  const n = (typeof count === 'number') ? Math.max(0, Math.min(count, cards.length)) : cards.length;
+  const sum = cards.slice(0, n).reduce((a, c) => a + baccaratValue(c.rank), 0);
+  return sum % 10;
+}
 
 /** ===== 主頁面 ===== */
 export default function BaccaratRoomPage() {
@@ -86,17 +100,13 @@ export default function BaccaratRoomPage() {
 
   // 進入不同階段時的翻牌邏輯
   useEffect(() => {
-    // 在「下注中」時，強制回到全牌背（不翻）
     if (state?.phase === "BETTING") {
       setRevealedCount(0);
       return;
     }
-    // 在「揭曉」時，依序每 0.9s 翻一張，直到所有牌翻完
     if (state?.phase === "REVEAL" && state.result) {
       setRevealedCount(0);
-      const total =
-        (state.result.playerCards?.length || 0) +
-        (state.result.bankerCards?.length || 0);
+      const total = (state.result.playerCards?.length || 0) + (state.result.bankerCards?.length || 0);
       for (let i = 0; i < total; i++) {
         setTimeout(() => setRevealedCount(prev => prev + 1), i * 900);
       }
@@ -129,6 +139,28 @@ export default function BaccaratRoomPage() {
   const roundSeq = state?.roundSeq ?? 0;
   const playerCards = state?.result?.playerCards || [];
   const bankerCards = state?.result?.bankerCards || [];
+
+  /** 即時點數：REVEAL 期間用「已翻的牌」計算；SETTLED 用後端最終值；BETTING 顯示 "--" */
+  const livePlayerTotal = useMemo(() => {
+    if (!state?.result) return "--";
+    if (phase === "REVEAL") {
+      const n = Math.min(revealedCount, playerCards.length);
+      return baccaratTotal(playerCards, n).toString();
+    }
+    if (phase === "SETTLED") return String(state.result.playerTotal ?? 0);
+    return "--";
+  }, [state?.result, phase, revealedCount, playerCards]);
+
+  const liveBankerTotal = useMemo(() => {
+    if (!state?.result) return "--";
+    if (phase === "REVEAL") {
+      const revealedOnBanker = Math.max(0, revealedCount - playerCards.length);
+      const n = Math.min(revealedOnBanker, bankerCards.length);
+      return baccaratTotal(bankerCards, n).toString();
+    }
+    if (phase === "SETTLED") return String(state.result.bankerTotal ?? 0);
+    return "--";
+  }, [state?.result, phase, revealedCount, playerCards.length, bankerCards]);
 
   const totalBet = useMemo(
     () => Object.values(state?.myBets || {}).reduce((a, b) => a + (b || 0), 0),
@@ -175,35 +207,33 @@ export default function BaccaratRoomPage() {
                 <div className="row" style={{gap: 24, alignItems:'center'}}>
                   <div>
                     <div className="subtle">開牌（閒）</div>
-                    <div className="row" style={{gap:12}}>
+                    <div className="row" style={{gap:12, alignItems:'center'}}>
+                      <PointBadge value={livePlayerTotal} />
                       {playerCards.map((c,i)=>(
                         <Playing
                           key={i}
                           r={c.rank}
                           s={c.suit}
-                          // 閒的第 i 張在整體的翻牌順序是 i
-                          flipIndex={i}
+                          flipIndex={i} // 閒從 0 開始
                           revealedCount={revealedCount}
                         />
                       ))}
                     </div>
-                    <div className="mt16"><b>點數：{state.result.playerTotal}</b></div>
                   </div>
                   <div>
                     <div className="subtle">開牌（莊）</div>
-                    <div className="row" style={{gap:12}}>
+                    <div className="row" style={{gap:12, alignItems:'center'}}>
+                      <PointBadge value={liveBankerTotal} banker />
                       {bankerCards.map((c,i)=>(
                         <Playing
                           key={i}
                           r={c.rank}
                           s={c.suit}
-                          // 莊的第 i 張在整體的翻牌順序是 (閒牌數 + i)
-                          flipIndex={playerCards.length + i}
+                          flipIndex={playerCards.length + i} // 莊接在閒後面
                           revealedCount={revealedCount}
                         />
                       ))}
                     </div>
-                    <div className="mt16"><b>點數：{state.result.bankerTotal}</b></div>
                   </div>
                   <div>
                     <div className="subtle">結果</div>
@@ -301,6 +331,15 @@ function Playing({ r, s, flipIndex, revealedCount }:{
           <div className={`card-suit ${isRedSuit(s)?'red':''}`}>{suitIcon(s)}</div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** 點數徽章（REVEAL 即時變動；SETTLED 為最終） */
+function PointBadge({ value, banker }: { value: string|number; banker?: boolean }) {
+  return (
+    <div className={`point-badge ${banker ? 'banker' : 'player'}`} title="即時點數">
+      {value}
     </div>
   );
 }
