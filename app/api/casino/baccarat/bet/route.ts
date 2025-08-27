@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifyJWT } from "@/lib/jwt";
-import { phaseAt, roundNumberAt, nowTaipei } from "@/lib/baccarat";
+import { phaseAt, roundNumberAt, type RoomSec } from "@/lib/baccarat";
 
-const ALLOWED = new Set([
-  "PLAYER","BANKER","TIE","PLAYER_PAIR","BANKER_PAIR","ANY_PAIR","PERFECT_PAIR"
-]);
+const ALLOWED = new Set(["PLAYER","BANKER","TIE","PLAYER_PAIR","BANKER_PAIR","ANY_PAIR","PERFECT_PAIR"]);
+
+function parseRoomSec(req: NextRequest): RoomSec {
+  const r = Number(new URL(req.url).searchParams.get("room") || "60");
+  return (r === 30 || r === 60 || r === 90) ? r : 60;
+}
 
 export const runtime = "nodejs";
 
@@ -16,22 +19,21 @@ export async function POST(req: NextRequest) {
     const payload = await verifyJWT(token);
     const userId = String(payload.sub);
 
+    const roomSec = parseRoomSec(req);
     const { side, amount } = await req.json();
+
     if (!ALLOWED.has(side)) return NextResponse.json({ error: "無效注項" }, { status: 400 });
 
     const amt = Number(amount);
     if (!Number.isInteger(amt) || amt <= 0) return NextResponse.json({ error: "無效金額" }, { status: 400 });
 
-    const date = nowTaipei();
-    const { phase } = phaseAt(date);
+    const now = new Date();
+    const { phase } = phaseAt(now, roomSec);
     if (phase !== "BETTING") return NextResponse.json({ error: "非下注時間" }, { status: 400 });
 
-    const round = roundNumberAt(date);
+    const round = roundNumberAt(now, roomSec);
 
-    // TODO: 之後接銀行餘額檢查 / 扣款；此處先記錄下注
-    await prisma.bet.create({
-      data: { userId, round, side, amount: amt }
-    });
+    await prisma.bet.create({ data: { userId, round, roomSec, side, amount: amt } });
 
     return NextResponse.json({ ok: true, round });
   } catch (e: any) {

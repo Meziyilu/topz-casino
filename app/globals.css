@@ -207,3 +207,36 @@ label { display: block; font-weight: 600; margin: 6px 0 6px; color: #d7deea; }
 @media (prefers-reduced-motion: reduce) {
   .glass.neon::after, .btn.shimmer::after, .aurora { animation: none !important; }
 }
+/* ===== 揭牌動畫 ===== */
+.cards { display: flex; gap: 10px; perspective: 800px; }
+.cardflip {
+  width: 64px; height: 88px; border-radius: 10px; position: relative;
+  transform-style: preserve-3d; transition: transform .6s;
+  border: 1px solid rgba(255,255,255,0.12); overflow: hidden;
+  background: rgba(255,255,255,0.06);
+}
+.cardflip .front, .cardflip .back {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  backface-visibility: hidden; font-weight: 800; font-size: 20px;
+}
+.cardflip .front {
+  background: linear-gradient(135deg, rgba(125,193,255,.25), rgba(159,125,255,.25));
+}
+.cardflip .back {
+  transform: rotateY(180deg);
+  background: rgba(0,0,0,0.35);
+}
+.cards.reveal .cardflip { transform: rotateY(180deg); }
+
+/* ===== 路子（珠盤路） ===== */
+.bead-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 18px);
+  grid-auto-rows: 18px;
+  gap: 6px 8px;
+  padding-top: 6px;
+}
+.bead {
+  width: 18px; height: 18px; border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.3);
+}
