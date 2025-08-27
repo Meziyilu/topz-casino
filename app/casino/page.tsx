@@ -1,23 +1,24 @@
+// app/casino/page.tsx
+'use client';
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
-export const runtime = "nodejs";
+type Room = { id: string; code: "R30"|"R60"|"R90"; name: string; durationSeconds: number };
 
-export default function CasinoPage() {
+export default function CasinoLobby() {
+  const [rooms, setRooms] = useState<Room[]>([]);
+  useEffect(() => { fetch("/api/casino/rooms").then(r=>r.json()).then(setRooms).catch(()=>{}); }, []);
   return (
     <div className="glass neon">
       <div className="content">
-        <div className="row space-between">
-          <h1 className="h1">賭場</h1>
-          <Link href="/lobby" className="btn-secondary btn">回大廳</Link>
-        </div>
-        <p className="subtle">選擇房間（回合長度）：</p>
-
+        <h1 className="h1">百家樂大廳</h1>
         <div className="grid">
-          {([30,60,90] as const).map(sec => (
-            <div key={sec} className="card col-4">
-              <h3>百家樂 {sec}s 房</h3>
-              <p className="note">每局 {sec} 秒，當日局號每日重置。</p>
-              <Link href={`/casino/baccarat/${sec}`} className="btn shimmer">進入</Link>
+          {rooms.map(r=>(
+            <div key={r.id} className="card col-4">
+              <h3>{r.name}</h3>
+              <p>局長：{r.durationSeconds}s</p>
+              <Link href={`/casino/baccarat/${r.code}`} className="btn shimmer">進入房間</Link>
             </div>
           ))}
         </div>

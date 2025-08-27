@@ -1,8 +1,4 @@
-// lib/baccarat.ts — multi-room deterministic baccarat, daily reset
-
-export type RoomSec = 30 | 60 | 90;
-export type Phase = "BETTING" | "REVEAL" | "SETTLED";
-
+// lib/baccarat.ts
 export type Card = { rank: number; suit: number };
 export type DealResult = {
   playerCards: Card[];
@@ -16,47 +12,58 @@ export type DealResult = {
   perfectPair: boolean;
 };
 
-// ---- 房間設定 ----
-// 下注/揭曉/結算：按比例切分（50% / 33% / 17%）
-export function splitPhases(total: number) {
-  const bet = Math.max(10, Math.floor(total * 0.5));
-  const reveal = Math.max(6, Math.floor(total * 0.33));
-  const settle = Math.max(4, total - bet - reveal);
-  return { bet, reveal, settle };
+export type Phase = "BETTING" | "REVEAL" | "SETTLED";
+
+/** 根據房間秒數自動拆配各階段時間（約 1/2, 1/3, 其餘） */
+export function phaseSlices(durationSeconds: number) {
+  const betting = Math.max(10, Math.floor(durationSeconds * 0.5));
+  const reveal = Math.max(5, Math.floor(durationSeconds * (1 / 3)));
+  const settled = Math.max(3, durationSeconds - betting - reveal);
+  return { betting, reveal, settled };
 }
 
-// 以台北當地日期「每日重置」局號（從 1 開始）
-function taipeiNow(): Date {
-  return new Date(Date.now());
-}
-function minutesSinceTaipeiMidnight(d: Date) {
-  // 用當地時間（Node 預設可能是 UTC；不影響相對連續性）
-  const t = new Date(d);
-  return t.getHours() * 60 + t.getMinutes();
-}
-function secondsSinceTaipeiMidnight(d: Date) {
-  const t = new Date(d);
-  return t.getHours() * 3600 + t.getMinutes() * 60 + t.getSeconds();
+/** 取「台北當地的當日 00:00」(以 UTC 儲存) 作為 day 基準 */
+export function taipeiDayStartUTC(now = new Date()): Date {
+  // UTC+8：把時間往前推 8 小時取 UTC midnight，再加回去
+  const tzOffsetMs = 8 * 3600 * 1000;
+  const shifted = new Date(now.getTime() + tzOffsetMs);
+  const y = shifted.getUTCFullYear();
+  const m = shifted.getUTCMonth();
+  const d = shifted.getUTCDate();
+  const utcMidnightShifted = Date.UTC(y, m, d, 0, 0, 0);
+  return new Date(utcMidnightShifted - tzOffsetMs);
 }
 
-export function roundNumberAt(date: Date, roomSec: RoomSec): number {
-  const sec = secondsSinceTaipeiMidnight(date);
-  return Math.floor(sec / roomSec) + 1; // 當日第幾局，從 1 開始
+/** 回傳當前 phase 與倒數（依房間秒數） */
+export function phaseAt(date: Date, durationSeconds: number): { phase: Phase; secLeft: number } {
+  const { betting, reveal, settled } = phaseSlices(durationSeconds);
+  const pos = Math.floor((date.getTime() / 1000) % durationSeconds); // 0..duration-1
+  if (pos < betting) return { phase: "BETTING", secLeft: betting - pos };
+  if (pos < betting + reveal) return { phase: "REVEAL", secLeft: betting + reveal - pos };
+  return { phase: "SETTLED", secLeft: betting + reveal + settled - pos };
 }
 
-export function phaseAt(date: Date, roomSec: RoomSec): { phase: Phase; secLeft: number } {
-  const { bet, reveal, settle } = splitPhases(roomSec);
-  const pos = secondsSinceTaipeiMidnight(date) % roomSec; // 當前回合內的位置
-  if (pos < bet) {
-    return { phase: "BETTING", secLeft: bet - pos };
-  } else if (pos < bet + reveal) {
-    return { phase: "REVEAL", secLeft: bet + reveal - pos };
-  } else {
-    return { phase: "SETTLED", secLeft: roomSec - pos };
+/** 計算當日第幾局（roundSeq：從 1 開始） */
+export function roundSeqAt(date: Date, durationSeconds: number): number {
+  const day0 = taipeiDayStartUTC(date).getTime();
+  const elapsedSec = Math.floor((date.getTime() - day0) / 1000);
+  return Math.floor(elapsedSec / durationSeconds) + 1;
+}
+
+/** 依 (roomCode + day(YYYYMMDD) + roundSeq) 產生穩定種子 */
+function seedFrom(roomCode: string, day: Date, roundSeq: number): number {
+  const y = day.getUTCFullYear();
+  const m = day.getUTCMonth() + 1;
+  const d = day.getUTCDate();
+  const key = `${roomCode}:${y}${String(m).padStart(2, "0")}${String(d).padStart(2, "0")}:${roundSeq}`;
+  let h = 2166136261 >>> 0; // FNV-1a
+  for (let i = 0; i < key.length; i++) {
+    h ^= key.charCodeAt(i);
+    h = Math.imul(h, 16777619);
   }
+  return h >>> 0;
 }
 
-// ---- 洗牌 / 發牌 ----
 function mulberry32(seed: number) {
   return function () {
     let t = (seed += 0x6d2b79f5);
@@ -65,12 +72,14 @@ function mulberry32(seed: number) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+
 function shuffle<T>(arr: T[], rnd: () => number) {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(rnd() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
 }
+
 function cardValue(rank: number): number {
   if (rank === 1) return 1;
   if (rank >= 10) return 0;
@@ -81,9 +90,9 @@ function total(cards: Card[]): number {
   return s % 10;
 }
 
-export function dealFromSeed(round: number, roomSec: RoomSec): DealResult {
-  // 用 (round, roomSec) 當種子，確保各房間獨立且可重現
-  const rnd = mulberry32(round * 1103515245 + roomSec * 12345);
+export function dealBy(roomCode: string, day: Date, roundSeq: number): DealResult {
+  const seed = seedFrom(roomCode, day, roundSeq);
+  const rnd = mulberry32(seed);
   const deck: Card[] = [];
   for (let r = 1; r <= 13; r++) for (let s = 0; s < 4; s++) deck.push({ rank: r, suit: s });
   shuffle(deck, rnd);
@@ -125,18 +134,25 @@ export function dealFromSeed(round: number, roomSec: RoomSec): DealResult {
     (playerPair && player[0].suit === player[1].suit) ||
     (bankerPair && banker[0].suit === banker[1].suit);
 
-  return { playerCards: player, bankerCards: banker, playerTotal, bankerTotal, outcome,
-    playerPair, bankerPair, anyPair, perfectPair };
+  return {
+    playerCards: player,
+    bankerCards: banker,
+    playerTotal,
+    bankerTotal,
+    outcome,
+    playerPair,
+    bankerPair,
+    anyPair,
+    perfectPair
+  };
 }
 
-export function recentRounds(n: number, refDate: Date, roomSec: RoomSec): number[] {
-  const cur = roundNumberAt(refDate, roomSec);
-  const perDay = Math.floor(24 * 3600 / roomSec);
+/** 最近 N 局（不跨日簡化） */
+export function recentSeqs(n: number, roundSeq: number): number[] {
   const arr: number[] = [];
   for (let i = 0; i < n; i++) {
-    let r = cur - i;
-    if (r <= 0) r += perDay;
-    arr.push(r);
+    const s = roundSeq - i;
+    if (s >= 1) arr.push(s);
   }
   return arr;
 }
