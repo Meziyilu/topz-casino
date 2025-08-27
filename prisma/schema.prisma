@@ -40,3 +40,16 @@ model Bet {
 
   @@index([userId, round])
 }
+model Bet {
+  id        String   @id @default(cuid())
+  userId    String
+  round     Int
+  roomSec   Int      @default(60)   // ← 房間回合秒數：30 / 60 / 90
+  side      BetSide
+  amount    Int
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, round, roomSec])
+}
