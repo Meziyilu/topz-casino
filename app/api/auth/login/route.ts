@@ -6,6 +6,14 @@ import { signJWT } from "@/lib/jwt";
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
+  const url = new URL(req.url);
+  // signout: POST /api/auth/login?signout=1
+  if (url.searchParams.get("signout")) {
+    const res = NextResponse.redirect(new URL("/", req.url));
+    res.cookies.set("token", "", { path: "/", maxAge: 0 });
+    return res;
+  }
+
   try {
     const { email, password } = await req.json();
     if (!email || !password) {
@@ -25,21 +33,10 @@ export async function POST(req: NextRequest) {
       sameSite: "lax",
       secure: true,
       path: "/",
-      maxAge: 60 * 60 * 24 * 7 // 7 days
+      maxAge: 60 * 60 * 24 * 7
     });
     return res;
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Bad Request" }, { status: 400 });
   }
-}
-
-// simple signout through POST with ?signout=1
-export async function POST_signout(req: NextRequest) {
-  const url = new URL(req.url);
-  if (url.searchParams.get("signout")) {
-    const res = NextResponse.redirect(new URL("/", req.url));
-    res.cookies.set("token", "", { path: "/", maxAge: 0 });
-    return res;
-  }
-  return NextResponse.json({ ok: false }, { status: 400 });
 }

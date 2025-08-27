@@ -1,5 +1,4 @@
 'use client';
-
 import { useState } from "react";
 
 export default function Home() {
@@ -21,7 +20,6 @@ export default function Home() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
-
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
       setMessage(isLogin ? "登入成功，正在前往大廳…" : "註冊成功，請再登入");

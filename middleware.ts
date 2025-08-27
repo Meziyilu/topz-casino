@@ -6,12 +6,9 @@ const ENC = new TextEncoder();
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Protect /lobby route — if no valid token, redirect to home
   if (pathname.startsWith("/lobby")) {
     const token = req.cookies.get("token")?.value;
-    if (!token) {
-      return NextResponse.redirect(new URL("/", req.url));
-    }
+    if (!token) return NextResponse.redirect(new URL("/", req.url));
     try {
       const secret = process.env.JWT_SECRET;
       if (!secret) throw new Error("JWT_SECRET not set");
@@ -24,6 +21,4 @@ export async function middleware(req: NextRequest) {
   return NextResponse.next();
 }
 
-export const config = {
-  matcher: ["/lobby/:path*"]
-};
+export const config = { matcher: ["/lobby/:path*"] };
