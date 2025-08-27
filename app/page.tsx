@@ -20,6 +20,7 @@ export default function Home() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
+
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
       setMessage(isLogin ? "登入成功，正在前往大廳…" : "註冊成功，請再登入");
@@ -30,37 +31,40 @@ export default function Home() {
   };
 
   return (
-    <div className="container">
-      <h1>Fullstack Render Template</h1>
-      <p className="note">Next.js + Prisma + JWT Cookie（Render-ready）</p>
-
-      <div className="row" style={{justifyContent: 'space-between'}}>
-        <button className="btn" onClick={() => setIsLogin(true)} disabled={isLogin}>登入</button>
-        <button className="btn" onClick={() => setIsLogin(false)} disabled={!isLogin}>註冊</button>
-      </div>
-
-      <form onSubmit={submit}>
-        {!isLogin && (
-          <div>
-            <label>暱稱（可選）</label>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name" />
+    <div className="glass">
+      <div className="content">
+        <div className="row space-between">
+          <h1 className="h1">Welcome Back</h1>
+          <div className="row">
+            <button className="btn-secondary btn" onClick={() => setIsLogin(true)} disabled={isLogin}>登入</button>
+            <button className="btn" onClick={() => setIsLogin(false)} disabled={!isLogin}>註冊</button>
           </div>
-        )}
-        <div>
-          <label>Email</label>
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required />
         </div>
-        <div>
-          <label>密碼</label>
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="********" required />
-        </div>
-        <button className="btn" type="submit">{isLogin ? "登入" : "註冊"}</button>
-        {message && <div className="note">{message}</div>}
-      </form>
+        <p className="subtle">Next.js + Prisma + JWT Cookie（Render-ready）</p>
 
-      <hr />
-      <div className="note">
-        健康檢查：<code>/api/healthz</code>
+        <form className="form" onSubmit={submit}>
+          {!isLogin && (
+            <div>
+              <label>暱稱（可選）</label>
+              <input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="Your name" />
+            </div>
+          )}
+          <div>
+            <label>Email</label>
+            <input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required />
+          </div>
+          <div>
+            <label>密碼</label>
+            <input className="input" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="********" required />
+          </div>
+
+          <div className="row space-between mt16">
+            <span className="note">健康檢查：<code>/api/healthz</code></span>
+            <button className="btn" type="submit">{isLogin ? "登入" : "註冊"}</button>
+          </div>
+
+          {message && <div className="note mt16">{message}</div>}
+        </form>
       </div>
     </div>
   );
