@@ -9,7 +9,7 @@ export default async function LobbyPage() {
   const token = (await cookies()).get("token")?.value;
   if (!token) {
     return (
-      <div className="glass">
+      <div className="glass neon">
         <div className="content">
           <h1 className="h1">未登入</h1>
           <p className="subtle">請先 <Link href="/">回首頁登入</Link></p>
@@ -24,7 +24,7 @@ export default async function LobbyPage() {
     if (!user) throw new Error("no user");
 
     return (
-      <div className="glass">
+      <div className="glass neon">
         <div className="content">
           <div className="row space-between">
             <h1 className="h1">大廳</h1>
@@ -52,7 +52,7 @@ export default async function LobbyPage() {
             <div className="card col-6">
               <h3>快速動作</h3>
               <div className="row">
-                <button className="btn">前往銀行</button>
+                <button className="btn shimmer">前往銀行</button>
                 <button className="btn-secondary btn">抽卡</button>
                 <button className="btn-secondary btn">百家樂</button>
               </div>
@@ -80,7 +80,7 @@ export default async function LobbyPage() {
     );
   } catch {
     return (
-      <div className="glass">
+      <div className="glass neon">
         <div className="content">
           <h1 className="h1">登入失敗或逾期</h1>
           <p className="subtle"><Link href="/">回首頁重新登入</Link></p>

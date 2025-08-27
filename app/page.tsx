@@ -31,13 +31,13 @@ export default function Home() {
   };
 
   return (
-    <div className="glass">
+    <div className="glass neon">
       <div className="content">
         <div className="row space-between">
           <h1 className="h1">Welcome Back</h1>
           <div className="row">
             <button className="btn-secondary btn" onClick={() => setIsLogin(true)} disabled={isLogin}>登入</button>
-            <button className="btn" onClick={() => setIsLogin(false)} disabled={!isLogin}>註冊</button>
+            <button className="btn shimmer" onClick={() => setIsLogin(false)} disabled={!isLogin}>註冊</button>
           </div>
         </div>
         <p className="subtle">Next.js + Prisma + JWT Cookie（Render-ready）</p>
@@ -60,7 +60,7 @@ export default function Home() {
 
           <div className="row space-between mt16">
             <span className="note">健康檢查：<code>/api/healthz</code></span>
-            <button className="btn" type="submit">{isLogin ? "登入" : "註冊"}</button>
+            <button className="btn shimmer" type="submit">{isLogin ? "登入" : "註冊"}</button>
           </div>
 
           {message && <div className="note mt16">{message}</div>}

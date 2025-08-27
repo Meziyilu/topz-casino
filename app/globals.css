@@ -1,4 +1,4 @@
-/* ===== 基礎設定 ===== */
+/* ===== Base ===== */
 * { box-sizing: border-box; }
 html, body {
   margin: 0; padding: 0;
@@ -22,7 +22,7 @@ html, body {
   --container-w: min(920px, 92vw);
 }
 
-/* ===== 背景（漸層 + 噪點） ===== */
+/* ===== Background (gradient + noise) ===== */
 .bg-gradient {
   position: fixed; inset: 0; z-index: -2;
   background:
@@ -40,7 +40,22 @@ html, body {
   mix-blend-mode: overlay;
 }
 
-/* ===== 版面 ===== */
+/* ===== Aurora layer ===== */
+.aurora {
+  position: fixed; inset: 0; z-index: -3; pointer-events: none;
+  background:
+    radial-gradient(800px 500px at 15% 20%, rgba(125,193,255,0.12), transparent 60%),
+    radial-gradient(700px 450px at 85% 35%, rgba(159,125,255,0.12), transparent 60%),
+    radial-gradient(900px 600px at 50% 85%, rgba(110,231,170,0.10), transparent 60%);
+  filter: blur(10px);
+  animation: aurora-float 18s ease-in-out infinite alternate;
+}
+@keyframes aurora-float {
+  0%   { transform: translate3d(0,0,0) scale(1);     filter: blur(10px);  }
+  100% { transform: translate3d(-2%, 2%, 0) scale(1.03); filter: blur(12px); }
+}
+
+/* ===== Layout ===== */
 .page-wrap {
   min-height: 100dvh;
   display: grid;
@@ -48,7 +63,7 @@ html, body {
   padding: 48px 20px;
 }
 
-/* ===== 玻璃面板 ===== */
+/* ===== Glass Panel ===== */
 .glass {
   width: var(--container-w);
   border-radius: var(--radius);
@@ -61,7 +76,6 @@ html, body {
   overflow: clip;
 }
 .glass::before {
-  /* 霓虹邊緣光暈 */
   content: ""; position: absolute; inset: 0; pointer-events: none;
   border-radius: inherit;
   background:
@@ -75,9 +89,33 @@ html, body {
   padding: 1px;
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
 }
-.glass .content { padding: 28px; }
+.glass .content { padding: 28px; transition: background .2s ease; }
 
-/* ===== 標題/文字 ===== */
+/* Neon breathing halo */
+.glass.neon { position: relative; }
+.glass.neon::after {
+  content: "";
+  position: absolute; inset: -2px; z-index: -1;
+  border-radius: inherit;
+  background:
+    conic-gradient(from 0deg,
+      rgba(125,193,255,0.0),
+      rgba(125,193,255,0.5),
+      rgba(159,125,255,0.55),
+      rgba(125,193,255,0.5),
+      rgba(125,193,255,0.0)
+    );
+  filter: blur(16px) saturate(140%);
+  animation: neon-rotate 8s linear infinite;
+  opacity: .65;
+}
+@keyframes neon-rotate { to { transform: rotate(360deg); } }
+
+.glass:hover .content {
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.00));
+}
+
+/* ===== Typography ===== */
 .h1 {
   margin: 0 0 6px; font-size: clamp(22px, 3vw, 32px); font-weight: 800;
   letter-spacing: 0.3px;
@@ -86,10 +124,8 @@ html, body {
 }
 .subtle { opacity: 0.8; }
 
-/* ===== 表單 ===== */
-.form {
-  display: grid; gap: 14px; margin-top: 18px;
-}
+/* ===== Form ===== */
+.form { display: grid; gap: 14px; margin-top: 18px; }
 label { display: block; font-weight: 600; margin: 6px 0 6px; color: #d7deea; }
 .input {
   width: 100%; padding: 12px 14px; border-radius: 12px;
@@ -103,7 +139,7 @@ label { display: block; font-weight: 600; margin: 6px 0 6px; color: #d7deea; }
   box-shadow: 0 0 0 4px rgba(125,193,255,0.18);
 }
 
-/* ===== 按鈕 ===== */
+/* ===== Buttons ===== */
 .btn {
   appearance: none; border: 0; cursor: pointer;
   padding: 12px 16px; border-radius: 12px; font-weight: 700;
@@ -119,14 +155,28 @@ label { display: block; font-weight: 600; margin: 6px 0 6px; color: #d7deea; }
   border: 1px solid rgba(255,255,255,0.1);
 }
 
-/* ===== 排版工具 ===== */
+/* Shimmer effect */
+.btn.shimmer { position: relative; overflow: hidden; }
+.btn.shimmer::after {
+  content: ""; position: absolute; top: 0; bottom: 0; width: 80px;
+  transform: skewX(-20deg) translateX(-150%);
+  background: linear-gradient(90deg, rgba(255,255,255,0.0), rgba(255,255,255,0.38), rgba(255,255,255,0.0));
+  filter: blur(1px);
+  animation: shimmer-move 2.2s ease-in-out infinite;
+}
+@keyframes shimmer-move {
+  0%   { transform: skewX(-20deg) translateX(-150%); }
+  55%  { transform: skewX(-20deg) translateX(220%); }
+  100% { transform: skewX(-20deg) translateX(220%); }
+}
+
+/* ===== Grid / Cards ===== */
 .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .space-between { justify-content: space-between; }
 .mt16 { margin-top: 16px; }
 .mt24 { margin-top: 24px; }
 .center { text-align: center; }
 
-/* ===== 卡片群（大廳） ===== */
 .grid {
   display: grid; gap: 16px; margin-top: 16px;
   grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -135,11 +185,9 @@ label { display: block; font-weight: 600; margin: 6px 0 6px; color: #d7deea; }
 .col-6  { grid-column: span 6; }
 .col-4  { grid-column: span 4; }
 @media (max-width: 860px){
-  .col-6 { grid-column: span 12; }
-  .col-4 { grid-column: span 12; }
+  .col-6, .col-4 { grid-column: span 12; }
 }
 
-/* 小卡片風格 */
 .card {
   background: var(--card);
   border: 1px solid var(--stroke);
@@ -148,9 +196,14 @@ label { display: block; font-weight: 600; margin: 6px 0 6px; color: #d7deea; }
   -webkit-backdrop-filter: blur(var(--blur));
   padding: 18px;
   box-shadow: var(--shadow);
+  transition: transform .15s ease;
 }
+.card:hover { transform: translateY(-2px); }
 .card h3 { margin: 0 0 10px; font-size: 18px; letter-spacing: .2px; }
 .stat { font-size: 28px; font-weight: 800; }
-
-/* 錯誤/提示 */
 .note { opacity: .9; font-size: 14px; }
+
+/* ===== Reduced motion ===== */
+@media (prefers-reduced-motion: reduce) {
+  .glass.neon::after, .btn.shimmer::after, .aurora { animation: none !important; }
+}

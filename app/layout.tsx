@@ -10,10 +10,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="zh-Hant">
       <body>
-        {/* 背景層 */}
+        {/* Background layers */}
         <div className="bg-gradient"></div>
         <div className="bg-noise"></div>
-        {/* 內容 */}
+        <div className="aurora"></div>
+        {/* Content */}
         <main className="page-wrap">{children}</main>
       </body>
     </html>
