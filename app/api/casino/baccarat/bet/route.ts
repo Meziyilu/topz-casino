@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifyJWT } from "@/lib/jwt";
-import { Prisma } from "@prisma/client"; // ✅ 用 Prisma.TransactionClient
+import { Prisma } from "@prisma/client";
 
 type BetSide =
   | "PLAYER" | "BANKER" | "TIE"
@@ -15,6 +15,8 @@ function validSide(x: string): x is BetSide {
     "PLAYER_PAIR","BANKER_PAIR","ANY_PAIR","PERFECT_PAIR",
   ].includes(x);
 }
+
+export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   try {
@@ -68,12 +70,12 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // 3) 流水
+      // 3) 流水（📌 target 一律是 WALLET，不是下注面）
       await tx.ledger.create({
         data: {
           userId,
           type: "BET_PLACED",
-          target: sideStr,
+          target: "WALLET",
           delta: -amount,
           memo: `下注 ${sideStr} (room ${room.code} #${round.roundSeq})`,
           balanceAfter: afterDebit.balance,
