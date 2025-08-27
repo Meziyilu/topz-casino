@@ -78,8 +78,8 @@ export async function GET(req: NextRequest) {
   try {
     const roomCode = String(req.nextUrl.searchParams.get("room") || "R60").toUpperCase();
 
-    // 房間
-    const room = await prisma.room.findFirst({ where: { code: roomCode } });
+    // 房間（code 是 Prisma Enum → 將字串轉型）
+    const room = await prisma.room.findFirst({ where: { code: roomCode as any } });
     if (!room) {
       return NextResponse.json({ error: "房間不存在" }, { status: 404 });
     }
