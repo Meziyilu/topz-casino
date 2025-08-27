@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifyJWT } from "@/lib/jwt";
-import { PrismaClient } from "@prisma/client";
+import { Prisma } from "@prisma/client"; // ✅ 用 Prisma.TransactionClient
 
 type BetSide =
   | "PLAYER" | "BANKER" | "TIE"
@@ -32,11 +32,9 @@ export async function POST(req: NextRequest) {
     if (!validSide(sideStr)) return NextResponse.json({ error: "下注面不合法" }, { status: 400 });
     if (!Number.isInteger(amount) || amount <= 0) return NextResponse.json({ error: "金額不合法" }, { status: 400 });
 
-    // 取當前房間 & 今日資訊（你的專案若已有取得 day/roundSeq 的方法，可替換）
     const room = await prisma.room.findFirst({ where: { code: roomCode as any } });
     if (!room) return NextResponse.json({ error: "找不到房間" }, { status: 404 });
 
-    // 你應該已有「當日 day、目前 roundSeq、phase」的狀態來源；這裡示意用最近 round 作為當前回合
     const round = await prisma.round.findFirst({
       where: { roomId: room.id },
       orderBy: [{ day: "desc" }, { roundSeq: "desc" }],
@@ -45,19 +43,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "現在不是下注時間" }, { status: 400 });
     }
 
-    const res = await prisma.$transaction(async (tx: PrismaClient) => {
+    const res = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // 1) 餘額檢查與扣款
       const u = await tx.user.findUnique({ where: { id: userId } });
       if (!u) throw new Error("找不到使用者");
       if (u.balance < amount) throw new Error("餘額不足");
 
-      const updated = await tx.user.update({
+      const afterDebit = await tx.user.update({
         where: { id: userId },
         data: { balance: { decrement: amount } },
         select: { balance: true, bankBalance: true },
       });
 
-      // 2) 寫Bet（盡量把 roundId, roomId, day, roundSeq 都寫入）
+      // 2) 建立下注
       const bet = await tx.bet.create({
         data: {
           userId,
@@ -70,20 +68,20 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // 3) 寫流水（BET_PLACED，扣款為負）
+      // 3) 流水
       await tx.ledger.create({
         data: {
           userId,
           type: "BET_PLACED",
-          target: "WALLET",
+          target: sideStr,
           delta: -amount,
           memo: `下注 ${sideStr} (room ${room.code} #${round.roundSeq})`,
-          balanceAfter: updated.balance,
-          bankAfter: updated.bankBalance,
+          balanceAfter: afterDebit.balance,
+          bankAfter: afterDebit.bankBalance,
         },
       });
 
-      return { betId: bet.id, balance: updated.balance };
+      return { betId: bet.id, balance: afterDebit.balance };
     });
 
     return NextResponse.json(res);
