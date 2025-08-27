@@ -1,0 +1,18 @@
+# dependencies
+/node_modules
+
+# production
+/.next
+/out
+
+# misc
+.DS_Store
+*.log
+.env
+.env.*
+.env.local
+*.sqlite
+pnpm-lock.yaml
+yarn.lock
+dist
+coverage
