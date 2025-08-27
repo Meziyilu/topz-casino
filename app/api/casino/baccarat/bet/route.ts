@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
     const room = await prisma.room.findFirst({ where: { code: roomCode as any } });
     if (!room) return NextResponse.json({ error: "找不到房間" }, { status: 404 });
 
+    // 取得目前進行中的回合（請依你的實作調整）
     const round = await prisma.round.findFirst({
       where: { roomId: room.id },
       orderBy: [{ day: "desc" }, { roundSeq: "desc" }],
@@ -70,7 +71,7 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // 3) 流水（📌 target 一律是 WALLET，不是下注面）
+      // 3) 流水（target 必須是 WALLET）
       await tx.ledger.create({
         data: {
           userId,

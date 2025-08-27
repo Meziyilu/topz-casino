@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifyJWT } from "@/lib/jwt";
-import { Prisma } from "@prisma/client"; // ✅ 引入 TransactionClient 型別
+import { Prisma } from "@prisma/client"; // TransactionClient
 
 export const runtime = "nodejs";
 
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// 錢包與銀行轉帳
+// 錢包與銀行轉帳（deposit: 銀行→錢包；withdraw: 錢包→銀行）
 export async function POST(req: NextRequest) {
   try {
     const token = req.cookies.get("token")?.value;
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     const userId = String(payload.sub);
 
     const body = await req.json().catch(() => ({}));
-    const action = String(body?.action || ""); // deposit | withdraw
+    const action = String(body?.action || "");
     const amount = Number(body?.amount);
 
     if (!["deposit", "withdraw"].includes(action)) {
