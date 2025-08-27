@@ -240,3 +240,82 @@ label { display: block; font-weight: 600; margin: 6px 0 6px; color: #d7deea; }
   width: 18px; height: 18px; border-radius: 50%;
   box-shadow: 0 2px 8px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.3);
 }
+/* ======== Playing Cards (翻牌 + 霓虹光暈) ======== */
+.card-stage { perspective: 1200px; display: inline-block; }
+.playing-card {
+  width: 72px; height: 104px; border-radius: 12px;
+  position: relative; transform-style: preserve-3d;
+  transition: transform .8s cubic-bezier(.2,.7,.2,1);
+  box-shadow: 0 12px 30px rgba(0,0,0,.35);
+}
+.playing-card.flip { transform: rotateY(180deg); }
+.playing-card .face, .playing-card .back {
+  position: absolute; inset: 0; border-radius: inherit; backface-visibility: hidden;
+}
+.playing-card .back {
+  background:
+    radial-gradient(240px 140px at 50% 0%, rgba(125,193,255,.25),transparent 60%),
+    linear-gradient(135deg, rgba(255,255,255,.12), rgba(255,255,255,.04));
+  border: 1px solid rgba(255,255,255,.2);
+  display: grid; place-items: center;
+}
+.playing-card .face {
+  transform: rotateY(180deg);
+  background: #fff; color: #111;
+  border: 1px solid rgba(0,0,0,.12);
+  display: grid; place-items: center; font-weight: 800;
+}
+
+/* 角標（♠♥♦♣） */
+.card-rank { font-size: 24px; }
+.card-suit { font-size: 20px; margin-left: 4px; }
+.red { color: #e63946; }
+
+/* 進場閃光（霓虹光暈） */
+.glow-in {
+  position: relative;
+  animation: glow-in 800ms ease forwards;
+}
+@keyframes glow-in {
+  from { filter: drop-shadow(0 0 0 rgba(125,193,255,0)); opacity: 0; transform: translateY(6px); }
+  to   { filter: drop-shadow(0 0 16px rgba(125,193,255,.45)); opacity: 1; transform: translateY(0); }
+}
+
+/* 撒花粒子（簡易） */
+.spark {
+  position: absolute; width: 6px; height: 6px; border-radius: 999px;
+  background: rgba(255,255,255,.85);
+  animation: spark-fly 900ms ease-out forwards;
+}
+@keyframes spark-fly {
+  from { transform: translate(0,0) scale(1); opacity: 1; }
+  to   { transform: translate(var(--dx,30px), var(--dy,-30px)) scale(0.4); opacity: 0; }
+}
+
+/* ======== 路子點樣式 ======== */
+.road-dot {
+  width: 14px; height: 14px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.15);
+  display: inline-block;
+}
+.road-P { background: rgba(79, 152, 255, .85); }   /* 閒=藍 */
+.road-B { background: rgba(255, 95, 95, .85); }    /* 莊=紅 */
+.road-T { background: rgba(122, 122, 122, .85); }  /* 和=灰 */
+.road-grid {
+  display: grid; grid-template-columns: repeat(10, 16px);
+  grid-auto-rows: 16px; gap: 4px;
+  padding: 6px; border-radius: 10px;
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.12);
+}
+
+/* ======== 錢包徽章 ======== */
+.wallet-badge {
+  padding: 10px 14px; border-radius: 12px;
+  background: linear-gradient(135deg, rgba(125,193,255,.18), rgba(159,125,255,.18));
+  border: 1px solid rgba(255,255,255,.18);
+  box-shadow: 0 6px 20px rgba(0,0,0,.25);
+  display: inline-flex; align-items: baseline; gap: 8px;
+}
+.wallet-amt { font-weight: 800; font-size: 20px; }
+.wallet-sep { opacity: .6; margin: 0 6px; }
