@@ -12,7 +12,7 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
-    "types": ["node"],
+    "types": ["node", "react"],
 
     "baseUrl": ".",                  // ← 新增
     "paths": { "@/*": ["./*"] }      // ← 新增
