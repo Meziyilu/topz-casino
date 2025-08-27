@@ -1,3 +1,4 @@
+// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,12 +9,13 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  name      String?
-  balance   Int      @default(0)
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  email       String   @unique
+  password    String
+  name        String?
+  balance     Int      @default(0) // 錢包
+  bankBalance Int      @default(0) // 銀行
+  createdAt   DateTime @default(now())
 
   bets Bet[]
 }
@@ -61,9 +63,9 @@ model Room {
 
 /**
  * 每個房間每天的局序從 1 重新開始：
- * - 唯一鍵： (roomId, day, roundSeq)
- * - day：請用「台北當地日期 00:00」轉成 UTC 存入（Date-only semantics）
- * 牌面存 Json，方便前端做開牌動畫與路子。
+ * - 唯一鍵：(roomId, day, roundSeq)
+ * - day：以台北當地日期 00:00 轉為 UTC 存入
+ * - 牌面/對子等資訊以 Json/Boolean 保存，方便前端動畫與路子
  */
 model Round {
   id       String   @id @default(cuid())
@@ -77,15 +79,15 @@ model Round {
   bankerTotal Int?
 
   playerCards Json? // [{rank:1..13,suit:0..3}, ...]
-  bankerCards Json? // 同上
+  bankerCards Json?
 
   playerPair  Boolean?
   bankerPair  Boolean?
   anyPair     Boolean?
   perfectPair Boolean?
 
-  startedAt DateTime // 回合開始時間（UTC）
-  settledAt DateTime? // 結算完成時間（UTC）
+  startedAt DateTime // 回合開始 UTC
+  settledAt DateTime? // 結算完成 UTC
   createdAt DateTime  @default(now())
 
   room Room  @relation(fields: [roomId], references: [id])
@@ -97,14 +99,13 @@ model Round {
 
 /**
  * 下注記錄：
- * - 直接掛房間 + 當日局序，方便在回合尚未持久化時先寫單
- * - 若有預先建立 Round，可選擇把 roundId 一起寫入
+ * - 指向房間 + 當日 + 局序（即使 Round 尚未持久化，也能先寫單）
+ * - 若已有對應 Round，可一併寫 roundId
  */
 model Bet {
   id       String   @id @default(cuid())
   userId   String
   roomId   String
-  // 指向每日回合（為了查詢效率，同步保存 day & roundSeq）
   day      DateTime
   roundSeq Int
 
