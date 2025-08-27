@@ -13,4 +13,30 @@ model User {
   password  String
   name      String?
   createdAt DateTime @default(now())
+
+  // inverse relation for Bet.user
+  bets Bet[]
+}
+
+enum BetSide {
+  PLAYER
+  BANKER
+  TIE
+  PLAYER_PAIR
+  BANKER_PAIR
+  ANY_PAIR
+  PERFECT_PAIR
+}
+
+model Bet {
+  id        String   @id @default(cuid())
+  userId    String
+  round     Int
+  side      BetSide
+  amount    Int
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, round])
 }
