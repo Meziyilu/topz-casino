@@ -32,7 +32,7 @@ export default async function LobbyPage() {
               <button className="btn-secondary btn" type="submit">登出</button>
             </form>
           </div>
-          <p className="subtle">歡迎，<b>{user.name || user.email}</b> — 這裡之後可以放銀行、抽卡、百家樂的入口。</p>
+          <p className="subtle">歡迎，<b>{user.name || user.email}</b></p>
 
           <div className="grid">
             <div className="card col-6">
@@ -52,27 +52,21 @@ export default async function LobbyPage() {
             <div className="card col-6">
               <h3>快速動作</h3>
               <div className="row">
-                <button className="btn shimmer">前往銀行</button>
-                <button className="btn-secondary btn">抽卡</button>
-                <button className="btn-secondary btn">百家樂</button>
+                <Link href="/bank" className="btn shimmer">前往銀行</Link>
+                <Link href="/casino" className="btn-secondary btn">賭場</Link>
               </div>
             </div>
 
-            <div className="card col-4">
+            <div className="card col-6">
               <h3>系統狀態</h3>
               <div className="stat">OK</div>
-              <div className="note">健康檢查 /api/healthz</div>
+              <div className="note">服務運行中</div>
             </div>
 
-            <div className="card col-4">
+            <div className="card col-6">
               <h3>版本</h3>
-              <div className="stat">全端 1.0（玻璃面板）</div>
-              <div className="note">Next.js + Prisma + JWT</div>
-            </div>
-
-            <div className="card col-4">
-              <h3>接下來</h3>
-              <div className="note">可加：餘額/存提款、抽卡動畫、賭桌面板…</div>
+              <div className="stat">TOPZCASINO</div>
+              <div className="note">Frosted UI • Neon • Aurora</div>
             </div>
           </div>
         </div>

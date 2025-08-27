@@ -23,8 +23,8 @@ export default function Home() {
 
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
-      setMessage(isLogin ? "登入成功，正在前往大廳…" : "註冊成功，請再登入");
       if (isLogin) window.location.href = "/lobby";
+      else setMessage("註冊成功，請再登入");
     } else {
       setMessage(data?.error || "發生錯誤");
     }
@@ -34,13 +34,12 @@ export default function Home() {
     <div className="glass neon">
       <div className="content">
         <div className="row space-between">
-          <h1 className="h1">Welcome Back</h1>
+          <h1 className="h1">TOPZCASINO</h1>
           <div className="row">
             <button className="btn-secondary btn" onClick={() => setIsLogin(true)} disabled={isLogin}>登入</button>
             <button className="btn shimmer" onClick={() => setIsLogin(false)} disabled={!isLogin}>註冊</button>
           </div>
         </div>
-        <p className="subtle">Next.js + Prisma + JWT Cookie（Render-ready）</p>
 
         <form className="form" onSubmit={submit}>
           {!isLogin && (
@@ -59,7 +58,7 @@ export default function Home() {
           </div>
 
           <div className="row space-between mt16">
-            <span className="note">健康檢查：<code>/api/healthz</code></span>
+            <span></span>
             <button className="btn shimmer" type="submit">{isLogin ? "登入" : "註冊"}</button>
           </div>
 
