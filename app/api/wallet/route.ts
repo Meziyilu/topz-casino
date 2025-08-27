@@ -2,11 +2,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifyJWT } from "@/lib/jwt";
-import { PrismaClient } from "@prisma/client"; // ✅ 新增：拿到 PrismaClient 型別
+import { Prisma } from "@prisma/client"; // ✅ 引入 TransactionClient 型別
 
 export const runtime = "nodejs";
 
-/** 取得目前登入者的錢包/銀行餘額 */
+// 取得使用者錢包 & 銀行餘額
 export async function GET(req: NextRequest) {
   try {
     const token = req.cookies.get("token")?.value;
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-/** 銀行 ↔ 錢包轉帳 */
+// 錢包與銀行轉帳
 export async function POST(req: NextRequest) {
   try {
     const token = req.cookies.get("token")?.value;
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     const userId = String(payload.sub);
 
     const body = await req.json().catch(() => ({}));
-    const action = String(body?.action || "");
+    const action = String(body?.action || ""); // deposit | withdraw
     const amount = Number(body?.amount);
 
     if (!["deposit", "withdraw"].includes(action)) {
@@ -47,8 +47,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "金額不合法" }, { status: 400 });
     }
 
-    // ✅ 指定 tx 型別
-    const out = await prisma.$transaction(async (tx: PrismaClient) => {
+    const out = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const u = await tx.user.findUnique({ where: { id: userId } });
       if (!u) throw new Error("找不到使用者");
 
@@ -56,7 +55,6 @@ export async function POST(req: NextRequest) {
       let bank = u.bankBalance;
 
       if (action === "deposit") {
-        // 銀行 → 錢包
         if (bank < amount) throw new Error("銀行餘額不足");
         const updated = await tx.user.update({
           where: { id: userId },
@@ -75,13 +73,12 @@ export async function POST(req: NextRequest) {
             type: "TRANSFER_IN",
             target: "WALLET",
             delta: amount,
-            memo: "銀行→錢包",
+            memo: "銀行 → 錢包",
             balanceAfter: wallet,
             bankAfter: bank,
           },
         });
       } else {
-        // withdraw：錢包 → 銀行
         if (wallet < amount) throw new Error("錢包餘額不足");
         const updated = await tx.user.update({
           where: { id: userId },
@@ -100,7 +97,7 @@ export async function POST(req: NextRequest) {
             type: "TRANSFER_OUT",
             target: "BANK",
             delta: -amount,
-            memo: "錢包→銀行",
+            memo: "錢包 → 銀行",
             balanceAfter: wallet,
             bankAfter: bank,
           },
