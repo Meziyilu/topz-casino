@@ -2,13 +2,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifyJWT } from "@/lib/jwt";
+import { PrismaClient } from "@prisma/client"; // ✅ 新增：拿到 PrismaClient 型別
 
 export const runtime = "nodejs";
 
-/**
- * 取得目前登入者的錢包與銀行餘額
- * 回應一律加上 no-store，避免任何中間層快取
- */
+/** 取得目前登入者的錢包/銀行餘額 */
 export async function GET(req: NextRequest) {
   try {
     const token = req.cookies.get("token")?.value;
@@ -17,7 +15,7 @@ export async function GET(req: NextRequest) {
     const payload = await verifyJWT(token);
     const me = await prisma.user.findUnique({
       where: { id: String(payload.sub) },
-      select: { balance: true, bankBalance: true }
+      select: { balance: true, bankBalance: true },
     });
     if (!me) return NextResponse.json({ error: "找不到使用者" }, { status: 404 });
 
@@ -29,13 +27,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-/**
- * 轉帳：
- * - action: "deposit"  表示 銀行 -> 錢包
- * - action: "withdraw" 表示 錢包 -> 銀行
- * - amount: 正整數
- * 成功後回傳最新餘額，並寫入 Ledger（TRANSFER_IN / TRANSFER_OUT）
- */
+/** 銀行 ↔ 錢包轉帳 */
 export async function POST(req: NextRequest) {
   try {
     const token = req.cookies.get("token")?.value;
@@ -55,7 +47,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "金額不合法" }, { status: 400 });
     }
 
-    const out = await prisma.$transaction(async (tx) => {
+    // ✅ 指定 tx 型別
+    const out = await prisma.$transaction(async (tx: PrismaClient) => {
       const u = await tx.user.findUnique({ where: { id: userId } });
       if (!u) throw new Error("找不到使用者");
 
@@ -63,7 +56,7 @@ export async function POST(req: NextRequest) {
       let bank = u.bankBalance;
 
       if (action === "deposit") {
-        // 銀行 -> 錢包
+        // 銀行 → 錢包
         if (bank < amount) throw new Error("銀行餘額不足");
         const updated = await tx.user.update({
           where: { id: userId },
@@ -76,7 +69,6 @@ export async function POST(req: NextRequest) {
         wallet = updated.balance;
         bank = updated.bankBalance;
 
-        // Ledger 記錄
         await tx.ledger.create({
           data: {
             userId,
@@ -89,7 +81,7 @@ export async function POST(req: NextRequest) {
           },
         });
       } else {
-        // withdraw: 錢包 -> 銀行
+        // withdraw：錢包 → 銀行
         if (wallet < amount) throw new Error("錢包餘額不足");
         const updated = await tx.user.update({
           where: { id: userId },
@@ -107,7 +99,7 @@ export async function POST(req: NextRequest) {
             userId,
             type: "TRANSFER_OUT",
             target: "BANK",
-            delta: -amount, // 流水統一：扣款為負
+            delta: -amount,
             memo: "錢包→銀行",
             balanceAfter: wallet,
             bankAfter: bank,
@@ -122,7 +114,6 @@ export async function POST(req: NextRequest) {
     res.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
     return res;
   } catch (e: any) {
-    // 4xx/5xx 都走這裡；訊息偏向給管理者看的簡短說明
     const msg = e?.message || "Server error";
     const status = /不足|不合法|未登入|不支援/.test(msg) ? 400 : 500;
     return NextResponse.json({ error: msg }, { status });
