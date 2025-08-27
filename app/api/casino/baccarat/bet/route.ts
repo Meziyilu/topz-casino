@@ -2,13 +2,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifyJWT } from "@/lib/jwt";
-import { phaseAt, roundSeqAt, taipeiDayStartUTC } from "@/lib/baccarat";
+import { PrismaClient } from "@prisma/client";
 
-const ALLOWED = new Set([
-  "PLAYER","BANKER","TIE","PLAYER_PAIR","BANKER_PAIR","ANY_PAIR","PERFECT_PAIR"
-]);
+type BetSide =
+  | "PLAYER" | "BANKER" | "TIE"
+  | "PLAYER_PAIR" | "BANKER_PAIR"
+  | "ANY_PAIR" | "PERFECT_PAIR";
 
-export const runtime = "nodejs";
+function validSide(x: string): x is BetSide {
+  return [
+    "PLAYER","BANKER","TIE",
+    "PLAYER_PAIR","BANKER_PAIR","ANY_PAIR","PERFECT_PAIR",
+  ].includes(x);
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,37 +23,73 @@ export async function POST(req: NextRequest) {
     const payload = await verifyJWT(token);
     const userId = String(payload.sub);
 
-    const roomCode = (req.nextUrl.searchParams.get("room") || "R60").toUpperCase();
-    const room = await prisma.room.findUnique({ where: { code: roomCode as any } });
-    if (!room) return NextResponse.json({ error: "房間不存在" }, { status: 404 });
+    const body = await req.json().catch(() => ({}));
+    const roomCode = String(body?.room || req.nextUrl.searchParams.get("room") || "").toUpperCase();
+    const sideStr = String(body?.side || "");
+    const amount = Number(body?.amount);
 
-    const { side, amount } = await req.json();
-    if (!ALLOWED.has(side)) return NextResponse.json({ error: "無效注項" }, { status: 400 });
+    if (!roomCode) return NextResponse.json({ error: "缺少房間參數 room" }, { status: 400 });
+    if (!validSide(sideStr)) return NextResponse.json({ error: "下注面不合法" }, { status: 400 });
+    if (!Number.isInteger(amount) || amount <= 0) return NextResponse.json({ error: "金額不合法" }, { status: 400 });
 
-    const amt = Number(amount);
-    if (!Number.isInteger(amt) || amt <= 0) return NextResponse.json({ error: "無效金額" }, { status: 400 });
+    // 取當前房間 & 今日資訊（你的專案若已有取得 day/roundSeq 的方法，可替換）
+    const room = await prisma.room.findFirst({ where: { code: roomCode as any } });
+    if (!room) return NextResponse.json({ error: "找不到房間" }, { status: 404 });
 
-    const now = new Date();
-    const { phase } = phaseAt(now, room.durationSeconds);
-    if (phase !== "BETTING") return NextResponse.json({ error: "非下注時間" }, { status: 400 });
+    // 你應該已有「當日 day、目前 roundSeq、phase」的狀態來源；這裡示意用最近 round 作為當前回合
+    const round = await prisma.round.findFirst({
+      where: { roomId: room.id },
+      orderBy: [{ day: "desc" }, { roundSeq: "desc" }],
+    });
+    if (!round || round.phase !== "BETTING") {
+      return NextResponse.json({ error: "現在不是下注時間" }, { status: 400 });
+    }
 
-    const day = taipeiDayStartUTC(now);
-    const roundSeq = roundSeqAt(now, room.durationSeconds);
+    const res = await prisma.$transaction(async (tx: PrismaClient) => {
+      // 1) 餘額檢查與扣款
+      const u = await tx.user.findUnique({ where: { id: userId } });
+      if (!u) throw new Error("找不到使用者");
+      if (u.balance < amount) throw new Error("餘額不足");
 
-    // TODO: balance 檢查與扣款（之後接銀行）
-    await prisma.bet.create({
-      data: {
-        userId,
-        roomId: room.id,
-        day,
-        roundSeq,
-        side,
-        amount: amt
-      }
+      const updated = await tx.user.update({
+        where: { id: userId },
+        data: { balance: { decrement: amount } },
+        select: { balance: true, bankBalance: true },
+      });
+
+      // 2) 寫Bet（盡量把 roundId, roomId, day, roundSeq 都寫入）
+      const bet = await tx.bet.create({
+        data: {
+          userId,
+          roomId: room.id,
+          day: round.day,
+          roundSeq: round.roundSeq,
+          side: sideStr as any,
+          amount,
+          roundId: round.id,
+        },
+      });
+
+      // 3) 寫流水（BET_PLACED，扣款為負）
+      await tx.ledger.create({
+        data: {
+          userId,
+          type: "BET_PLACED",
+          target: "WALLET",
+          delta: -amount,
+          memo: `下注 ${sideStr} (room ${room.code} #${round.roundSeq})`,
+          balanceAfter: updated.balance,
+          bankAfter: updated.bankBalance,
+        },
+      });
+
+      return { betId: bet.id, balance: updated.balance };
     });
 
-    return NextResponse.json({ ok: true, room: room.code, day, roundSeq });
+    return NextResponse.json(res);
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Bad Request" }, { status: 400 });
+    const msg = e?.message || "下注失敗";
+    const status = /不足|不合法|未登入|不是下注/.test(msg) ? 400 : 500;
+    return NextResponse.json({ error: msg }, { status });
   }
 }
