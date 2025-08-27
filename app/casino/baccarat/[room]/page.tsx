@@ -12,7 +12,7 @@ type RoomInfo = { code: RoomCode; name: string; durationSeconds: number };
 
 type StatePayload = {
   room: RoomInfo;
-  day: string;                 // UTC 時間（台北日切）
+  day: string;                 // UTC（台北切日）
   roundSeq: number;            // 當日局序
   phase: Phase;
   secLeft: number;
@@ -58,10 +58,10 @@ export default function BaccaratRoomPage() {
   const [err, setErr] = useState<string>("");
   const [wallet, setWallet] = useState<{wallet: number; bank: number}>({wallet:0, bank:0});
 
-  // 翻牌動畫：依序翻牌
+  // 逐張翻牌控制：目前已翻開幾張（依序）
   const [revealedCount, setRevealedCount] = useState(0);
 
-  // 取得狀態
+  // 拉狀態
   const fetchState = async () => {
     try {
       const res = await fetch(`/api/casino/baccarat/state?room=${code}`, { cache: "no-store" });
@@ -69,7 +69,7 @@ export default function BaccaratRoomPage() {
       setState(data);
     } catch {}
   };
-  // 取得錢包
+  // 拉錢包
   const fetchWallet = async () => {
     try {
       const r = await fetch(`/api/wallet`, { cache: "no-store" });
@@ -84,13 +84,21 @@ export default function BaccaratRoomPage() {
     return () => { clearInterval(t1); clearInterval(t2); };
   }, [code]);
 
-  // 當進入 REVEAL，就依序翻牌
+  // 進入不同階段時的翻牌邏輯
   useEffect(() => {
+    // 在「下注中」時，強制回到全牌背（不翻）
+    if (state?.phase === "BETTING") {
+      setRevealedCount(0);
+      return;
+    }
+    // 在「揭曉」時，依序每 0.9s 翻一張，直到所有牌翻完
     if (state?.phase === "REVEAL" && state.result) {
       setRevealedCount(0);
-      const totalCards = (state.result.playerCards?.length || 0) + (state.result.bankerCards?.length || 0);
-      for (let i = 0; i < totalCards; i++) {
-        setTimeout(() => setRevealedCount(prev => prev + 1), i * 900); // 每 0.9s 翻一張
+      const total =
+        (state.result.playerCards?.length || 0) +
+        (state.result.bankerCards?.length || 0);
+      for (let i = 0; i < total; i++) {
+        setTimeout(() => setRevealedCount(prev => prev + 1), i * 900);
       }
     }
   }, [state?.phase, state?.roundSeq]);
@@ -121,7 +129,6 @@ export default function BaccaratRoomPage() {
   const roundSeq = state?.roundSeq ?? 0;
   const playerCards = state?.result?.playerCards || [];
   const bankerCards = state?.result?.bankerCards || [];
-  const reveal = Boolean(state?.result && phase !== "BETTING");
 
   const totalBet = useMemo(
     () => Object.values(state?.myBets || {}).reduce((a, b) => a + (b || 0), 0),
@@ -150,7 +157,7 @@ export default function BaccaratRoomPage() {
         </div>
 
         <div className="grid">
-          {/* 本局資訊 + 開牌動畫 */}
+          {/* 本局資訊 + 開牌 */}
           <div className="card col-6">
             <h3>本局資訊</h3>
             <div className="row" style={{justifyContent:'space-between', flexWrap:'wrap', gap:8}}>
@@ -162,7 +169,7 @@ export default function BaccaratRoomPage() {
               <div>現在時間 <b>{nowStr}</b></div>
             </div>
 
-            {/* 開牌區 */}
+            {/* 開牌舞台（BETTING 期顯示牌背、REVEAL 期逐張翻牌） */}
             {state?.result && (
               <div className="mt16">
                 <div className="row" style={{gap: 24, alignItems:'center'}}>
@@ -172,9 +179,11 @@ export default function BaccaratRoomPage() {
                       {playerCards.map((c,i)=>(
                         <Playing
                           key={i}
-                          r={c.rank} s={c.suit}
-                          flipped={i < revealedCount}
-                          delayMs={i*150}
+                          r={c.rank}
+                          s={c.suit}
+                          // 閒的第 i 張在整體的翻牌順序是 i
+                          flipIndex={i}
+                          revealedCount={revealedCount}
                         />
                       ))}
                     </div>
@@ -186,9 +195,11 @@ export default function BaccaratRoomPage() {
                       {bankerCards.map((c,i)=>(
                         <Playing
                           key={i}
-                          r={c.rank} s={c.suit}
-                          flipped={(i + playerCards.length) < revealedCount}
-                          delayMs={i*150 + 300}
+                          r={c.rank}
+                          s={c.suit}
+                          // 莊的第 i 張在整體的翻牌順序是 (閒牌數 + i)
+                          flipIndex={playerCards.length + i}
+                          revealedCount={revealedCount}
                         />
                       ))}
                     </div>
@@ -230,7 +241,7 @@ export default function BaccaratRoomPage() {
             </div>
           </div>
 
-          {/* 下注區（已修正：BetSide 型別） */}
+          {/* 下注區 */}
           <div className="card col-12">
             <h3>下注區</h3>
             <div className="row" style={{gap: 12, flexWrap:'wrap'}}>
@@ -248,7 +259,7 @@ export default function BaccaratRoomPage() {
             {err && <div className="note mt16" style={{color:'#f87171'}}>{err}</div>}
           </div>
 
-          {/* 路子（近10局珠盤路簡版） */}
+          {/* 路子（近10局） */}
           <div className="card col-12">
             <h3>路子（近10局）</h3>
             <div className="road-grid">
@@ -261,7 +272,6 @@ export default function BaccaratRoomPage() {
                 );
               })}
             </div>
-            <div className="note mt16">提示：後續可擴充大路/大眼仔/小路/曱甴路。</div>
           </div>
 
           {/* 導覽 */}
@@ -277,14 +287,15 @@ export default function BaccaratRoomPage() {
   );
 }
 
-/** 單張撲克牌（翻牌動畫） */
-function Playing({ r, s, flipped, delayMs }: { r:number; s:number; flipped:boolean; delayMs?:number }) {
+/** 單張撲克牌（只在已輪到該張時 flip；否則顯示牌背） */
+function Playing({ r, s, flipIndex, revealedCount }:{
+  r:number; s:number; flipIndex:number; revealedCount:number
+}) {
+  const flipped = revealedCount > flipIndex; // 已輪到這張 → 翻面
   return (
-    <div className="card-stage glow-in" style={{ animationDelay: `${delayMs||0}ms` }}>
-      <div className={`playing-card ${flipped ? 'flip' : ''}`} style={{ transitionDelay: `${delayMs||0}ms` }}>
-        <div className="back">
-          <div style={{fontWeight:800, opacity:.75}}>TOPZ</div>
-        </div>
+    <div className="card-stage">
+      <div className={`playing-card ${flipped ? 'flip' : ''}`}>
+        <div className="back">TOPZ</div>
         <div className="face">
           <div className={`card-rank ${isRedSuit(s)?'red':''}`}>{rankText(r)}</div>
           <div className={`card-suit ${isRedSuit(s)?'red':''}`}>{suitIcon(s)}</div>

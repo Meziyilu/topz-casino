@@ -207,153 +207,86 @@ label { display: block; font-weight: 600; margin: 6px 0 6px; color: #d7deea; }
 @media (prefers-reduced-motion: reduce) {
   .glass.neon::after, .btn.shimmer::after, .aurora { animation: none !important; }
 }
-/* ===== 翻牌動畫樣式 ===== */
-.card-stage {
-  perspective: 1200px;
-  display: inline-block;
-}
+/* === Playing Cards (flip + forced white face) === */
+.card-stage { perspective: 1200px; display: inline-block; }
 
 .playing-card {
-  width: 72px;
-  height: 104px;
-  border-radius: 12px;
-  position: relative;
-  transform-style: preserve-3d;
+  width: 72px; height: 104px; border-radius: 12px;
+  position: relative; transform-style: preserve-3d;
   transition: transform 0.8s cubic-bezier(.2,.7,.2,1);
   box-shadow: 0 12px 30px rgba(0,0,0,.35);
-}
-
-.playing-card.flip {
-  transform: rotateY(180deg);
+  border: 1px solid rgba(0,0,0,.15);
+  background: transparent; /* 防被全站背景覆蓋 */
 }
 
 .playing-card .face,
 .playing-card .back {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
+  position: absolute; inset: 0; border-radius: inherit;
   backface-visibility: hidden;
-  display: grid;
-  place-items: center;
-  font-weight: 800;
-  font-size: 20px;
+  display: grid; place-items: center; font-weight: 800;
 }
 
+/* 牌背：深色 + 幾何圖 */
 .playing-card .back {
-  background: linear-gradient(135deg, #222, #555);
-  color: #eee;
+  background:
+    radial-gradient(120px 80px at 50% 0%, rgba(125,193,255,.25), transparent 60%),
+    repeating-linear-gradient(45deg, rgba(255,255,255,.08) 0 6px, rgba(255,255,255,.02) 6px 12px),
+    linear-gradient(135deg, #1f2937, #374151);
+  color: #e5e7eb;
   letter-spacing: 2px;
 }
 
+/* 牌面：強制白底黑字，避免被主題樣式蓋掉變黑 */
 .playing-card .face {
   transform: rotateY(180deg);
-  background: #fff;
-  color: #111;
+  background: #ffffff !important;
+  color: #111827 !important;
 }
 
-.card-rank {
-  font-size: 22px;
-  font-weight: bold;
-}
+/* 翻牌 */
+.playing-card.flip { transform: rotateY(180deg); }
 
-.card-suit {
-  font-size: 18px;
-}
+/* 角標 */
+.card-rank { font-size: 22px; font-weight: 900; line-height: 1; }
+.card-suit { font-size: 18px; margin-left: 4px; }
+.red { color: #e11d48 !important; }
 
-.red {
-  color: #e11d48; /* 紅心/方塊 */
+/* 亮閃 + 掃光（炫炮） */
+.playing-card.flip { position: relative; overflow: hidden; }
+.playing-card.flip::after {
+  content: ""; position: absolute; top: -50%; left: -50%;
+  width: 200%; height: 200%;
+  background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, transparent 70%);
+  opacity: 0; transform: scale(0.5);
+  animation: cardFlash 0.8s ease forwards; pointer-events: none;
 }
+@keyframes cardFlash {
+  0% { opacity: 0; transform: scale(0.5); }
+  40% { opacity: 1; transform: scale(1.2); }
+  100% { opacity: 0; transform: scale(1.6); }
+}
+.playing-card.flip .face::before {
+  content: ""; position: absolute; top: -50%; left: -50%;
+  width: 200%; height: 200%;
+  background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.6) 50%, transparent 70%);
+  transform: rotate(25deg) translateX(-150%);
+  animation: shineSweep 1s ease forwards; pointer-events: none;
+}
+@keyframes shineSweep { to { transform: rotate(25deg) translateX(150%); } }
 
-/* ===== 錢包徽章 ===== */
-.wallet-badge {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(255,255,255,0.1);
-  border-radius: 9999px;
-  padding: 4px 12px;
-  font-weight: bold;
-  font-size: 14px;
-  backdrop-filter: blur(6px);
-  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
-}
-.wallet-amt {
-  color: #facc15;
-  margin-right: 6px;
-}
-.wallet-sep {
-  opacity: .6;
-  margin: 0 4px;
-}
-
-/* ===== 路子圖 ===== */
-.road-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 8px 0;
-}
-.road-dot {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-}
+/* ===== 路子圖（簡版） ===== */
+.road-grid { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 0; }
+.road-dot { width: 20px; height: 20px; border-radius: 50%; }
 .road-P { background: #3b82f6; } /* PLAYER */
 .road-B { background: #ef4444; } /* BANKER */
 .road-T { background: #facc15; } /* TIE */
 
-/* ===== 小動畫特效 ===== */
-.glow-in {
-  animation: glowIn 0.6s ease forwards;
+/* ===== 錢包徽章 ===== */
+.wallet-badge {
+  display: flex; align-items: center; gap: 6px;
+  background: rgba(255,255,255,0.1); border-radius: 9999px;
+  padding: 4px 12px; font-weight: bold; font-size: 14px;
+  backdrop-filter: blur(6px); box-shadow: 0 2px 6px rgba(0,0,0,0.25);
 }
-@keyframes glowIn {
-  from { opacity: 0; transform: scale(0.9); }
-  to   { opacity: 1; transform: scale(1); }
-}
-/* ===== 開牌翻牌閃光特效 ===== */
-.playing-card.flip {
-  position: relative;
-  overflow: hidden;
-}
-
-/* 光暈效果 */
-.playing-card.flip::after {
-  content: "";
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, transparent 70%);
-  opacity: 0;
-  transform: scale(0.5);
-  animation: cardFlash 0.8s ease forwards;
-  pointer-events: none;
-}
-
-@keyframes cardFlash {
-  0%   { opacity: 0; transform: scale(0.5); }
-  40%  { opacity: 1; transform: scale(1.2); }
-  100% { opacity: 0; transform: scale(1.6); }
-}
-
-/* 掃光條 */
-.playing-card.flip .face::before {
-  content: "";
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.6) 50%, transparent 70%);
-  transform: rotate(25deg) translateX(-150%);
-  animation: shineSweep 1s ease forwards;
-  pointer-events: none;
-}
-
-@keyframes shineSweep {
-  to {
-    transform: rotate(25deg) translateX(150%);
-  }
-}
-
+.wallet-amt { color: #facc15; margin-right: 6px; }
+.wallet-sep { opacity: .6; margin: 0 4px; }
