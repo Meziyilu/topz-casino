@@ -9,15 +9,24 @@ datasource db {
 }
 
 model User {
-  id          String   @id @default(cuid())
-  email       String   @unique
-  password    String
-  name        String?
-  balance     Int      @default(0) // 錢包
-  bankBalance Int      @default(0) // 銀行
-  createdAt   DateTime @default(now())
+  id       String  @id @default(cuid())
+  email    String  @unique
+  password String
+  name     String?
+  isAdmin  Boolean @default(false)
 
-  bets Bet[]
+  // 餘額
+  balance     Int @default(0) // 錢包
+  bankBalance Int @default(0) // 銀行
+
+  createdAt DateTime @default(now())
+
+  // relations
+  bets         Bet[]
+  ledgers      Ledger[] @relation("UserLedgers")
+  adminLedgers Ledger[] @relation("AdminActorLedgers")
+
+  @@index([isAdmin])
 }
 
 enum BetSide {
@@ -65,7 +74,6 @@ model Room {
  * 每個房間每天的局序從 1 重新開始：
  * - 唯一鍵：(roomId, day, roundSeq)
  * - day：以台北當地日期 00:00 轉為 UTC 存入
- * - 牌面/對子等資訊以 Json/Boolean 保存，方便前端動畫與路子
  */
 model Round {
   id       String   @id @default(cuid())
@@ -78,7 +86,7 @@ model Round {
   playerTotal Int?
   bankerTotal Int?
 
-  playerCards Json? // [{rank:1..13,suit:0..3}, ...]
+  playerCards Json?
   bankerCards Json?
 
   playerPair  Boolean?
@@ -86,8 +94,8 @@ model Round {
   anyPair     Boolean?
   perfectPair Boolean?
 
-  startedAt DateTime // 回合開始 UTC
-  settledAt DateTime? // 結算完成 UTC
+  startedAt DateTime
+  settledAt DateTime?
   createdAt DateTime  @default(now())
 
   room Room  @relation(fields: [roomId], references: [id])
@@ -120,4 +128,40 @@ model Bet {
 
   @@index([userId, roomId, createdAt])
   @@index([roomId, day, roundSeq])
+}
+
+enum LedgerType {
+  ADMIN_ADJUST // 管理員人為調整
+  TRANSFER_IN // 銀行→錢包
+  TRANSFER_OUT // 錢包→銀行
+  BET_PLACED // 下單（預留）
+  BET_PAYOUT // 派彩（預留）
+}
+
+enum BalanceTarget {
+  WALLET
+  BANK
+}
+
+/**
+ * 交易流水（審計用）
+ */
+model Ledger {
+  id           String        @id @default(cuid())
+  userId       String
+  adminId      String? // 誰調的
+  type         LedgerType
+  target       BalanceTarget // 調整哪個錢包
+  delta        Int // 正：加幣；負：扣幣
+  memo         String? // 理由備註
+  balanceAfter Int? // 若 target=WALLET 調完的錢包餘額
+  bankAfter    Int? // 若 target=BANK   調完的銀行餘額
+  createdAt    DateTime      @default(now())
+
+  user  User  @relation("UserLedgers", fields: [userId], references: [id])
+  admin User? @relation("AdminActorLedgers", fields: [adminId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([adminId])
+  @@index([type, target])
 }
