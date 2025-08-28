@@ -26,10 +26,11 @@ export async function GET(req: Request) {
     const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get("pageSize") || "20", 10)));
     const skip = (page - 1) * pageSize;
 
+    // ✅ 只用 email 搜尋，避免引用不存在的 name 欄位
     const where = q
-      ? {
-          OR: [{ email: { contains: q, mode: "insensitive" as const } }],
-        }
+      ? ({
+          email: { contains: q, mode: "insensitive" },
+        } as const)
       : {};
 
     const [total, rows] = await Promise.all([
