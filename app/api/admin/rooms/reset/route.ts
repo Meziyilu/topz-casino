@@ -1,12 +1,10 @@
-// app/api/admin/rooms/reset/route.ts
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
-
-const asAny = <T = any>(v: unknown) => v as T;
+import type { Prisma } from "@prisma/client";
 
 function noStoreJson(payload: any, status = 200) {
   return NextResponse.json(payload, {
@@ -19,7 +17,7 @@ function noStoreJson(payload: any, status = 200) {
   });
 }
 
-// 台北日切（今天 00:00 以 UTC 表示）
+// 台北當日 00:00（UTC 表示）
 function taipeiDayStart(date = new Date()) {
   const utc = date.getTime();
   const tpe = utc + 8 * 3600_000;
@@ -27,19 +25,19 @@ function taipeiDayStart(date = new Date()) {
   return new Date(tpeStart - 8 * 3600_000);
 }
 
-// 建立第一局
-async function createFirstRoundTx(
-  tx: Parameters<typeof prisma.$transaction>[0] extends (arg: infer T) => any ? T : any,
-  roomId: string,
-  dayStartUtc: Date
-) {
+async function createNextRoundTx(tx: Prisma.TransactionClient, roomId: string, dayStartUtc: Date) {
+  const last = await tx.round.findFirst({
+    where: { roomId, day: dayStartUtc },
+    orderBy: { roundSeq: "desc" },
+    select: { roundSeq: true },
+  });
   const now = new Date();
   return tx.round.create({
     data: {
       roomId,
       day: dayStartUtc,
-      roundSeq: 1,
-      phase: asAny("BETTING"),
+      roundSeq: (last?.roundSeq ?? 0) + 1,
+      phase: "BETTING" as any,
       createdAt: now,
       startedAt: now,
     },
@@ -50,39 +48,36 @@ async function createFirstRoundTx(
 export async function POST(req: Request) {
   try {
     await requireAdmin(req);
+    const body = await req.json().catch(() => ({}));
+    const roomCode = String(body?.roomCode || "").toUpperCase();
+    if (!roomCode) return noStoreJson({ error: "缺少 roomCode" }, 400);
+
+    const room = await prisma.room.findUnique({ where: { code: roomCode as any }, select: { id: true, code: true } });
+    if (!room) return noStoreJson({ error: "房間不存在" }, 404);
 
     const dayStartUtc = taipeiDayStart(new Date());
 
-    const rooms = await prisma.room.findMany({
-      where: { code: { in: ["R30", "R60", "R90"] as any } },
-      select: { id: true, code: true, durationSeconds: true },
-    });
-    if (rooms.length === 0) return noStoreJson({ error: "尚未建立房間 R30/R60/R90" }, 400);
-
     await prisma.$transaction(async (tx) => {
-      // 刪掉「今天」的 rounds 與 bets（僅今天）
-      const todayRoundIds = (
+      // 找出當日所有 roundId
+      const roundIds = (
         await tx.round.findMany({
-          where: { day: dayStartUtc, roomId: { in: rooms.map((r) => r.id) } },
+          where: { roomId: room.id, day: dayStartUtc },
           select: { id: true },
         })
       ).map((r) => r.id);
 
-      if (todayRoundIds.length > 0) {
-        await tx.bet.deleteMany({ where: { roundId: { in: todayRoundIds } } });
-        await tx.round.deleteMany({ where: { id: { in: todayRoundIds } } });
+      // 刪當日下注與回合
+      if (roundIds.length) {
+        await tx.bet.deleteMany({ where: { roundId: { in: roundIds } } });
       }
+      await tx.round.deleteMany({ where: { roomId: room.id, day: dayStartUtc } });
 
-      // 為每個房間建立 round #1
-      for (const r of rooms) {
-        await createFirstRoundTx(tx, r.id, dayStartUtc);
-      }
+      // 開第一局
+      await createNextRoundTx(tx, room.id, dayStartUtc);
     });
 
-    return noStoreJson({ ok: true, message: "已清空今日局數並重建三房的第 1 局" });
+    return noStoreJson({ ok: true, roomCode });
   } catch (e: any) {
-    const msg = e?.message || "重置失敗";
-    if (msg.includes("管理員權限")) return noStoreJson({ error: msg }, 403);
-    return noStoreJson({ error: msg }, 400);
+    return noStoreJson({ error: e?.message || "Server error" }, 500);
   }
 }

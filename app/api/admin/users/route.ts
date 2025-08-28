@@ -1,35 +1,57 @@
-import { NextRequest, NextResponse } from "next/server";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { verifyJWT } from "@/lib/jwt";
+import { requireAdmin } from "@/lib/auth";
 
-export const runtime = "nodejs";
+function noStoreJson(payload: any, status = 200) {
+  return NextResponse.json(payload, {
+    status,
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+      Pragma: "no-cache",
+      Expires: "0",
+    },
+  });
+}
 
-export async function GET(req: NextRequest) {
+export async function GET(req: Request) {
   try {
-    const token = req.cookies.get("token")?.value;
-    if (!token) return NextResponse.json({ error: "未登入" }, { status: 401 });
-    const payload = await verifyJWT(token);
-    const me = await prisma.user.findUnique({ where: { id: String(payload.sub) }, select: { isAdmin: true }});
-    if (!me?.isAdmin) return NextResponse.json({ error: "沒有權限" }, { status: 403 });
+    await requireAdmin(req);
 
-    const q = (req.nextUrl.searchParams.get("q") || "").trim();
-    const users = await prisma.user.findMany({
-      where: q ? {
-        OR: [
-          { email: { contains: q, mode: "insensitive" } },
-          { name:  { contains: q, mode: "insensitive" } }
-        ]
-      } : {},
-      orderBy: { createdAt: "desc" },
-      take: 100,
-      select: {
-        id: true, email: true, name: true, balance: true, bankBalance: true, createdAt: true,
-        ledgers: { orderBy: { createdAt: "desc" }, take: 5, select: { id:true, type:true, target:true, delta:true, memo:true, createdAt:true } }
-      }
-    });
+    const url = new URL(req.url);
+    const q = (url.searchParams.get("q") || "").trim();
+    const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
+    const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get("pageSize") || "20", 10)));
+    const skip = (page - 1) * pageSize;
 
-    return NextResponse.json({ users });
-  } catch (e:any) {
-    return NextResponse.json({ error: e.message || "Server error" }, { status: 500 });
+    const where = q
+      ? {
+          OR: [{ email: { contains: q, mode: "insensitive" as const } }],
+        }
+      : {};
+
+    const [total, rows] = await Promise.all([
+      prisma.user.count({ where }),
+      prisma.user.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: pageSize,
+        select: {
+          id: true,
+          email: true,
+          isAdmin: true,
+          balance: true,
+          bankBalance: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+
+    return noStoreJson({ total, page, pageSize, rows });
+  } catch (e: any) {
+    return noStoreJson({ error: e?.message || "Server error" }, 500);
   }
 }

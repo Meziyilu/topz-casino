@@ -1,4 +1,3 @@
-// app/api/admin/wallet/adjust/route.ts
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -17,72 +16,63 @@ function noStoreJson(payload: any, status = 200) {
   });
 }
 
-/**
- * body:
- * {
- *   userId?: string,
- *   email?: string,
- *   target: "WALLET" | "BANK",
- *   delta: number,         // 正數加、負數減
- *   memo?: string
- * }
- */
+type Target = "WALLET" | "BANK";
+
 export async function POST(req: Request) {
   try {
-    const admin = await requireAdmin(req); // 不是管理員會直接 throw
-    const body = await req.json().catch(() => ({}));
-    const userId = body?.userId ? String(body.userId) : undefined;
-    const email = body?.email ? String(body.email) : undefined;
-    const target = String(body?.target || "");
-    const delta = Number(body?.delta || 0);
-    const memo = body?.memo ? String(body.memo) : `管理員調整（${admin.email}）`;
+    const admin = await requireAdmin(req);
 
-    if (!userId && !email) return noStoreJson({ error: "請提供 userId 或 email" }, 400);
-    if (!["WALLET", "BANK"].includes(target)) return noStoreJson({ error: "target 必須是 WALLET 或 BANK" }, 400);
-    if (!Number.isFinite(delta) || delta === 0) return noStoreJson({ error: "delta 必須是非 0 數字" }, 400);
+    const body = await req.json().catch(() => ({}));
+    const userId = String(body?.userId || "");
+    const target = String(body?.target || "WALLET").toUpperCase() as Target;
+    const delta = Number(body?.delta || 0);
+    const memo = String(body?.memo || "");
+
+    if (!userId) return noStoreJson({ error: "缺少 userId" }, 400);
+    if (!["WALLET", "BANK"].includes(target)) return noStoreJson({ error: "target 僅能 WALLET/BANK" }, 400);
+    if (!Number.isFinite(delta) || delta === 0) return noStoreJson({ error: "delta 必須為非 0 數字" }, 400);
 
     const out = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.findFirst({
-        where: userId ? { id: userId } : { email: email! },
-        select: { id: true, balance: true, bankBalance: true },
+      const u = await tx.user.findUnique({
+        where: { id: userId },
+        select: { balance: true, bankBalance: true },
       });
-      if (!user) throw new Error("找不到目標使用者");
+      if (!u) throw new Error("找不到使用者");
 
-      let after;
-      if (target === "WALLET") {
-        after = await tx.user.update({
-          where: { id: user.id },
-          data: { balance: { increment: delta } },
-          select: { balance: true, bankBalance: true },
-        });
-      } else {
-        after = await tx.user.update({
-          where: { id: user.id },
-          data: { bankBalance: { increment: delta } },
-          select: { balance: true, bankBalance: true },
-        });
-      }
+      let nextBalance = u.balance;
+      let nextBank = u.bankBalance;
+
+      if (target === "WALLET") nextBalance += delta;
+      else nextBank += delta;
+
+      if (nextBalance < 0 || nextBank < 0) throw new Error("調整後餘額不可小於 0");
+
+      const after = await tx.user.update({
+        where: { id: userId },
+        data: {
+          balance: nextBalance,
+          bankBalance: nextBank,
+        },
+        select: { balance: true, bankBalance: true },
+      });
 
       await tx.ledger.create({
         data: {
-          userId: user.id,
+          userId,
           type: "ADMIN_ADJUST" as any,
           target: target as any,
           delta,
-          memo,
+          memo: memo || `管理員(${admin.email})調整 ${target === "WALLET" ? "錢包" : "銀行"} ${delta > 0 ? "+" : ""}${delta}`,
           balanceAfter: after.balance,
           bankAfter: after.bankBalance,
         },
       });
 
-      return { userId: user.id, balance: after.balance, bankBalance: after.bankBalance };
+      return after;
     });
 
-    return noStoreJson({ ok: true, ...out });
+    return noStoreJson({ ok: true, balance: out.balance, bank: out.bankBalance });
   } catch (e: any) {
-    const msg = e?.message || "操作失敗";
-    // requireAdmin 丟出來的錯直接 403
-    if (msg.includes("管理員權限")) return noStoreJson({ error: msg }, 403);
-    return noStoreJson({ error: msg }, 400);
+    return noStoreJson({ error: e?.message || "Server error" }, 500);
   }
 }
