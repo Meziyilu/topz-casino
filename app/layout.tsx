@@ -1,13 +1,16 @@
+// app/layout.tsx
 import "./globals.css";
-import NavBar from "@/components/NavBar";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "TOPZCASINO",
+  description: "娛樂城",
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh-Hant">
-      <body className="bg-[#0a0f1a]">
-        <NavBar />
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
