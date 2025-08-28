@@ -17,20 +17,17 @@ function noStoreJson(payload: any, status = 200) {
   });
 }
 
-async function requireAdmin(req: Request) {
-  const cookie = (req as any)?.cookies?.get?.("token")?.value
-    // for edge/runtime compatibility:
-    ?? (globalThis as any)?.Headers ? null : null;
+// ---- 修正：用 headers 解析 token，避免 TS 對 null 的推斷問題 ----
+function readTokenFromHeaders(req: Request): string | null {
+  const raw = req.headers.get("cookie");
+  if (!raw) return null;
+  // 抓 token=...; 的值
+  const m = raw.match(/(?:^|;\s*)token=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
 
-  // Next 14 route handler：用 headers 讀 cookie
-  let token = cookie;
-  if (!token) {
-    const headerCookie = (req.headers.get("cookie") || "")
-      .split(";")
-      .map(s => s.trim())
-      .find(s => s.startsWith("token="));
-    if (headerCookie) token = headerCookie.split("=")[1];
-  }
+async function requireAdmin(req: Request) {
+  const token = readTokenFromHeaders(req);
   if (!token) return null;
 
   try {
@@ -51,7 +48,6 @@ export async function POST(req: Request) {
     const admin = await requireAdmin(req);
     if (!admin) return noStoreJson({ error: "需要管理員權限" }, 403);
 
-    // 全量重置：清空下注/帳本/回合/房間 → 建立三房 → 各開首局
     await prisma.$transaction(async (tx) => {
       await tx.ledger.deleteMany();
       await tx.bet.deleteMany();
