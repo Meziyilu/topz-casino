@@ -1,4 +1,3 @@
-// app/api/casino/baccarat/bet/route.ts
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -6,6 +5,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifyJWT } from "@/lib/jwt";
 import type { Prisma, BetSide } from "@prisma/client";
+import { asAny } from "@/lib/cast";
 
 function noStoreJson(payload: any, status = 200) {
   return NextResponse.json(payload, {
@@ -42,24 +42,24 @@ export async function POST(req: Request) {
     if (!me) return noStoreJson({ error: "未登入" }, 401);
 
     const body = await req.json().catch(() => ({}));
-    const roomCode = String(body?.room || "").toUpperCase();
+    const roomCodeStr = String(body?.room || "").toUpperCase();
     const side = String(body?.side || "").toUpperCase() as BetSide;
     const amount = Number(body?.amount || 0);
 
     const valid: BetSide[] = ["PLAYER", "BANKER", "TIE", "PLAYER_PAIR", "BANKER_PAIR"];
-    if (!roomCode) return noStoreJson({ error: "缺少 room" }, 400);
+    if (!roomCodeStr) return noStoreJson({ error: "缺少 room" }, 400);
     if (!valid.includes(side)) return noStoreJson({ error: "side 不合法" }, 400);
     if (!Number.isFinite(amount) || amount <= 0) return noStoreJson({ error: "amount 必須為正" }, 400);
 
-    // 這裡把 roomCode 轉型，避免 enum 型別不相容
+    // ⚠️ 放寬 enum 型別
     const room = await prisma.room.findFirst({
-      where: { code: roomCode as any },
+      where: { code: asAny(roomCodeStr) },
       select: { id: true, code: true, durationSeconds: true },
     });
     if (!room) return noStoreJson({ error: "房間不存在" }, 404);
 
     const round = await prisma.round.findFirst({
-      where: { roomId: room.id, phase: "BETTING" },
+      where: { roomId: room.id, phase: asAny("BETTING") },
       orderBy: [{ roundSeq: "desc" }],
       select: { id: true, startedAt: true },
     });
@@ -83,15 +83,15 @@ export async function POST(req: Request) {
       });
 
       const bet = await tx.bet.create({
-        data: { userId: me.id, roundId: round.id, side, amount },
+        data: { userId: me.id, roundId: round.id, side: asAny(side), amount },
         select: { id: true },
       });
 
       await tx.ledger.create({
         data: {
           userId: me.id,
-          type: "BET_PLACED",
-          target: "WALLET",
+          type: asAny("BET_PLACED"),
+          target: asAny("WALLET"),
           delta: -amount,
           memo: `下注 ${side} (${room.code})`,
           balanceAfter: after.balance,
