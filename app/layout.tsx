@@ -1,21 +1,12 @@
 import "./globals.css";
-import type { Metadata } from "next";
-
-export const metadata: Metadata = {
-  title: "Fullstack Render Template",
-  description: "Next.js + Prisma + JWT cookie on Render"
-};
+import NavBar from "@/components/NavBar";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh-Hant">
-      <body>
-        {/* Background layers */}
-        <div className="bg-gradient"></div>
-        <div className="bg-noise"></div>
-        <div className="aurora"></div>
-        {/* Content */}
-        <main className="page-wrap">{children}</main>
+      <body className="bg-[#0a0f1a]">
+        <NavBar />
+        {children}
       </body>
     </html>
   );
