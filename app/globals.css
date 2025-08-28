@@ -2,100 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 版面底色（暗夜漸層） */
-:root {
-  --bg1: #0b0f1a;
-  --bg2: #111827;
-  --glass: rgba(255, 255, 255, 0.08);
-  --glass-strong: rgba(255, 255, 255, 0.12);
-  --glass-border: rgba(255, 255, 255, 0.18);
+/* 全域樣式 */
+body {
+  @apply bg-casino-bg text-white font-sans;
 }
 
-html, body {
-  height: 100%;
-  background: radial-gradient(1000px 600px at 20% 0%, #0f172a 0%, var(--bg1) 40%, var(--bg2) 100%);
-  color: #e5e7eb;
-}
-
-/* 霧面玻璃卡片 */
-.glass {
-  background: var(--glass);
-  border: 1px solid var(--glass-border);
-  box-shadow: 0 10px 40px rgba(0,0,0,0.25);
-  backdrop-filter: saturate(160%) blur(14px);
-  -webkit-backdrop-filter: saturate(160%) blur(14px);
-  border-radius: 16px;
-}
-
-/* 更亮的玻璃（大廳區塊） */
-.glass-strong {
-  background: var(--glass-strong);
-  border: 1px solid rgba(255,255,255,0.22);
-}
-
-/* 霓虹邊框 */
-.neon {
-  box-shadow: 0 0 0 1px rgba(86,116,255,0.35), 0 0 40px rgba(86,116,255,0.25) inset;
-}
-
-/* 按鈕 */
-.btn {
-  @apply inline-flex items-center justify-center px-4 py-2 rounded-md font-semibold transition;
-  background: linear-gradient(90deg, #5674ff, #7b95ff);
-  color: white;
-  border: 1px solid rgba(255,255,255,0.2);
-}
-.btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
-.btn:active { transform: translateY(0); }
-
-/* 錢包徽章 */
-.badge {
-  @apply text-sm px-3 py-1 rounded-full;
-  background: rgba(86,116,255,0.18);
-  border: 1px solid rgba(86,116,255,0.35);
-}
-
-/* 百家樂投注鍵 */
-.bet-btn {
-  @apply px-3 py-2 rounded-md font-semibold;
-  border: 1px solid rgba(255,255,255,0.15);
-  background: rgba(255,255,255,0.06);
-}
-.bet-btn:hover { background: rgba(255,255,255,0.12); }
-
-/* Shimmer 效果 */
-.shimmer {
-  background-image: linear-gradient(90deg, rgba(255,255,255,0.05) 0, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0.05) 100%);
-  background-size: 200% 100%;
-  animation: shimmer 2s linear infinite;
-}
-
-/* 翻牌動畫（3D） */
+/* 卡片樣式 */
 .card {
-  transform-style: preserve-3d;
-  transition: transform .6s ease;
-}
-.card.flip {
-  transform: rotateY(180deg);
-}
-.card-face {
-  backface-visibility: hidden;
-}
-.card-back {
-  transform: rotateY(180deg);
+  @apply bg-casino-card rounded-lg shadow-lg p-4 animate-fade;
 }
 
-/* 路子格 */
-.road-grid {
-  display: grid;
-  grid-template-columns: repeat(20, minmax(0, 1fr));
-  grid-auto-rows: 16px;
-  gap: 4px;
+/* 按鈕樣式 */
+.btn {
+  @apply px-4 py-2 rounded-md font-bold text-white transition;
+  @apply bg-casino-accent hover:bg-purple-600 active:scale-95;
 }
-.road-cell {
-  width: 16px; height: 16px; border-radius: 9999px;
-  border: 1px solid rgba(255,255,255,0.2);
+
+/* 房間區塊 */
+.room-card {
+  @apply card hover:scale-105 transform transition duration-200 cursor-pointer;
 }
-.road-p { background: #ef4444; }   /* PLAYER 紅 */
-.road-b { background: #3b82f6; }   /* BANKER 藍 */
-.road-t { background: #22c55e; }   /* TIE 綠 */
