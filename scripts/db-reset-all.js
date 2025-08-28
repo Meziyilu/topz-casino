@@ -61,3 +61,61 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+// scripts/db-reset-all.js
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient();
+
+async function main() {
+  console.log("⚠️  Resetting database...");
+
+  // 清空順序要注意外鍵依賴
+  await prisma.ledger.deleteMany();
+  await prisma.bet.deleteMany();
+  await prisma.round.deleteMany();
+  await prisma.room.deleteMany();
+
+  console.log("✅ Cleared old data");
+
+  // 建立三個房間
+  const rooms = await prisma.room.createMany({
+    data: [
+      { code: "R30", name: "30秒房", durationSeconds: 30 },
+      { code: "R60", name: "60秒房", durationSeconds: 60 },
+      { code: "R90", name: "90秒房", durationSeconds: 90 },
+    ],
+    skipDuplicates: true,
+  });
+
+  console.log("✅ Rooms created:", rooms);
+
+  // 重新查詢房間 ID
+  const roomList = await prisma.room.findMany();
+
+  // 為每個房間建立第一局
+  const now = new Date();
+  for (const r of roomList) {
+    await prisma.round.create({
+      data: {
+        roomId: r.id,
+        day: now,
+        roundSeq: 1,
+        phase: "BETTING",
+        startedAt: now,
+        createdAt: now,
+      },
+    });
+    console.log(`✅ Initialized first round for ${r.code}`);
+  }
+
+  console.log("🎉 Database reset complete!");
+}
+
+main()
+  .catch((e) => {
+    console.error("❌ Error resetting DB:", e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
