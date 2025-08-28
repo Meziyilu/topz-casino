@@ -51,7 +51,7 @@ function taipeiDayRange(date = new Date()) {
   return { startUtc, endUtc };
 }
 
-// ✅ 用 TransactionClient
+// 使用 TransactionClient
 async function settleRoundTx(tx: Prisma.TransactionClient, roundId: string) {
   await tx.round.update({
     where: { id: roundId },
@@ -59,12 +59,7 @@ async function settleRoundTx(tx: Prisma.TransactionClient, roundId: string) {
   });
 }
 
-// ✅ 用 TransactionClient
-async function createNextRoundTx(
-  tx: Prisma.TransactionClient,
-  roomId: string,
-  startUtc: Date
-) {
+async function createNextRoundTx(tx: Prisma.TransactionClient, roomId: string, startUtc: Date) {
   const latest = await tx.round.findFirst({
     where: { roomId, startedAt: { gte: startUtc } },
     orderBy: [{ roundSeq: "desc" }],
@@ -92,6 +87,7 @@ export async function GET(req: Request) {
 
     const me = await getUser(req);
 
+    // 1) 房間
     const room = await prisma.room.findFirst({
       where: { code: roomCode as any },
       select: { id: true, code: true, name: true, durationSeconds: true },
@@ -100,6 +96,7 @@ export async function GET(req: Request) {
 
     const { startUtc, endUtc } = taipeiDayRange(new Date());
 
+    // 2) 管理員強制重啟
     if (force === "restart") {
       if (!me?.isAdmin) return noStoreJson({ error: "需要管理員權限" }, 403);
       await prisma.$transaction(async (tx) => {
@@ -111,6 +108,7 @@ export async function GET(req: Request) {
       });
     }
 
+    // 3) 最新一局（沒有就開第一局）
     let round = await prisma.round.findFirst({
       where: { roomId: room.id, startedAt: { gte: startUtc, lt: endUtc } },
       orderBy: [{ roundSeq: "desc" }],
@@ -135,9 +133,10 @@ export async function GET(req: Request) {
       });
     }
 
+    // 4) 階段切換與倒數
     const now = new Date();
-    const betDuration = room.durationSeconds;
-    const revealDuration = 5;
+    const betDuration = room.durationSeconds; // 30/60/90
+    const revealDuration = 5; // 開牌動畫時長
     let phase: Phase = (round.phase as any) || "BETTING";
     let secLeft = 0;
 
@@ -217,11 +216,16 @@ export async function GET(req: Request) {
       }
     }
 
+    // 5) 我的投注（⚠️ 移除 day 篩選，避免 Bet 沒有 day 欄位）
     let myBets: Record<string, number> = {};
     if (me && round) {
       const rows = await prisma.bet.groupBy({
         by: ["side"],
-        where: { userId: me.id, day: startUtc, roundSeq: round.roundSeq },
+        where: {
+          userId: me.id,
+          roundSeq: round.roundSeq, // 只以 roundSeq 聚合
+          // 如果你的 Bet 有 roomCode，可加上： roomCode: room.code as any
+        },
         _sum: { amount: true },
       });
       for (const r of rows) {
@@ -229,6 +233,7 @@ export async function GET(req: Request) {
       }
     }
 
+    // 6) 最近戰績
     const recentRows = await prisma.round.findMany({
       where: {
         roomId: room.id,
