@@ -1,66 +1,94 @@
+// app/api/casino/baccarat/bet/route.ts
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import prisma from "@/lib/prisma";
 import { getUserFromRequest } from "@/lib/auth";
+
+function noStoreJson(payload: any, status = 200) {
+  return NextResponse.json(payload, {
+    status,
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+      Pragma: "no-cache",
+      Expires: "0",
+    },
+  });
+}
 
 export async function POST(req: Request) {
   try {
-    const { roomCode, side, amount } = await req.json();
     const me = await getUserFromRequest(req);
-    if (!me) return NextResponse.json({ error: "尚未登入" }, { status: 401 });
+    if (!me) return noStoreJson({ error: "尚未登入" }, 401);
 
-    // 找房間
-    const room = await prisma.room.findUnique({ where: { code: roomCode } });
-    if (!room) {
-      return NextResponse.json({ error: "房間不存在" }, { status: 404 });
+    const body = await req.json().catch(() => ({}));
+    const roomCode = String(body?.roomCode || "");
+    const side = String(body?.side || "");
+    const amount = Number(body?.amount || 0);
+
+    if (!roomCode) return noStoreJson({ error: "缺少房間代碼" }, 400);
+    if (!["PLAYER", "BANKER", "TIE", "PLAYER_PAIR", "BANKER_PAIR", "ANY_PAIR", "PERFECT_PAIR"].includes(side)) {
+      return noStoreJson({ error: "side 非法" }, 400);
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return noStoreJson({ error: "amount 必須是大於 0 的數字" }, 400);
     }
 
-    // 找最新回合
+    // 找房間
+    const room = await prisma.room.findUnique({ where: { code: roomCode as any } });
+    if (!room) return noStoreJson({ error: "房間不存在" }, 404);
+
+    // 找「最新一局」（若你有台北日切，可用 day 條件加強）
     const round = await prisma.round.findFirst({
       where: { roomId: room.id },
       orderBy: { roundSeq: "desc" },
     });
-    if (!round || round.phase !== "BETTING") {
-      return NextResponse.json({ error: "非下注階段" }, { status: 400 });
-    }
+    if (!round) return noStoreJson({ error: "尚未建立任何局數" }, 500);
+    if (round.phase !== "BETTING") return noStoreJson({ error: "非下注階段" }, 400);
 
-    // 扣款 + 建立下注
     const result = await prisma.$transaction(async (tx) => {
-      const u = await tx.user.findUnique({ where: { id: me.id } });
+      // 扣錢
+      const u = await tx.user.findUnique({ where: { id: me.id }, select: { balance: true, bankBalance: true } });
       if (!u) throw new Error("找不到使用者");
       if (u.balance < amount) throw new Error("餘額不足");
 
-      const updated = await tx.user.update({
+      const afterDebit = await tx.user.update({
         where: { id: me.id },
         data: { balance: { decrement: amount } },
+        select: { balance: true, bankBalance: true },
       });
 
+      // 建立下注（**不包含 roomId**；用 roundId 對應該局）
       await tx.bet.create({
         data: {
           userId: me.id,
-          roomId: room.id,
+          roundId: round.id,
           day: round.day,
           roundSeq: round.roundSeq,
-          side,
+          side: side as any,
           amount,
         },
       });
 
+      // 記帳
       await tx.ledger.create({
         data: {
           userId: me.id,
-          type: "BET",
-          target: side,
+          type: "BET" as any,
+          target: side as any, // 若 enum 不含 side，可改 "WALLET" as any
           delta: -amount,
           memo: `下注 ${side} (房間 ${room.code} #${round.roundSeq})`,
-          balanceAfter: updated.balance,
+          balanceAfter: afterDebit.balance,
+          bankAfter: afterDebit.bankBalance,
         },
       });
 
-      return { balance: updated.balance };
+      return { balance: afterDebit.balance };
     });
 
-    return NextResponse.json({ ok: true, balance: result.balance });
+    return noStoreJson({ ok: true, balance: result.balance });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message || "下注失敗" }, { status: 400 });
+    return noStoreJson({ error: e?.message || "下注失敗" }, 400);
   }
 }
