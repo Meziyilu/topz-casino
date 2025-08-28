@@ -4,10 +4,9 @@ export const revalidate = 0;
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { verifyJWT } from "@/lib/jwt";
+import { getUserFromRequest } from "@/lib/auth";
 
-type BalanceTarget = "WALLET" | "BANK";
-
+// 小工具
 function noStoreJson(payload: any, status = 200) {
   return NextResponse.json(payload, {
     status,
@@ -19,50 +18,45 @@ function noStoreJson(payload: any, status = 200) {
   });
 }
 
-function readTokenFromHeaders(req: Request): string | null {
-  const raw = req.headers.get("cookie");
-  if (!raw) return null;
-  const m = raw.match(/(?:^|;\s*)token=([^;]+)/);
-  return m ? decodeURIComponent(m[1]) : null;
-}
-
-async function requireUser(req: Request) {
-  const token = readTokenFromHeaders(req);
-  if (!token) return null;
+// 讀取我的餘額（錢包＋銀行）
+export async function GET(req: Request) {
   try {
-    const payload = await verifyJWT(token);
-    return prisma.user.findUnique({
-      where: { id: String(payload.sub) },
-      select: { id: true, balance: true, bankBalance: true },
+    const me = await getUserFromRequest(req);
+    if (!me) return noStoreJson({ error: "尚未登入" }, 401);
+
+    const u = await prisma.user.findUnique({
+      where: { id: me.id },
+      select: { balance: true, bankBalance: true },
     });
-  } catch {
-    return null;
+    if (!u) return noStoreJson({ error: "找不到使用者" }, 404);
+
+    return noStoreJson({ balance: u.balance, bankBalance: u.bankBalance });
+  } catch (e: any) {
+    return noStoreJson({ error: e?.message || "Server error" }, 500);
   }
 }
 
-// GET: 讀取餘額
-export async function GET(req: Request) {
-  const me = await requireUser(req);
-  if (!me) return noStoreJson({ error: "未登入" }, 401);
-  return noStoreJson({ balance: me.balance, bankBalance: me.bankBalance });
-}
-
-// POST: 轉帳 銀行⇄錢包
-// body: { from: "BANK" | "WALLET", amount: number }
+/**
+ * 銀行 ⇄ 錢包轉帳
+ * body: { from: "BANK"|"WALLET", amount: number }
+ * - BANK → WALLET：銀行扣、錢包加
+ * - WALLET → BANK：錢包扣、銀行加
+ * 會寫入一條 Ledger(type="TRANSFER")
+ */
 export async function POST(req: Request) {
   try {
-    const me = await requireUser(req);
-    if (!me) return noStoreJson({ error: "未登入" }, 401);
+    const me = await getUserFromRequest(req);
+    if (!me) return noStoreJson({ error: "尚未登入" }, 401);
 
     const body = await req.json().catch(() => ({}));
-    const from = String(body?.from || "").toUpperCase() as BalanceTarget;
+    const from = String(body?.from || "");
     const amount = Number(body?.amount || 0);
 
-    if (!(from === "BANK" || from === "WALLET")) {
+    if (!["BANK", "WALLET"].includes(from)) {
       return noStoreJson({ error: "from 必須是 BANK 或 WALLET" }, 400);
     }
     if (!Number.isFinite(amount) || amount <= 0) {
-      return noStoreJson({ error: "amount 必須為正數" }, 400);
+      return noStoreJson({ error: "amount 必須是大於 0 的數字" }, 400);
     }
 
     const out = await prisma.$transaction(async (tx) => {
@@ -73,9 +67,8 @@ export async function POST(req: Request) {
       if (!u) throw new Error("找不到使用者");
 
       if (from === "BANK") {
-        // 銀行 → 錢包
         if (u.bankBalance < amount) throw new Error("銀行餘額不足");
-        const updated = await tx.user.update({
+        const after = await tx.user.update({
           where: { id: me.id },
           data: {
             bankBalance: { decrement: amount },
@@ -83,36 +76,22 @@ export async function POST(req: Request) {
           },
           select: { balance: true, bankBalance: true },
         });
-
-        // 記帳（同一動作記兩筆，標示方向；LedgerType 使用 "TRANSFER"）
         await tx.ledger.create({
           data: {
             userId: me.id,
             type: "TRANSFER" as any,
-            target: "BANK" as BalanceTarget,
-            delta: -amount,
-            memo: "銀行 → 錢包",
-            balanceAfter: updated.balance,
-            bankAfter: updated.bankBalance,
-          },
-        });
-        await tx.ledger.create({
-          data: {
-            userId: me.id,
-            type: "TRANSFER" as any,
-            target: "WALLET" as BalanceTarget,
+            target: "WALLET" as any, // 最終流入到錢包
             delta: amount,
             memo: "銀行 → 錢包",
-            balanceAfter: updated.balance,
-            bankAfter: updated.bankBalance,
+            balanceAfter: after.balance,
+            bankAfter: after.bankBalance,
           },
         });
-
-        return { balance: updated.balance, bankBalance: updated.bankBalance };
+        return after;
       } else {
-        // from === "WALLET"：錢包 → 銀行
+        // WALLET -> BANK
         if (u.balance < amount) throw new Error("錢包餘額不足");
-        const updated = await tx.user.update({
+        const after = await tx.user.update({
           where: { id: me.id },
           data: {
             balance: { decrement: amount },
@@ -120,36 +99,23 @@ export async function POST(req: Request) {
           },
           select: { balance: true, bankBalance: true },
         });
-
         await tx.ledger.create({
           data: {
             userId: me.id,
             type: "TRANSFER" as any,
-            target: "WALLET" as BalanceTarget,
-            delta: -amount,
-            memo: "錢包 → 銀行",
-            balanceAfter: updated.balance,
-            bankAfter: updated.bankBalance,
-          },
-        });
-        await tx.ledger.create({
-          data: {
-            userId: me.id,
-            type: "TRANSFER" as any,
-            target: "BANK" as BalanceTarget,
+            target: "BANK" as any,
             delta: amount,
             memo: "錢包 → 銀行",
-            balanceAfter: updated.balance,
-            bankAfter: updated.bankBalance,
+            balanceAfter: after.balance,
+            bankAfter: after.bankBalance,
           },
         });
-
-        return { balance: updated.balance, bankBalance: updated.bankBalance };
+        return after;
       }
     });
 
-    return noStoreJson({ ok: true, ...out });
+    return noStoreJson({ ok: true, balance: out.balance, bankBalance: out.bankBalance });
   } catch (e: any) {
-    return noStoreJson({ error: e?.message || "Server error" }, 500);
+    return noStoreJson({ error: e?.message || "轉帳失敗" }, 400);
   }
 }
