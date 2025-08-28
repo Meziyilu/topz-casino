@@ -51,7 +51,7 @@ function taipeiDayRange(date = new Date()) {
   return { startUtc, endUtc };
 }
 
-// ✅ 這裡用 Prisma.TransactionClient
+// ✅ 用 TransactionClient
 async function settleRoundTx(tx: Prisma.TransactionClient, roundId: string) {
   await tx.round.update({
     where: { id: roundId },
@@ -59,7 +59,7 @@ async function settleRoundTx(tx: Prisma.TransactionClient, roundId: string) {
   });
 }
 
-// ✅ 這裡用 Prisma.TransactionClient
+// ✅ 用 TransactionClient
 async function createNextRoundTx(
   tx: Prisma.TransactionClient,
   roomId: string,
@@ -130,7 +130,8 @@ export async function GET(req: Request) {
 
     if (!round) {
       round = await prisma.$transaction(async (tx) => {
-        return createNextRoundTx(tx, room.id, startUtc);
+        const created = await createNextRoundTx(tx, room.id, startUtc);
+        return created;
       });
     }
 
@@ -170,12 +171,11 @@ export async function GET(req: Request) {
     }
 
     if (phase === "SETTLED") {
-      const currentSeq = round ? round.roundSeq : 0;
       const hasNext = await prisma.round.findFirst({
         where: {
           roomId: room.id,
           startedAt: { gte: startUtc, lt: endUtc },
-          roundSeq: { gt: currentSeq },
+          roundSeq: { gt: round.roundSeq },
         },
         select: { id: true },
       });
@@ -221,7 +221,7 @@ export async function GET(req: Request) {
     if (me && round) {
       const rows = await prisma.bet.groupBy({
         by: ["side"],
-        where: { userId: me.id, day: taipeiDayRange().startUtc, roundSeq: round.roundSeq },
+        where: { userId: me.id, day: startUtc, roundSeq: round.roundSeq },
         _sum: { amount: true },
       });
       for (const r of rows) {
@@ -242,7 +242,7 @@ export async function GET(req: Request) {
 
     return noStoreJson({
       room: { code: room.code, name: room.name, durationSeconds: room.durationSeconds },
-      day: taipeiDayRange().startUtc,
+      day: startUtc,
       roundSeq: round!.roundSeq,
       phase,
       secLeft,
