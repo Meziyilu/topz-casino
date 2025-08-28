@@ -18,23 +18,7 @@ export async function verifyJWT(token: string) {
   return payload;
 }
 
-export async function setAuthCookie(token: string) {
-  const c = await cookies();
-  c.set(COOKIE_NAME, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: true,
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7, // 7 days
-  });
-}
-
-export async function getTokenFromCookie(): Promise<string | null> {
+export async function getTokenFromCookie() {
   const c = await cookies();
   return c.get(COOKIE_NAME)?.value ?? null;
-}
-
-export async function clearAuthCookie() {
-  const c = await cookies();
-  c.set(COOKIE_NAME, "", { path: "/", maxAge: 0 });
 }

@@ -1,64 +1,56 @@
+// app/casino/[room]/page.tsx
 "use client";
-
-import { useParams } from "next/navigation";
 import useSWR from "swr";
-import { useCallback, useState } from "react";
 
-const fetcher = (u: string) =>
-  fetch(u, { credentials: "include", cache: "no-store" }).then((r) => r.json());
+const fetcher = (url: string) => fetch(url, { cache: "no-store" }).then(r => r.json());
 
-export default function RoomPage() {
-  const params = useParams<{ room: string }>();
-  const roomCode = String(params.room || "R60").toUpperCase();
+export default function RoomPage({ params }: { params: { room: string } }) {
+  const room = (params.room || "R60").toUpperCase();
+  const { data, mutate } = useSWR(`/api/casino/baccarat/state?room=${room}`, fetcher, { refreshInterval: 1000 });
 
-  const { data: me } = useSWR("/api/auth/me", fetcher, { refreshInterval: 60000 });
-  const isAdmin = !!me?.isAdmin;
+  async function bet(side: string, amount = 100) {
+    const res = await fetch("/api/casino/baccarat/bet", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ room, side, amount }),
+    }).then(r => r.json());
+    if (res.ok) mutate();
+    else alert(res.error || "下注失敗");
+  }
 
-  const { data, mutate } = useSWR(
-    `/api/casino/baccarat/state?room=${roomCode}`,
-    fetcher,
-    { refreshInterval: 1000, dedupingInterval: 500, revalidateOnFocus: false }
-  );
+  if (!data) return <div className="p-6">載入中…</div>;
 
-  const [busy, setBusy] = useState(false);
-  const onRestart = useCallback(async () => {
-    if (!confirm(`確定要重啟房間 ${roomCode} 的當局？`)) return;
-    try {
-      setBusy(true);
-      const res = await fetch(`/api/casino/baccarat/state?room=${roomCode}&force=restart`, {
-        method: "GET",
-        credentials: "include",
-        cache: "no-store",
-      });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j?.error || "重啟失敗");
-      mutate(); // 立即刷新
-      alert(`房間 ${roomCode} 已重啟為「下注中」`);
-    } catch (e: any) {
-      alert(e.message || "重啟失敗");
-    } finally {
-      setBusy(false);
-    }
-  }, [roomCode, mutate]);
-
-  // 下面是你的原本畫面...
   return (
-    <div className="min-h-[100dvh] text-white p-4 md:p-6">
-      <div className="flex items-center justify-between mb-4">
-        <div className="text-2xl font-extrabold">百家樂 - {roomCode}</div>
-        {isAdmin && (
-          <button
-            onClick={onRestart}
-            disabled={busy}
-            className="px-3 py-2 rounded-lg font-bold border border-white/20 bg-gradient-to-b from-orange-400 to-orange-600"
-          >
-            {busy ? "重啟中…" : "重啟本房"}
-          </button>
-        )}
+    <div className="container mx-auto p-6">
+      <div className="mb-4">
+        <h2 className="text-2xl font-bold">{data.room?.name}（{data.room?.code}）</h2>
+        <div className="opacity-80">局序 #{String(data.roundSeq).padStart(4,"0")} ｜ 狀態 {data.phase} ｜ 倒數 {data.secLeft}s</div>
       </div>
 
-      {/* 你原本的下注面板 / 開牌動畫 / 路子 等 */}
-      {/* ... */}
+      <div className="flex gap-3 mb-6">
+        {["PLAYER","BANKER","TIE","PLAYER_PAIR","BANKER_PAIR"].map(s => (
+          <button key={s} onClick={() => bet(s, 100)}
+            className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 backdrop-blur border border-white/20">
+            壓 {s} 100
+          </button>
+        ))}
+      </div>
+
+      <div className="rounded-xl p-4 bg-white/5 backdrop-blur border border-white/10">
+        <div className="font-semibold mb-2">我的當局投注</div>
+        <pre className="text-sm">{JSON.stringify(data.myBets, null, 2)}</pre>
+      </div>
+
+      <div className="rounded-xl p-4 mt-6 bg-white/5 backdrop-blur border border-white/10">
+        <div className="font-semibold mb-2">今日路子（近20局）</div>
+        <div className="flex flex-wrap gap-2">
+          {data.recent?.map((r: any) => (
+            <span key={r.roundSeq} className="px-2 py-1 rounded bg-white/10">
+              #{r.roundSeq} {r.outcome ?? "-"} ({r.p}:{r.b})
+            </span>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

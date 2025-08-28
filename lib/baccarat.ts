@@ -1,158 +1,87 @@
 // lib/baccarat.ts
-export type Card = { rank: number; suit: number };
-export type DealResult = {
-  playerCards: Card[];
-  bankerCards: Card[];
-  playerTotal: number;
-  bankerTotal: number;
-  outcome: "PLAYER" | "BANKER" | "TIE";
-  playerPair: boolean;
-  bankerPair: boolean;
-  anyPair: boolean;
-  perfectPair: boolean;
-};
+import type { BetSide, RoundOutcome } from "@prisma/client";
 
-export type Phase = "BETTING" | "REVEAL" | "SETTLED";
+export type Card = { r: number; s: number }; // r:1..13, s:0..3
+export type Shoe = Card[];
 
-/** 根據房間秒數自動拆配各階段時間（約 1/2, 1/3, 其餘） */
-export function phaseSlices(durationSeconds: number) {
-  const betting = Math.max(10, Math.floor(durationSeconds * 0.5));
-  const reveal = Math.max(5, Math.floor(durationSeconds * (1 / 3)));
-  const settled = Math.max(3, durationSeconds - betting - reveal);
-  return { betting, reveal, settled };
-}
-
-/** 取「台北當地的當日 00:00」(以 UTC 儲存) 作為 day 基準 */
-export function taipeiDayStartUTC(now = new Date()): Date {
-  // UTC+8：把時間往前推 8 小時取 UTC midnight，再加回去
-  const tzOffsetMs = 8 * 3600 * 1000;
-  const shifted = new Date(now.getTime() + tzOffsetMs);
-  const y = shifted.getUTCFullYear();
-  const m = shifted.getUTCMonth();
-  const d = shifted.getUTCDate();
-  const utcMidnightShifted = Date.UTC(y, m, d, 0, 0, 0);
-  return new Date(utcMidnightShifted - tzOffsetMs);
-}
-
-/** 回傳當前 phase 與倒數（依房間秒數） */
-export function phaseAt(date: Date, durationSeconds: number): { phase: Phase; secLeft: number } {
-  const { betting, reveal, settled } = phaseSlices(durationSeconds);
-  const pos = Math.floor((date.getTime() / 1000) % durationSeconds); // 0..duration-1
-  if (pos < betting) return { phase: "BETTING", secLeft: betting - pos };
-  if (pos < betting + reveal) return { phase: "REVEAL", secLeft: betting + reveal - pos };
-  return { phase: "SETTLED", secLeft: betting + reveal + settled - pos };
-}
-
-/** 計算當日第幾局（roundSeq：從 1 開始） */
-export function roundSeqAt(date: Date, durationSeconds: number): number {
-  const day0 = taipeiDayStartUTC(date).getTime();
-  const elapsedSec = Math.floor((date.getTime() - day0) / 1000);
-  return Math.floor(elapsedSec / durationSeconds) + 1;
-}
-
-/** 依 (roomCode + day(YYYYMMDD) + roundSeq) 產生穩定種子 */
-function seedFrom(roomCode: string, day: Date, roundSeq: number): number {
-  const y = day.getUTCFullYear();
-  const m = day.getUTCMonth() + 1;
-  const d = day.getUTCDate();
-  const key = `${roomCode}:${y}${String(m).padStart(2, "0")}${String(d).padStart(2, "0")}:${roundSeq}`;
-  let h = 2166136261 >>> 0; // FNV-1a
-  for (let i = 0; i < key.length; i++) {
-    h ^= key.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
-function mulberry32(seed: number) {
-  return function () {
-    let t = (seed += 0x6d2b79f5);
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function shuffle<T>(arr: T[], rnd: () => number) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(rnd() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-}
-
-function cardValue(rank: number): number {
-  if (rank === 1) return 1;
-  if (rank >= 10) return 0;
-  return rank;
-}
-function total(cards: Card[]): number {
-  const s = cards.reduce((a, c) => a + cardValue(c.rank), 0);
-  return s % 10;
-}
-
-export function dealBy(roomCode: string, day: Date, roundSeq: number): DealResult {
-  const seed = seedFrom(roomCode, day, roundSeq);
-  const rnd = mulberry32(seed);
-  const deck: Card[] = [];
-  for (let r = 1; r <= 13; r++) for (let s = 0; s < 4; s++) deck.push({ rank: r, suit: s });
-  shuffle(deck, rnd);
-
-  const player: Card[] = [deck.pop()!, deck.pop()!];
-  const banker: Card[] = [deck.pop()!, deck.pop()!];
-
-  let pt = total(player);
-  let bt = total(banker);
-  const natural = pt >= 8 || bt >= 8;
-
-  if (!natural) {
-    let player3: Card | null = null;
-    if (pt <= 5) {
-      player3 = deck.pop()!;
-      player.push(player3);
-      pt = total(player);
+export function makeShoe(): Shoe {
+  const shoe: Shoe = [];
+  for (let d = 0; d < 6; d++) { // 6副牌，簡化
+    for (let s = 0; s < 4; s++) {
+      for (let r = 1; r <= 13; r++) shoe.push({ r, s });
     }
-    const b = bt;
-    const p3 = player3 ? cardValue(player3.rank) : null;
-    const bankerDraw =
-      (player3 === null && bt <= 5) ||
-      (player3 !== null &&
-        ((b <= 2) ||
-          (b === 3 && p3 !== 8) ||
-          (b === 4 && p3! >= 2 && p3! <= 7) ||
-          (b === 5 && p3! >= 4 && p3! <= 7) ||
-          (b === 6 && (p3 === 6 || p3 === 7))));
-    if (bankerDraw) banker.push(deck.pop()!);
+  }
+  // 洗牌
+  for (let i = shoe.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shoe[i], shoe[j]] = [shoe[j], shoe[i]];
+  }
+  return shoe;
+}
+
+export function cardVal(c: Card) {
+  const r = c.r;
+  if (r >= 10) return 0;
+  return r === 1 ? 1 : r;
+}
+
+export function sumMod10(cards: Card[]) {
+  return cards.reduce((acc, c) => acc + cardVal(c), 0) % 10;
+}
+
+export function isPair(cards: Card[]) {
+  return cards.length >= 2 && cards[0].r === cards[1].r;
+}
+
+export function dealOneRound(shoe: Shoe) {
+  // 簡化：每局重新抽，不跨局共用 shoe（避免持久化）
+  const draw = (): Card => ({ r: Math.floor(Math.random() * 13) + 1, s: Math.floor(Math.random() * 4) });
+
+  const p: Card[] = [draw(), draw()];
+  const b: Card[] = [draw(), draw()];
+
+  let pTotal = sumMod10(p);
+  let bTotal = sumMod10(b);
+
+  const natural = pTotal >= 8 || bTotal >= 8;
+  if (!natural) {
+    // 簡化第三張規則（接近、非完整真人規則）
+    if (pTotal <= 5) {
+      p.push(draw());
+      pTotal = sumMod10(p);
+    }
+    if (bTotal <= 5) {
+      b.push(draw());
+      bTotal = sumMod10(b);
+    }
   }
 
-  const playerTotal = total(player);
-  const bankerTotal = total(banker);
-  const outcome = playerTotal > bankerTotal ? "PLAYER" : playerTotal < bankerTotal ? "BANKER" : "TIE";
-  const playerPair = player[0].rank === player[1].rank;
-  const bankerPair = banker[0].rank === banker[1].rank;
-  const anyPair = playerPair || bankerPair;
-  const perfectPair =
-    (playerPair && player[0].suit === player[1].suit) ||
-    (bankerPair && banker[0].suit === banker[1].suit);
+  let outcome: RoundOutcome;
+  if (pTotal > bTotal) outcome = "PLAYER";
+  else if (bTotal > pTotal) outcome = "BANKER";
+  else outcome = "TIE";
 
   return {
-    playerCards: player,
-    bankerCards: banker,
-    playerTotal,
-    bankerTotal,
+    playerCards: p,
+    bankerCards: b,
+    playerTotal: pTotal,
+    bankerTotal: bTotal,
+    playerPair: isPair(p),
+    bankerPair: isPair(b),
+    anyPair: isPair(p) || isPair(b),
+    perfectPair: isPair(p) && isPair(b),
     outcome,
-    playerPair,
-    bankerPair,
-    anyPair,
-    perfectPair
   };
 }
 
-/** 最近 N 局（不跨日簡化） */
-export function recentSeqs(n: number, roundSeq: number): number[] {
-  const arr: number[] = [];
-  for (let i = 0; i < n; i++) {
-    const s = roundSeq - i;
-    if (s >= 1) arr.push(s);
+export function payoutRatio(side: BetSide, result: ReturnType<typeof dealOneRound>) {
+  // 常見賠率（可依需求調整）
+  switch (side) {
+    case "PLAYER": return result.outcome === "PLAYER" ? 1.0 : (result.outcome === "TIE" ? 0 : -1);
+    case "BANKER": return result.outcome === "BANKER" ? 0.95 : (result.outcome === "TIE" ? 0 : -1);
+    case "TIE":    return result.outcome === "TIE" ? 8.0 : -1;
+    case "PLAYER_PAIR": return result.playerPair ? 11.0 : -1;
+    case "BANKER_PAIR": return result.bankerPair ? 11.0 : -1;
+    default: return -1;
   }
-  return arr;
 }
