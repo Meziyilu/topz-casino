@@ -1,118 +1,155 @@
 // app/api/wallet/route.ts
-import { NextRequest, NextResponse } from "next/server";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifyJWT } from "@/lib/jwt";
-import { Prisma } from "@prisma/client"; // TransactionClient
 
-export const runtime = "nodejs";
+type BalanceTarget = "WALLET" | "BANK";
 
-// 取得使用者錢包 & 銀行餘額
-export async function GET(req: NextRequest) {
+function noStoreJson(payload: any, status = 200) {
+  return NextResponse.json(payload, {
+    status,
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+      Pragma: "no-cache",
+      Expires: "0",
+    },
+  });
+}
+
+function readTokenFromHeaders(req: Request): string | null {
+  const raw = req.headers.get("cookie");
+  if (!raw) return null;
+  const m = raw.match(/(?:^|;\s*)token=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+async function requireUser(req: Request) {
+  const token = readTokenFromHeaders(req);
+  if (!token) return null;
   try {
-    const token = req.cookies.get("token")?.value;
-    if (!token) return NextResponse.json({ error: "未登入" }, { status: 401 });
-
     const payload = await verifyJWT(token);
-    const me = await prisma.user.findUnique({
+    return prisma.user.findUnique({
       where: { id: String(payload.sub) },
-      select: { balance: true, bankBalance: true },
+      select: { id: true, balance: true, bankBalance: true },
     });
-    if (!me) return NextResponse.json({ error: "找不到使用者" }, { status: 404 });
-
-    const res = NextResponse.json({ wallet: me.balance, bank: me.bankBalance });
-    res.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
-    return res;
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
+  } catch {
+    return null;
   }
 }
 
-// 錢包與銀行轉帳（deposit: 銀行→錢包；withdraw: 錢包→銀行）
-export async function POST(req: NextRequest) {
-  try {
-    const token = req.cookies.get("token")?.value;
-    if (!token) return NextResponse.json({ error: "未登入" }, { status: 401 });
+// GET: 讀取餘額
+export async function GET(req: Request) {
+  const me = await requireUser(req);
+  if (!me) return noStoreJson({ error: "未登入" }, 401);
+  return noStoreJson({ balance: me.balance, bankBalance: me.bankBalance });
+}
 
-    const payload = await verifyJWT(token);
-    const userId = String(payload.sub);
+// POST: 轉帳 銀行⇄錢包
+// body: { from: "BANK" | "WALLET", amount: number }
+export async function POST(req: Request) {
+  try {
+    const me = await requireUser(req);
+    if (!me) return noStoreJson({ error: "未登入" }, 401);
 
     const body = await req.json().catch(() => ({}));
-    const action = String(body?.action || "");
-    const amount = Number(body?.amount);
+    const from = String(body?.from || "").toUpperCase() as BalanceTarget;
+    const amount = Number(body?.amount || 0);
 
-    if (!["deposit", "withdraw"].includes(action)) {
-      return NextResponse.json({ error: "不支援的動作" }, { status: 400 });
+    if (!(from === "BANK" || from === "WALLET")) {
+      return noStoreJson({ error: "from 必須是 BANK 或 WALLET" }, 400);
     }
-    if (!Number.isInteger(amount) || amount <= 0) {
-      return NextResponse.json({ error: "金額不合法" }, { status: 400 });
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return noStoreJson({ error: "amount 必須為正數" }, 400);
     }
 
-    const out = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const u = await tx.user.findUnique({ where: { id: userId } });
+    const out = await prisma.$transaction(async (tx) => {
+      const u = await tx.user.findUnique({
+        where: { id: me.id },
+        select: { balance: true, bankBalance: true },
+      });
       if (!u) throw new Error("找不到使用者");
 
-      let wallet = u.balance;
-      let bank = u.bankBalance;
-
-      if (action === "deposit") {
-        if (bank < amount) throw new Error("銀行餘額不足");
+      if (from === "BANK") {
+        // 銀行 → 錢包
+        if (u.bankBalance < amount) throw new Error("銀行餘額不足");
         const updated = await tx.user.update({
-          where: { id: userId },
+          where: { id: me.id },
           data: {
             bankBalance: { decrement: amount },
             balance: { increment: amount },
           },
           select: { balance: true, bankBalance: true },
         });
-        wallet = updated.balance;
-        bank = updated.bankBalance;
 
+        // 記帳（同一動作記兩筆，標示方向；LedgerType 使用 "TRANSFER"）
         await tx.ledger.create({
           data: {
-            userId,
-            type: "TRANSFER_IN",
-            target: "WALLET",
-            delta: amount,
+            userId: me.id,
+            type: "TRANSFER" as any,
+            target: "BANK" as BalanceTarget,
+            delta: -amount,
             memo: "銀行 → 錢包",
-            balanceAfter: wallet,
-            bankAfter: bank,
+            balanceAfter: updated.balance,
+            bankAfter: updated.bankBalance,
           },
         });
+        await tx.ledger.create({
+          data: {
+            userId: me.id,
+            type: "TRANSFER" as any,
+            target: "WALLET" as BalanceTarget,
+            delta: amount,
+            memo: "銀行 → 錢包",
+            balanceAfter: updated.balance,
+            bankAfter: updated.bankBalance,
+          },
+        });
+
+        return { balance: updated.balance, bankBalance: updated.bankBalance };
       } else {
-        if (wallet < amount) throw new Error("錢包餘額不足");
+        // from === "WALLET"：錢包 → 銀行
+        if (u.balance < amount) throw new Error("錢包餘額不足");
         const updated = await tx.user.update({
-          where: { id: userId },
+          where: { id: me.id },
           data: {
             balance: { decrement: amount },
             bankBalance: { increment: amount },
           },
           select: { balance: true, bankBalance: true },
         });
-        wallet = updated.balance;
-        bank = updated.bankBalance;
 
         await tx.ledger.create({
           data: {
-            userId,
-            type: "TRANSFER_OUT",
-            target: "BANK",
+            userId: me.id,
+            type: "TRANSFER" as any,
+            target: "WALLET" as BalanceTarget,
             delta: -amount,
             memo: "錢包 → 銀行",
-            balanceAfter: wallet,
-            bankAfter: bank,
+            balanceAfter: updated.balance,
+            bankAfter: updated.bankBalance,
           },
         });
-      }
+        await tx.ledger.create({
+          data: {
+            userId: me.id,
+            type: "TRANSFER" as any,
+            target: "BANK" as BalanceTarget,
+            delta: amount,
+            memo: "錢包 → 銀行",
+            balanceAfter: updated.balance,
+            bankAfter: updated.bankBalance,
+          },
+        });
 
-      return { wallet, bank };
+        return { balance: updated.balance, bankBalance: updated.bankBalance };
+      }
     });
 
-    const res = NextResponse.json(out);
-    res.headers.set("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate");
-    return res;
+    return noStoreJson({ ok: true, ...out });
   } catch (e: any) {
-    const msg = e?.message || "Server error";
-    const status = /不足|不合法|未登入|不支援/.test(msg) ? 400 : 500;
-    return NextResponse.json({ error: msg }, { status });
+    return noStoreJson({ error: e?.message || "Server error" }, 500);
   }
 }
