@@ -30,7 +30,10 @@ async function requireUser(req: Request) {
   if (!token) return null;
   const payload = await verifyJWT(token).catch(() => null);
   if (!payload?.sub) return null;
-  return prisma.user.findUnique({ where: { id: String(payload.sub) }, select: { id: true, balance: true } });
+  return prisma.user.findUnique({
+    where: { id: String(payload.sub) },
+    select: { id: true, balance: true },
+  });
 }
 
 export async function POST(req: Request) {
@@ -43,12 +46,16 @@ export async function POST(req: Request) {
     const side = String(body?.side || "").toUpperCase() as BetSide;
     const amount = Number(body?.amount || 0);
 
-    const valid: BetSide[] = ["PLAYER","BANKER","TIE","PLAYER_PAIR","BANKER_PAIR"];
+    const valid: BetSide[] = ["PLAYER", "BANKER", "TIE", "PLAYER_PAIR", "BANKER_PAIR"];
     if (!roomCode) return noStoreJson({ error: "缺少 room" }, 400);
     if (!valid.includes(side)) return noStoreJson({ error: "side 不合法" }, 400);
     if (!Number.isFinite(amount) || amount <= 0) return noStoreJson({ error: "amount 必須為正" }, 400);
 
-    const room = await prisma.room.findFirst({ where: { code: roomCode }, select: { id: true, code: true, durationSeconds: true } });
+    // 這裡把 roomCode 轉型，避免 enum 型別不相容
+    const room = await prisma.room.findFirst({
+      where: { code: roomCode as any },
+      select: { id: true, code: true, durationSeconds: true },
+    });
     if (!room) return noStoreJson({ error: "房間不存在" }, 404);
 
     const round = await prisma.round.findFirst({
@@ -58,7 +65,7 @@ export async function POST(req: Request) {
     });
     if (!round) return noStoreJson({ error: "目前沒有可下注回合" }, 400);
 
-    // 檢查是否還在下注時間
+    // 還在下注時間內？
     const now = Date.now();
     const sec = Math.floor((now - new Date(round.startedAt).getTime()) / 1000);
     if (sec >= room.durationSeconds) return noStoreJson({ error: "下注已截止" }, 400);
@@ -76,12 +83,7 @@ export async function POST(req: Request) {
       });
 
       const bet = await tx.bet.create({
-        data: {
-          userId: me.id,
-          roundId: round.id,
-          side,
-          amount,
-        },
+        data: { userId: me.id, roundId: round.id, side, amount },
         select: { id: true },
       });
 
