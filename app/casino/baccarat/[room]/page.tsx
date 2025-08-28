@@ -1,184 +1,153 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
 
-type Phase = "BETTING" | "REVEALING" | "SETTLED";
-type Side = "PLAYER" | "BANKER" | "TIE" | "PLAYER_PAIR" | "BANKER_PAIR";
-
-type StateResp = {
+type RoomState = {
   room: { code: string; name: string; durationSeconds: number };
-  day: string;
-  roundSeq: number | null;
-  phase: Phase;
+  roundSeq: number;
+  phase: "BETTING" | "DEALING" | "SETTLED";
   secLeft: number;
-  result: null | { outcome: string | null; p: number | null; b: number | null };
-  myBets: Record<string, number>;
-  recent: { roundSeq: number | null; outcome: string | null; p: number; b: number }[];
+  result?: {
+    playerTotal: number;
+    bankerTotal: number;
+    outcome: string;
+  } | null;
+  myBets?: Record<string, number>;
 };
 
-const BET_SIDES: { key: Side; label: string }[] = [
-  { key: "PLAYER", label: "閒" },
-  { key: "BANKER", label: "莊" },
-  { key: "TIE", label: "和" },
-  { key: "PLAYER_PAIR", label: "閒對" },
-  { key: "BANKER_PAIR", label: "莊對" },
-];
+export default function BaccaratRoomPage() {
+  const { room } = useParams<{ room: string }>();
+  const [state, setState] = useState<RoomState | null>(null);
 
-export default function BaccaratRoom() {
-  const params = useParams<{ room: string }>();
-  const roomCode = String(params.room || "R60").toUpperCase();
-
-  const [data, setData] = useState<StateResp | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [placing, setPlacing] = useState<Side | null>(null);
-  const [amount, setAmount] = useState(100);
-
-  // 輪詢狀態
   useEffect(() => {
-    let alive = true;
-    async function tick() {
-      try {
-        const res = await fetch(`/api/casino/baccarat/state?room=${roomCode}`, { cache: "no-store" });
-        if (!res.ok) throw new Error("state error");
-        const json = (await res.json()) as StateResp;
-        if (alive) setData(json);
-      } catch {}
-    }
-    tick();
-    const id = setInterval(tick, 1000); // 每秒刷新
-    return () => { alive = false; clearInterval(id); };
-  }, [roomCode]);
-
-  async function place(side: Side) {
-    if (!data) return;
-    setPlacing(side);
-    try {
-      const res = await fetch("/api/casino/baccarat/bet", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+    if (!room) return;
+    let timer: NodeJS.Timeout;
+    async function fetchState() {
+      const res = await fetch(`/api/casino/baccarat/state?room=${room}`, {
         cache: "no-store",
-        body: JSON.stringify({ room: roomCode, side, amount }),
       });
-      const out = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(out?.error || "下注失敗");
-      // 成功後下一輪輪詢就會更新 myBets
-    } catch (e) {
-      console.error(e);
-      alert((e as any)?.message || "下注失敗");
-    } finally {
-      setPlacing(null);
+      if (res.ok) {
+        const data = await res.json();
+        setState(data);
+      }
     }
+    fetchState();
+    timer = setInterval(fetchState, 1000);
+    return () => clearInterval(timer);
+  }, [room]);
+
+  if (!state) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <div className="text-lg opacity-70">載入中…</div>
+      </div>
+    );
   }
-
-  const secLeft = data?.secLeft ?? 0;
-  const phase = data?.phase ?? "BETTING";
-
-  const road = useMemo(() => {
-    return (data?.recent || []).slice(0, 40);
-  }, [data]);
 
   return (
     <div className="min-h-screen p-6 space-y-6">
-      {/* 頂部資訊 */}
-      <div className="max-w-6xl mx-auto grid gap-4 md:grid-cols-3">
-        <div className="glass rounded-xl p-4">
-          <div className="text-sm opacity-70">房間</div>
-          <div className="text-xl font-bold">{data?.room.name ?? roomCode}</div>
-          <div className="text-xs opacity-70 mt-1">代碼：{roomCode}</div>
+      <header className="max-w-5xl mx-auto flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-wide">
+            百家樂 {state.room.name}
+          </h1>
+          <div className="opacity-70 text-sm">局號 #{state.roundSeq}</div>
         </div>
+        <a
+          href="/casino"
+          className="badge hover:brightness-110"
+        >
+          返回大廳
+        </a>
+      </header>
 
-        <div className="glass rounded-xl p-4">
-          <div className="text-sm opacity-70">局序</div>
-          <div className="text-xl font-bold">{data?.roundSeq ?? "--"}</div>
-          <div className="text-xs opacity-70 mt-1">狀態：{phase}</div>
-        </div>
-
-        <div className="glass rounded-xl p-4">
-          <div className="text-sm opacity-70">倒數</div>
-          <div className="text-3xl font-extrabold">
-            {secLeft}s
+      {/* 狀態區 */}
+      <section className="max-w-5xl mx-auto glass-strong neon rounded-2xl p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="font-bold text-lg">
+            {state.phase === "BETTING" && "下注中"}
+            {state.phase === "DEALING" && "開牌中"}
+            {state.phase === "SETTLED" && "已結算"}
           </div>
-          <div className="text-xs opacity-70 mt-1">下注秒數：{data?.room.durationSeconds ?? 0}</div>
+          <div className="text-sm opacity-80">
+            倒數：<span className="font-semibold">{state.secLeft}s</span>
+          </div>
         </div>
-      </div>
 
-      {/* 路子圖 */}
-      <div className="max-w-6xl mx-auto glass rounded-xl p-4">
-        <div className="text-sm opacity-80 mb-3">路子圖</div>
-        <div className="road-grid">
-          {road.map((r, i) => {
-            const cls =
-              r.outcome === "PLAYER" ? "road-p" :
-              r.outcome === "BANKER" ? "road-b" :
-              "road-t";
-            return <div key={i} className={`road-cell ${cls}`} title={`#${r.roundSeq} ${r.outcome}`}></div>;
-          })}
+        {/* 倒數條 */}
+        <div className="w-full h-2 bg-black/30 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-brand-400 to-brand-600 transition-all duration-1000"
+            style={{
+              width: `${Math.max(
+                0,
+                (state.secLeft / state.room.durationSeconds) * 100
+              )}%`,
+            }}
+          />
         </div>
-      </div>
 
-      {/* 下注區 */}
-      <div className="max-w-6xl mx-auto grid gap-4 md:grid-cols-5">
-        <div className="md:col-span-2 glass rounded-xl p-4">
-          <div className="text-sm opacity-80 mb-2">投注額</div>
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              min={1}
-              className="w-40 px-3 py-2 rounded-md bg-black/20 border border-white/15 focus:outline-none focus:ring-2 focus:ring-brand-500"
-              value={amount}
-              onChange={(e) => setAmount(Math.max(1, Number(e.target.value || 1)))}
-            />
-            <div className="flex gap-2">
-              {[100, 500, 1000].map(v => (
-                <button key={v} onClick={() => setAmount(v)} className="bet-btn">{v}</button>
-              ))}
+        {/* 結果 / 開牌動畫 */}
+        {state.phase !== "BETTING" && state.result && (
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            <div className="glass rounded-xl p-4 text-center">
+              <div className="opacity-70 text-sm">PLAYER</div>
+              <div className="text-3xl font-bold">{state.result.playerTotal}</div>
+            </div>
+            <div className="glass rounded-xl p-4 text-center">
+              <div className="opacity-70 text-sm">BANKER</div>
+              <div className="text-3xl font-bold">{state.result.bankerTotal}</div>
             </div>
           </div>
+        )}
 
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            {BET_SIDES.map((b) => (
-              <button
-                key={b.key}
-                disabled={phase !== "BETTING" || placing !== null}
-                onClick={() => place(b.key)}
-                className={`btn rounded-lg ${placing === b.key ? "shimmer opacity-80" : ""}`}
+        {state.phase === "SETTLED" && state.result && (
+          <div className="mt-2 text-center text-lg font-extrabold">
+            結果：{state.result.outcome}
+          </div>
+        )}
+      </section>
+
+      {/* 我的投注 */}
+      <section className="max-w-5xl mx-auto glass rounded-2xl p-6">
+        <h2 className="font-bold mb-3">我的投注</h2>
+        {state.myBets && Object.keys(state.myBets).length > 0 ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {Object.entries(state.myBets).map(([side, amt]) => (
+              <div
+                key={side}
+                className="glass p-3 rounded-xl text-center text-sm font-semibold"
               >
-                {b.label}
-                {!!data?.myBets?.[b.key] && (
-                  <span className="ml-2 text-xs opacity-90">(我：{data.myBets[b.key]})</span>
-                )}
-              </button>
+                {side}: {amt}
+              </div>
             ))}
           </div>
+        ) : (
+          <div className="text-sm opacity-70">本局尚未下注</div>
+        )}
+      </section>
 
-          {phase !== "BETTING" && (
-            <div className="mt-3 text-sm opacity-80">目前不可下注（{phase}）</div>
-          )}
-        </div>
-
-        {/* 結果 / 翻牌展示（簡版占位，等動畫資產再補） */}
-        <div className="md:col-span-3 glass rounded-xl p-4">
-          <div className="text-sm opacity-80 mb-2">結果展示</div>
-          {data?.result ? (
-            <div className="grid grid-cols-3 gap-3">
-              <div className="card p-4 rounded-xl bg-black/20 border border-white/10">
-                <div className="opacity-70 mb-1">玩家</div>
-                <div className="text-3xl font-extrabold">{data.result.p ?? "-"}</div>
-              </div>
-              <div className="grid place-items-center">
-                <div className="text-xl font-bold">{data.result.outcome ?? "-"}</div>
-              </div>
-              <div className="card p-4 rounded-xl bg-black/20 border border-white/10">
-                <div className="opacity-70 mb-1">莊家</div>
-                <div className="text-3xl font-extrabold">{data.result.b ?? "-"}</div>
-              </div>
-            </div>
-          ) : (
-            <div className="opacity-70">待開牌 / 動畫播放中…</div>
-          )}
-        </div>
-      </div>
+      {/* 投注按鈕 */}
+      {state.phase === "BETTING" && (
+        <section className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-3 gap-4">
+          {["PLAYER", "BANKER", "TIE"].map((side) => (
+            <button
+              key={side}
+              onClick={async () => {
+                await fetch(`/api/casino/baccarat/bet`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ roomCode: room, side, amount: 100 }),
+                });
+              }}
+              className="btn rounded-xl py-6 text-lg font-bold"
+            >
+              壓 {side}
+            </button>
+          ))}
+        </section>
+      )}
     </div>
   );
 }
