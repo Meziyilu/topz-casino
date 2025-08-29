@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import CardFlip from "../../../components/CardFlip"; // 從 app/casino/baccarat/[room]/ 到 /components
+import CardFlip from "../../../../components/CardFlip"; // 從 app/casino/baccarat/[room]/ 到 /components
 
 type Outcome = "PLAYER" | "BANKER" | "TIE" | null;
 type Phase = "BETTING" | "REVEALING" | "SETTLED";
