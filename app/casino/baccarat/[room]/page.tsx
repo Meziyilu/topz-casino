@@ -3,12 +3,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import CardFlip from "@/components/CardFlip"; // ✅ 新增：真實翻牌元件
+import CardFlip from "@/components/CardFlip";
 
 type Outcome = "PLAYER" | "BANKER" | "TIE" | null;
 type Phase = "BETTING" | "REVEALING" | "SETTLED";
 
-// 你原本的 StateResp，保留 + 支援兩種牌面欄位
 type StateResp = {
   room: { code: string; name: string; durationSeconds: number };
   day: string;
@@ -16,23 +15,18 @@ type StateResp = {
   roundSeq: number;
   phase: Phase;
   secLeft: number;
-  result:
-    | null
-    | {
-        outcome: Outcome;
-        p: number | null;
-        b: number | null;
-        // 若 API 走我之前的建議，會是這兩個
-        playerCards?: Card[] | null;
-        bankerCards?: Card[] | null;
-      };
-  // 若 API 走你現在的版本，會是這個 cards：
-  cards?: { player: Card[]; banker: Card[] };
+  result: null | {
+    outcome: Outcome;
+    p: number | null;
+    b: number | null;
+    playerCards?: { rank: string; suit: string }[];
+    bankerCards?: { rank: string; suit: string }[];
+  };
+  // 舊欄位（相容）
+  cards?: { player: { rank: string; suit: string }[]; banker: { rank: string; suit: string }[] };
   myBets: Record<string, number>;
   recent: { roundSeq: number; outcome: Outcome; p: number; b: number }[];
 };
-
-type Card = { rank: number; suit: "S" | "H" | "D" | "C" };
 
 const zhPhase: Record<Phase, string> = {
   BETTING: "下注中",
@@ -44,21 +38,12 @@ const zhOutcome: Record<NonNullable<Outcome>, string> = {
   BANKER: "莊",
   TIE: "和",
 };
-
 function fmtOutcome(o: Outcome) {
   if (!o) return "—";
   return zhOutcome[o];
 }
 function pad4(n: number) {
   return n.toString().padStart(4, "0");
-}
-
-// ✅ 牌面字串（A♠、10♦…）
-function cardLabel(c: Card | undefined) {
-  if (!c) return "";
-  const ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"] as const;
-  const suit: Record<Card["suit"], string> = { S: "♠", H: "♥", D: "♦", C: "♣" };
-  return `${ranks[c.rank - 1]}${suit[c.suit]}`;
 }
 
 export default function RoomPage() {
@@ -70,7 +55,7 @@ export default function RoomPage() {
   const [placing, setPlacing] = useState<null | "PLAYER" | "BANKER" | "TIE">(null);
   const [err, setErr] = useState<string>("");
 
-  // ✅ 籌碼/金額
+  // 下注金額
   const chipOptions = [50, 100, 500, 1000];
   const [amount, setAmount] = useState<number>(100);
   const isAmountValid = useMemo(() => Number.isFinite(amount) && amount > 0, [amount]);
@@ -111,7 +96,6 @@ export default function RoomPage() {
     if (!data) return;
     setLocalSec(data.secLeft);
   }, [data?.secLeft]);
-
   useEffect(() => {
     if (localSec <= 0) return;
     const t = setInterval(() => setLocalSec((s) => Math.max(0, s - 1)), 1000);
@@ -146,19 +130,21 @@ export default function RoomPage() {
     }
   }
 
-  const outcomeMark = useMemo(() => (data?.result ? data.result.outcome : null), [data?.result]);
+  const outcomeMark = data?.result?.outcome ?? null;
 
-  // ✅ 牌面來源：同時支援 data.cards 或 result.playerCards/bankerCards
-  const playerCards = (data?.cards?.player ??
+  // 從 API 兩種欄位取牌面（兼容）
+  const playerCards =
     data?.result?.playerCards ??
-    []) as Card[];
-  const bankerCards = (data?.cards?.banker ??
+    data?.cards?.player ??
+    [];
+  const bankerCards =
     data?.result?.bankerCards ??
-    []) as Card[];
+    data?.cards?.banker ??
+    [];
 
   return (
     <div className="min-h-screen bg-casino-bg text-white">
-      {/* 頂部列（原樣） */}
+      {/* 頂部列 */}
       <div className="max-w-6xl mx-auto px-4 py-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button className="btn glass tilt" onClick={() => router.push("/lobby")} title="回大廳">
@@ -210,7 +196,7 @@ export default function RoomPage() {
               </div>
             </div>
 
-            {/* 籌碼列（原樣） */}
+            {/* 籌碼列 */}
             <div className="flex flex-wrap gap-2 mb-6">
               {chipOptions.map((c) => (
                 <button
@@ -219,7 +205,6 @@ export default function RoomPage() {
                   disabled={data?.phase !== "BETTING"}
                   className={`px-3 py-1 rounded-full border transition
                     ${amount === c ? "border-white/70 bg-white/10" : "border-white/20 hover:border-white/40"}`}
-                  title={`下注 ${c}`}
                 >
                   {c}
                 </button>
@@ -228,7 +213,6 @@ export default function RoomPage() {
                 onClick={() => setAmount((a) => a + 50)}
                 disabled={data?.phase !== "BETTING"}
                 className="px-3 py-1 rounded-full border border-white/20 hover:border-white/40 transition"
-                title="快速 +50"
               >
                 +50
               </button>
@@ -236,7 +220,6 @@ export default function RoomPage() {
                 onClick={() => setAmount((a) => a + 100)}
                 disabled={data?.phase !== "BETTING"}
                 className="px-3 py-1 rounded-full border border-white/20 hover:border-white/40 transition"
-                title="快速 +100"
               >
                 +100
               </button>
@@ -244,13 +227,12 @@ export default function RoomPage() {
                 onClick={() => setAmount(0)}
                 disabled={data?.phase !== "BETTING"}
                 className="px-3 py-1 rounded-full border border-white/20 hover:border-white/40 transition"
-                title="清除"
               >
                 清除
               </button>
             </div>
 
-            {/* 大按鈕：壓 閒／和／莊（原樣） */}
+            {/* 壓：閒／和／莊 */}
             <div className="grid grid-cols-3 gap-4">
               <button
                 disabled={placing === "PLAYER" || data?.phase !== "BETTING" || !isAmountValid}
@@ -307,63 +289,34 @@ export default function RoomPage() {
               </button>
             </div>
 
-            {/* ✅ 新增：真實翻牌區（不取代你原本的 FlipTile） */}
-            {(data?.phase === "REVEALING" || data?.phase === "SETTLED") && (
-              <div className="mt-8 space-y-4">
-                <div className="text-sm opacity-80">開牌動畫</div>
-
-                {/* 閒牌三張 */}
-                <div className="flex items-center gap-4">
-                  <div className="w-10 text-center opacity-80">閒</div>
-                  <div className="flex gap-3">
-                    {[0, 1, 2].map((i) => (
-                      <CardFlip
-                        key={`p-${i}`}
-                        backText={cardLabel(playerCards[i])}
-                        frontText="？"
-                        delay={[100, 800, 1400][i]}
-                        highlight={data?.result?.outcome === "PLAYER"}
-                        w={90}
-                        h={128}
-                      />
-                    ))}
-                  </div>
-                  <div className="ml-2 min-w-[80px] text-lg">
-                    {typeof data?.result?.p === "number" ? `${data!.result!.p} 點` : ""}
-                  </div>
-                </div>
-
-                {/* 莊牌三張 */}
-                <div className="flex items-center gap-4">
-                  <div className="w-10 text-center opacity-80">莊</div>
-                  <div className="flex gap-3">
-                    {[0, 1, 2].map((i) => (
-                      <CardFlip
-                        key={`b-${i}`}
-                        backText={cardLabel(bankerCards[i])}
-                        frontText="？"
-                        delay={[400, 1100, 1700][i]}
-                        highlight={data?.result?.outcome === "BANKER"}
-                        w={90}
-                        h={128}
-                      />
-                    ))}
-                  </div>
-                  <div className="ml-2 min-w-[80px] text-lg">
-                    {typeof data?.result?.b === "number" ? `${data!.result!.b} 點` : ""}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* 你原本的翻牌/結果（保留） */}
-            {data?.phase !== "BETTING" && data?.result && (
+            {/* 翻牌/結果 */}
+            {data?.phase !== "BETTING" && (
               <div className="mt-8">
                 <div className="text-sm opacity-80 mb-2">本局結果</div>
-                <div className="grid grid-cols-2 gap-6 w-full max-w-xl">
-                  <FlipTile label="閒" value={data.result.p ?? 0} outcome={data.result.outcome} />
-                  <FlipTile label="莊" value={data.result.b ?? 0} outcome={data.result.outcome} />
+
+                {/* 真牌面 + 金光 */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
+                  <CardFlip
+                    title="閒"
+                    cards={playerCards as any}
+                    reveal={true}
+                    win={outcomeMark === "PLAYER"}
+                  />
+                  <CardFlip
+                    title="莊"
+                    cards={bankerCards as any}
+                    reveal={true}
+                    win={outcomeMark === "BANKER"}
+                  />
                 </div>
+
+                {/* 合計與贏方中文 */}
+                {data?.result && (
+                  <div className="grid grid-cols-2 gap-6 w-full max-w-xl">
+                    <FlipTile label="閒" value={data.result.p ?? 0} outcome={data.result.outcome} />
+                    <FlipTile label="莊" value={data.result.b ?? 0} outcome={data.result.outcome} />
+                  </div>
+                )}
                 <div className="mt-3 text-lg">
                   結果：<span className="font-bold">{fmtOutcome(outcomeMark)}</span>
                 </div>
@@ -376,11 +329,12 @@ export default function RoomPage() {
           </div>
         </div>
 
-        {/* 右：路子 / 歷史（原樣保留） */}
-        <div className="">
-          <div className="glass glow-ring p-6 rounded-2xl">
+        {/* 右：路子 / 歷史 */}
+        <div>
+          <div className="glass glow-ring p-6 rounded-2xl mb-6">
             <div className="text-xl font-bold mb-4">路子（近 20 局）</div>
 
+            {/* 原色塊大路 */}
             <div className="grid grid-cols-10 gap-2">
               {(data?.recent || []).map((r) => (
                 <div
@@ -410,6 +364,7 @@ export default function RoomPage() {
               )}
             </div>
 
+            {/* 表格 */}
             <div className="mt-4 max-h-64 overflow-auto text-sm">
               <table className="w-full text-left opacity-90">
                 <thead className="opacity-70">
@@ -429,17 +384,32 @@ export default function RoomPage() {
                       <td className="py-1 pr-2">{r.b}</td>
                     </tr>
                   ))}
-                  {(!data || (data && data.recent.length === 0)) && (
-                    <tr>
-                      <td colSpan={4} className="py-2 opacity-60">
-                        暫無資料
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
             </div>
+          </div>
 
+          {/* 新增：表情路子（🟦/🟥/🟨） */}
+          <div className="glass glow-ring p-6 rounded-2xl">
+            <div className="text-xl font-bold mb-3">表情路子</div>
+            <div className="flex flex-wrap gap-2 text-lg">
+              {(data?.recent || []).slice(0, 20).map((r) => {
+                const icon =
+                  r.outcome === "PLAYER" ? "🟦" : r.outcome === "BANKER" ? "🟥" : "🟨";
+                return (
+                  <span
+                    key={`emo-${r.roundSeq}`}
+                    className="px-2 py-1 rounded-lg bg-white/5 border border-white/10"
+                    title={`#${pad4(r.roundSeq)}：${fmtOutcome(r.outcome)}  閒${r.p} / 莊${r.b}`}
+                  >
+                    {icon}
+                  </span>
+                );
+              })}
+              {(!data || (data && data.recent.length === 0)) && (
+                <span className="opacity-60 text-sm">暫無資料</span>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -447,7 +417,7 @@ export default function RoomPage() {
   );
 }
 
-/** 翻牌卡片（帶勝方金光）——（原樣保留） */
+/** 翻牌卡片（舊的總點/金光，保留） */
 function FlipTile({
   label,
   value,
@@ -466,11 +436,9 @@ function FlipTile({
         className={`flip-inner ${outcome ? "animate-[flipIn_.8s_ease_forwards]" : ""}`}
         style={{ transform: outcome ? "rotateY(180deg)" : "none" }}
       >
-        {/* 正面：未翻開（霧面） */}
         <div className="flip-front glass flex items-center justify-center text-xl font-bold">
           {label}
         </div>
-        {/* 背面：已翻開（總點數） */}
         <div
           className={`flip-back relative flex items-center justify-center text-3xl font-extrabold rounded-2xl ${
             isWin ? "shadow-[0_0_32px_rgba(255,215,0,.35)]" : ""
@@ -486,15 +454,6 @@ function FlipTile({
                 : "1px solid rgba(253,164,175,.5)",
           }}
         >
-          {isWin && (
-            <span
-              className="absolute inset-0 rounded-2xl pointer-events-none"
-              style={{
-                boxShadow:
-                  "0 0 26px rgba(255,215,0,.45), inset 0 0 22px rgba(255,215,0,.25)",
-              }}
-            />
-          )}
           {value ?? 0} 點
         </div>
       </div>
