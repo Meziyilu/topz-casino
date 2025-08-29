@@ -1,4 +1,3 @@
-// app/casino/baccarat/[room]/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -29,8 +28,14 @@ const zhOutcome: Record<Exclude<Outcome, null>, string> = {
   BANKER: "莊",
   TIE: "和",
 };
-const fmtOutcome = (o: Outcome) => (o ? zhOutcome[o] : "—");
-const pad4 = (n: number) => n.toString().padStart(4, "0");
+
+function fmtOutcome(o: Outcome) {
+  if (!o) return "—";
+  return zhOutcome[o];
+}
+function pad4(n: number) {
+  return n.toString().padStart(4, "0");
+}
 
 export default function RoomPage() {
   const { room } = useParams<{ room: string }>();
@@ -41,9 +46,9 @@ export default function RoomPage() {
   const [placing, setPlacing] = useState<null | "PLAYER" | "BANKER" | "TIE">(null);
   const [err, setErr] = useState<string>("");
 
-  // 👉 新增：選擇下注面額（預設 100）
-  const [chip, setChip] = useState<number>(100);
-  const chips = [50, 100, 500, 1000];
+  // 面額籌碼
+  const chips = [50, 100, 500, 1000] as const;
+  const [chip, setChip] = useState<(typeof chips)[number]>(100);
 
   // 輪詢 state
   useEffect(() => {
@@ -75,7 +80,7 @@ export default function RoomPage() {
     };
   }, [room]);
 
-  // 倒數（用伺服器回傳基準，前端每秒扣 1 比較順）
+  // 倒數本地同步
   const [localSec, setLocalSec] = useState<number>(0);
   useEffect(() => {
     if (!data) return;
@@ -87,7 +92,8 @@ export default function RoomPage() {
     return () => clearInterval(t);
   }, [localSec]);
 
-  async function place(side: "PLAYER" | "BANKER" | "TIE") {
+  // 下注
+  async function place(side: "PLAYER" | "BANKER" | "TIE", amount = chip) {
     if (!data) return;
     if (data.phase !== "BETTING") {
       setErr("目前非下注時間");
@@ -99,7 +105,7 @@ export default function RoomPage() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomCode: data.room.code, side, amount: chip }),
+        body: JSON.stringify({ roomCode: data.room.code, side, amount }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "下注失敗");
@@ -111,13 +117,11 @@ export default function RoomPage() {
     }
   }
 
-  const outcomeMark: Outcome = useMemo(
-    () => (data?.result ? data.result.outcome : null),
-    [data?.result]
-  );
+  const outcomeMark = useMemo(() => {
+    if (!data?.result) return null;
+    return data.result.outcome;
+  }, [data?.result]);
 
-  // 用「roundId」作為翻牌卡片的 key，確保每一局都重新觸發動畫
-  const flipKey = data?.roundId || "init";
   const showFlip = data?.phase !== "BETTING" && !!data?.result;
 
   return (
@@ -135,7 +139,7 @@ export default function RoomPage() {
 
           <div className="glass px-4 py-2 rounded-xl">
             <div className="text-sm opacity-80">房間</div>
-            <div className="text-lg font-semibold">{data?.room?.name || room}</div>
+            <div className="text-lg font-semibold">{data?.room.name || room}</div>
           </div>
 
           <div className="glass px-4 py-2 rounded-xl">
@@ -165,44 +169,41 @@ export default function RoomPage() {
       </div>
 
       {/* 內容區 */}
-      <div className="max-w-6xl mx-auto px-4 grid lg:grid-cols-3 gap-6 pb-16">
+      <div className="max-w-6xl mx-auto px-4 grid md:grid-cols-3 gap-6 pb-16">
         {/* 左：下注區 */}
-        <div className="lg:col-span-2">
+        <div className="md:col-span-2">
           <div className="glass glow-ring p-6 rounded-2xl sheen">
             <div className="text-xl font-bold mb-4">下注面板</div>
 
-            {/* 👉 新增：籌碼面額 */}
-            <div className="mb-4">
-              <div className="text-sm opacity-80 mb-2">選擇下注金額</div>
-              <div className="flex gap-3 flex-wrap">
-                {chips.map((c) => (
-                  <button
-                    key={c}
-                    className={`px-4 py-2 rounded-full border transition
-                      ${chip === c ? "bg-white/20 border-white/60 shadow-[0_0_16px_rgba(255,255,255,.25)]" : "bg-white/10 border-white/20 hover:bg-white/15"}
-                    `}
-                    onClick={() => setChip(c)}
-                    title={`下注 ${c}`}
-                  >
-                    ${c.toLocaleString()}
-                  </button>
-                ))}
-              </div>
+            {/* 面額籌碼 */}
+            <div className="mb-5 flex items-center gap-3 flex-wrap">
+              <div className="text-sm opacity-80 mr-2">選擇籌碼：</div>
+              {chips.map((c) => (
+                <button
+                  key={c}
+                  className={`px-4 py-2 rounded-full transition relative overflow-hidden
+                    ${
+                      chip === c
+                        ? "bg-white/25 ring-2 ring-white/70 shadow-[0_0_24px_rgba(255,255,255,.35)]"
+                        : "bg-white/10 hover:bg-white/15 ring-1 ring-white/25"
+                    }`}
+                  onClick={() => setChip(c)}
+                >
+                  ${c.toLocaleString()}
+                </button>
+              ))}
             </div>
 
-            {/* 主三鍵：閒／和／莊 */}
+            {/* 下注按鈕 */}
             <div className="grid grid-cols-3 gap-4">
               <button
                 disabled={placing === "PLAYER" || data?.phase !== "BETTING"}
                 onClick={() => place("PLAYER")}
                 className="btn shimmer"
-                title={`下注 ${chip} 到「閒」`}
               >
                 壓「閒」
                 {!!data?.myBets?.PLAYER && (
-                  <span className="ml-2 text-xs opacity-80">
-                    （我: {data.myBets.PLAYER}）
-                  </span>
+                  <span className="ml-2 text-xs opacity-80">（我: {data.myBets.PLAYER}）</span>
                 )}
               </button>
 
@@ -210,13 +211,10 @@ export default function RoomPage() {
                 disabled={placing === "TIE" || data?.phase !== "BETTING"}
                 onClick={() => place("TIE")}
                 className="btn shimmer"
-                title={`下注 ${chip} 到「和」`}
               >
                 壓「和」
                 {!!data?.myBets?.TIE && (
-                  <span className="ml-2 text-xs opacity-80">
-                    （我: {data.myBets.TIE}）
-                  </span>
+                  <span className="ml-2 text-xs opacity-80">（我: {data.myBets.TIE}）</span>
                 )}
               </button>
 
@@ -224,34 +222,21 @@ export default function RoomPage() {
                 disabled={placing === "BANKER" || data?.phase !== "BETTING"}
                 onClick={() => place("BANKER")}
                 className="btn shimmer"
-                title={`下注 ${chip} 到「莊」`}
               >
                 壓「莊」
                 {!!data?.myBets?.BANKER && (
-                  <span className="ml-2 text-xs opacity-80">
-                    （我: {data.myBets.BANKER}）
-                  </span>
+                  <span className="ml-2 text-xs opacity-80">（我: {data.myBets.BANKER}）</span>
                 )}
               </button>
             </div>
 
-            {/* 翻牌/結果：使用 roundId 做 key，確保每局重置動畫 */}
+            {/* 翻牌/結果 */}
             {showFlip && data?.result && (
-              <div className="mt-8" key={flipKey}>
+              <div className="mt-8" key={data.roundId}>
                 <div className="text-sm opacity-80 mb-2">本局結果</div>
                 <div className="grid grid-cols-2 gap-6 w-full max-w-xl">
-                  <FlipTile
-                    label="閒"
-                    value={data.result.p ?? 0}
-                    outcome={data.result.outcome}
-                    doFlip={true}
-                  />
-                  <FlipTile
-                    label="莊"
-                    value={data.result.b ?? 0}
-                    outcome={data.result.outcome}
-                    doFlip={true}
-                  />
+                  <FlipTile label="閒" value={data.result.p ?? 0} outcome={data.result.outcome} doFlip />
+                  <FlipTile label="莊" value={data.result.b ?? 0} outcome={data.result.outcome} doFlip />
                 </div>
                 <div className="mt-3 text-lg">
                   結果：<span className="font-bold">{fmtOutcome(outcomeMark)}</span>
@@ -266,7 +251,7 @@ export default function RoomPage() {
         </div>
 
         {/* 右：路子 / 歷史 */}
-        <div className="">
+        <div>
           <div className="glass glow-ring p-6 rounded-2xl">
             <div className="text-xl font-bold mb-4">路子（近 20 局）</div>
 
@@ -300,7 +285,7 @@ export default function RoomPage() {
               )}
             </div>
 
-            {/* 表格（可選） */}
+            {/* 表格 */}
             <div className="mt-4 max-h-64 overflow-auto text-sm">
               <table className="w-full text-left opacity-90">
                 <thead className="opacity-70">
@@ -338,7 +323,7 @@ export default function RoomPage() {
   );
 }
 
-/** 翻牌卡片（中文標籤） */
+/** 翻牌卡片（中文標籤，保證每局觸發動畫） */
 function FlipTile({
   label,
   value,
@@ -350,8 +335,16 @@ function FlipTile({
   outcome: Outcome;
   doFlip: boolean;
 }) {
-  // 只要 doFlip = true，就套用翻面樣式；Key 用 roundId 控制每局重新掛載
-  const flipped = doFlip && !!outcome;
+  const [flipped, setFlipped] = useState(false);
+
+  useEffect(() => {
+    setFlipped(false);
+    if (doFlip && outcome) {
+      const t = setTimeout(() => setFlipped(true), 50);
+      return () => clearTimeout(t);
+    }
+  }, [doFlip, outcome]);
+
   const isWin =
     (label === "閒" && outcome === "PLAYER") ||
     (label === "莊" && outcome === "BANKER");
@@ -359,14 +352,16 @@ function FlipTile({
   return (
     <div className="flip-3d h-28">
       <div
-        className={`flip-inner ${flipped ? "animate-[flipIn_.7s_ease_forwards]" : ""}`}
-        style={{ transform: flipped ? "rotateY(180deg)" : "none" }}
+        className="flip-inner"
+        style={{
+          transform: flipped ? "rotateY(180deg)" : "none",
+          transition: "transform .7s cubic-bezier(.2,.7,.2,1)",
+        }}
       >
         {/* 正面：未翻開（霧面） */}
         <div className="flip-front glass flex items-center justify-center text-xl font-bold">
           {label}
         </div>
-
         {/* 背面：已翻開（總點數） */}
         <div
           className={`flip-back flex items-center justify-center text-3xl font-extrabold rounded-2xl ${
