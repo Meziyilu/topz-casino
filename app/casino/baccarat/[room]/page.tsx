@@ -1,221 +1,340 @@
 // app/casino/baccarat/[room]/page.tsx
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 
-type Phase = "BETTING" | "REVEALING" | "SETTLED";
 type Outcome = "PLAYER" | "BANKER" | "TIE" | null;
-type BetSide = "PLAYER" | "BANKER" | "TIE" | "PLAYER_PAIR" | "BANKER_PAIR";
+type Phase = "BETTING" | "REVEALING" | "SETTLED";
 
-type StatePayload = {
-  room: { code: "R30" | "R60" | "R90"; name: string; durationSeconds: number };
+type StateResp = {
+  room: { code: string; name: string; durationSeconds: number };
+  day: string;
   roundId: string;
   roundSeq: number;
   phase: Phase;
   secLeft: number;
-  result: { outcome: Outcome; p: number | null; b: number | null } | null;
+  result: null | { outcome: Outcome; p: number | null; b: number | null };
   myBets: Record<string, number>;
   recent: { roundSeq: number; outcome: Outcome; p: number; b: number }[];
 };
 
-const BETS: { key: BetSide; label: string }[] = [
-  { key: "PLAYER", label: "閒" },
-  { key: "BANKER", label: "莊" },
-  { key: "TIE", label: "和" },
-  { key: "PLAYER_PAIR", label: "閒對" },
-  { key: "BANKER_PAIR", label: "莊對" },
-];
+const zhPhase: Record<Phase, string> = {
+  BETTING: "下注中",
+  REVEALING: "開牌中",
+  SETTLED: "已結算",
+};
+const zhOutcome: Record<NonNullable<Outcome>, string> = {
+  PLAYER: "閒",
+  BANKER: "莊",
+  TIE: "和",
+};
 
-export default function BaccaratRoomPage() {
-  const { room } = useParams<{ room: "R30" | "R60" | "R90" }>();
+function fmtOutcome(o: Outcome) {
+  if (!o) return "—";
+  return zhOutcome[o];
+}
+
+function pad4(n: number) {
+  return n.toString().padStart(4, "0");
+}
+
+export default function RoomPage() {
+  const { room } = useParams<{ room: string }>();
   const router = useRouter();
-  const [data, setData] = useState<StatePayload | null>(null);
-  const [amount, setAmount] = useState<number>(100);
-  const [busy, setBusy] = useState<boolean>(false);
+  const [data, setData] = useState<StateResp | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [placing, setPlacing] = useState<null | string>(null);
   const [err, setErr] = useState<string>("");
 
-  const title = useMemo(() => {
-    switch (room) {
-      case "R30":
-        return "30秒房";
-      case "R60":
-        return "60秒房";
-      case "R90":
-        return "90秒房";
-      default:
-        return String(room);
-    }
-  }, [room]);
-
-  // 輪詢狀態
+  // 輪詢 state
   useEffect(() => {
-    let t: any;
-    const load = async () => {
+    let timer: any;
+    let mounted = true;
+
+    async function load(force?: boolean) {
       try {
-        const r = await fetch(`/api/casino/baccarat/state?room=${room}`, {
-          cache: "no-store",
-          credentials: "include",
-        });
-        const j = await r.json();
-        if (!r.ok) throw new Error(j?.error || "讀取失敗");
-        setData(j);
-        setErr("");
+        const url = `/api/casino/baccarat/state?room=${room}${force ? "&force=restart" : ""}`;
+        const res = await fetch(url, { cache: "no-store", credentials: "include" });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json?.error || "載入失敗");
+        if (mounted) {
+          setData(json);
+          setErr("");
+        }
       } catch (e: any) {
-        setErr(e?.message || "讀取失敗");
+        if (mounted) setErr(e?.message || "連線失敗");
+      } finally {
+        if (mounted) setLoading(false);
       }
-    };
+    }
+
     load();
-    t = setInterval(load, 1000);
-    return () => clearInterval(t);
+
+    // 每秒刷新
+    timer = setInterval(load, 1000);
+    return () => {
+      mounted = false;
+      clearInterval(timer);
+    };
   }, [room]);
 
-  const place = async (side: BetSide) => {
+  // 倒數秒數（前端跟著扣，畫面更順）
+  const [localSec, setLocalSec] = useState<number>(0);
+  useEffect(() => {
+    if (!data) return;
+    setLocalSec(data.secLeft);
+  }, [data?.secLeft]);
+
+  useEffect(() => {
+    if (localSec <= 0) return;
+    const t = setInterval(() => setLocalSec((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [localSec]);
+
+  async function place(side: "PLAYER" | "BANKER" | "TIE", amount = 100) {
     if (!data) return;
     if (data.phase !== "BETTING") {
-      setErr("非下注階段");
+      setErr("目前非下注時間");
       return;
     }
-    if (amount <= 0) {
-      setErr("金額需 > 0");
-      return;
-    }
+    setPlacing(side);
     try {
-      setBusy(true);
-      const r = await fetch(`/api/casino/baccarat/bet`, {
+      const res = await fetch("/api/casino/baccarat/bet", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ room: data.room.code, side, amount }),
+        body: JSON.stringify({ roomCode: data.room.code, side, amount }),
       });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j?.error || "下注失敗");
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "下注失敗");
       setErr("");
     } catch (e: any) {
       setErr(e?.message || "下注失敗");
     } finally {
-      setBusy(false);
+      setPlacing(null);
     }
-  };
+  }
+
+  const outcomeMark = useMemo(() => {
+    if (!data?.result) return null;
+    return data.result.outcome;
+  }, [data?.result]);
 
   return (
-    <div className="min-h-screen bg-gradient-casino px-4 py-8">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <button className="btn" onClick={() => router.push("/lobby")}>
-            ← 返回大廳
+    <div className="min-h-screen bg-casino-bg text-white">
+      {/* 頂部列 */}
+      <div className="max-w-6xl mx-auto px-4 py-6 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            className="btn glass tilt"
+            onClick={() => router.push("/lobby")}
+            title="回大廳"
+          >
+            ← 回大廳
           </button>
-          <div className="text-2xl font-extrabold tracking-widest">{title}</div>
-          <div />
+          <div className="glass px-4 py-2 rounded-xl">
+            <div className="text-sm opacity-80">房間</div>
+            <div className="text-lg font-semibold">{data?.room.name || room}</div>
+          </div>
+          <div className="glass px-4 py-2 rounded-xl">
+            <div className="text-sm opacity-80">局序</div>
+            <div className="text-lg font-semibold">{data ? pad4(data.roundSeq) : "--"}</div>
+          </div>
+          <div className="glass px-4 py-2 rounded-xl">
+            <div className="text-sm opacity-80">狀態</div>
+            <div className="text-lg font-semibold">
+              {data ? zhPhase[data.phase] : "載入中"}
+            </div>
+          </div>
+          <div className="glass px-4 py-2 rounded-xl">
+            <div className="text-sm opacity-80">倒數</div>
+            <div className="text-lg font-semibold">
+              {typeof localSec === "number" ? `${localSec}s` : "--"}
+            </div>
+          </div>
         </div>
 
-        {err && <div className="text-red-400 mb-3 text-sm">{err}</div>}
+        <div className="text-right">
+          {err && <div className="text-red-400 text-sm mb-2">{err}</div>}
+          <div className="opacity-70 text-xs">（時間以伺服器為準）</div>
+        </div>
+      </div>
 
-        {!data ? (
-          <div className="glass rounded-xl p-6">載入中…</div>
-        ) : (
-          <>
-            <div className="grid gap-6 md:grid-cols-2">
-              {/* 左側：倒數與結果 */}
-              <div className="glass rounded-xl p-6">
-                <div className="text-sm opacity-70">
-                  局序：<b className="tabular-nums">{data.roundSeq.toString().padStart(4, "0")}</b>
-                </div>
-                <div className="mt-2 text-sm opacity-70">
-                  狀態：<b>{data.phase}</b>
-                </div>
-                <div className="mt-3">
-                  <div className="text-6xl font-black tabular-nums">{data.secLeft}s</div>
-                </div>
+      {/* 內容區 */}
+      <div className="max-w-6xl mx-auto px-4 grid md:grid-cols-3 gap-6 pb-16">
+        {/* 左：下注區 */}
+        <div className="md:col-span-2">
+          <div className="glass glow-ring p-6 rounded-2xl sheen">
+            <div className="text-xl font-bold mb-4">下注面板</div>
 
-                {/* 開牌結果 */}
-                {data.phase !== "BETTING" && data.result && (
-                  <div className="mt-5 grid grid-cols-2 gap-4">
-                    <div className="card">
-                      <div className="opacity-70 text-sm mb-1">PLAYER</div>
-                      <div className="text-4xl font-extrabold">{data.result.p ?? "-"}</div>
-                    </div>
-                    <div className="card">
-                      <div className="opacity-70 text-sm mb-1">BANKER</div>
-                      <div className="text-4xl font-extrabold">{data.result.b ?? "-"}</div>
-                    </div>
-                    <div className="col-span-2 text-sm opacity-70">
-                      結果：<b>{data.result.outcome ?? "-"}</b>
-                    </div>
-                  </div>
+            <div className="grid grid-cols-3 gap-4">
+              <button
+                disabled={placing === "PLAYER" || data?.phase !== "BETTING"}
+                onClick={() => place("PLAYER")}
+                className="btn shimmer"
+              >
+                壓「閒」
+                {!!data?.myBets?.PLAYER && (
+                  <span className="ml-2 text-xs opacity-80">（我: {data.myBets.PLAYER}）</span>
                 )}
-              </div>
-
-              {/* 右側：下注面板 */}
-              <div className="glass rounded-xl p-6">
-                <div className="text-sm opacity-70 mb-2">下注金額</div>
-                <div className="flex items-center gap-2">
-                  <input
-                    className="bg-black/30 rounded px-3 py-2 outline-none border border-white/10 w-40"
-                    type="number"
-                    min={1}
-                    value={amount}
-                    onChange={(e) => setAmount(parseInt(e.target.value || "0", 10))}
-                  />
-                  <div className="flex gap-2">
-                    {[100, 500, 1000, 5000].map((v) => (
-                      <button key={v} className="btn" onClick={() => setAmount(v)}>
-                        {v}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mt-4 grid grid-cols-5 gap-2">
-                  {BETS.map((b) => (
-                    <button
-                      key={b.key}
-                      disabled={busy || data.phase !== "BETTING"}
-                      onClick={() => place(b.key)}
-                      className="btn"
-                    >
-                      {b.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="mt-4 text-sm opacity-70">
-                  我這局投注：
-                  <span className="ml-2">
-                    {Object.keys(data.myBets ?? {}).length === 0
-                      ? "（尚未下注）"
-                      : Object.entries(data.myBets)
-                          .map(([k, v]) => `${k}:${v}`)
-                          .join("、")}
-                  </span>
-                </div>
-              </div>
+              </button>
+              <button
+                disabled={placing === "TIE" || data?.phase !== "BETTING"}
+                onClick={() => place("TIE")}
+                className="btn shimmer"
+              >
+                壓「和」
+                {!!data?.myBets?.TIE && (
+                  <span className="ml-2 text-xs opacity-80">（我: {data.myBets.TIE}）</span>
+                )}
+              </button>
+              <button
+                disabled={placing === "BANKER" || data?.phase !== "BETTING"}
+                onClick={() => place("BANKER")}
+                className="btn shimmer"
+              >
+                壓「莊」
+                {!!data?.myBets?.BANKER && (
+                  <span className="ml-2 text-xs opacity-80">（我: {data.myBets.BANKER}）</span>
+                )}
+              </button>
             </div>
 
-            {/* 路子（近 20 局） */}
-            <div className="glass rounded-xl p-6 mt-6">
-              <div className="opacity-70 text-sm mb-3">近 20 局</div>
-              <div className="flex flex-wrap gap-2">
-                {data.recent.map((r) => (
-                  <div
-                    key={r.roundSeq}
-                    className={`px-2 py-1 rounded text-xs border
-                    ${
+            {/* 翻牌/結果 */}
+            {data?.phase !== "BETTING" && data?.result && (
+              <div className="mt-8">
+                <div className="text-sm opacity-80 mb-2">本局結果</div>
+                <div className="grid grid-cols-2 gap-6 w-full max-w-xl">
+                  <FlipTile label="閒" value={data.result.p ?? 0} outcome={data.result.outcome} />
+                  <FlipTile label="莊" value={data.result.b ?? 0} outcome={data.result.outcome} />
+                </div>
+                <div className="mt-3 text-lg">
+                  結果：<span className="font-bold">{fmtOutcome(outcomeMark)}</span>
+                </div>
+              </div>
+            )}
+
+            {data?.phase === "BETTING" && (
+              <div className="mt-8 opacity-80">等待下注結束後將自動開牌…</div>
+            )}
+          </div>
+        </div>
+
+        {/* 右：路子 / 歷史 */}
+        <div className="">
+          <div className="glass glow-ring p-6 rounded-2xl">
+            <div className="text-xl font-bold mb-4">路子（近 20 局）</div>
+
+            {/* 大路色塊（簡化版） */}
+            <div className="grid grid-cols-10 gap-2">
+              {(data?.recent || []).map((r) => (
+                <div
+                  key={r.roundSeq}
+                  className="h-6 rounded flex items-center justify-center text-[10px]"
+                  style={{
+                    background:
                       r.outcome === "PLAYER"
-                        ? "border-cyan-400/50 text-cyan-200"
+                        ? "rgba(103,232,249,.25)"
                         : r.outcome === "BANKER"
-                        ? "border-rose-400/50 text-rose-200"
-                        : "border-amber-400/50 text-amber-200"
-                    }`}
-                    title={`#${r.roundSeq} P:${r.p} B:${r.b}`}
-                  >
-                    #{r.roundSeq} {r.outcome ?? "-"}
-                  </div>
-                ))}
-              </div>
+                        ? "rgba(253,164,175,.25)"
+                        : "rgba(253,230,138,.25)",
+                    border:
+                      r.outcome === "PLAYER"
+                        ? "1px solid rgba(103,232,249,.6)"
+                        : r.outcome === "BANKER"
+                        ? "1px solid rgba(253,164,175,.6)"
+                        : "1px solid rgba(253,230,138,.6)",
+                  }}
+                  title={`#${pad4(r.roundSeq)}：${fmtOutcome(r.outcome)}  閒${r.p} / 莊${r.b}`}
+                >
+                  {r.outcome ? zhOutcome[r.outcome] : "—"}
+                </div>
+              ))}
+              {(!data || (data && data.recent.length === 0)) && (
+                <div className="opacity-60 text-sm">暫無資料</div>
+              )}
             </div>
-          </>
-        )}
+
+            {/* 表格（可選） */}
+            <div className="mt-4 max-h-64 overflow-auto text-sm">
+              <table className="w-full text-left opacity-90">
+                <thead className="opacity-70">
+                  <tr>
+                    <th className="py-1 pr-2">局序</th>
+                    <th className="py-1 pr-2">結果</th>
+                    <th className="py-1 pr-2">閒點</th>
+                    <th className="py-1 pr-2">莊點</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data?.recent || []).map((r) => (
+                    <tr key={`t-${r.roundSeq}`} className="border-t border-white/10">
+                      <td className="py-1 pr-2">{pad4(r.roundSeq)}</td>
+                      <td className="py-1 pr-2">{fmtOutcome(r.outcome)}</td>
+                      <td className="py-1 pr-2">{r.p}</td>
+                      <td className="py-1 pr-2">{r.b}</td>
+                    </tr>
+                  ))}
+                  {(!data || (data && data.recent.length === 0)) && (
+                    <tr>
+                      <td colSpan={4} className="py-2 opacity-60">
+                        暫無資料
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** 翻牌卡片（中文標籤） */
+function FlipTile({
+  label,
+  value,
+  outcome,
+}: {
+  label: "閒" | "莊";
+  value: number;
+  outcome: Outcome;
+}) {
+  const isWin =
+    (label === "閒" && outcome === "PLAYER") ||
+    (label === "莊" && outcome === "BANKER");
+  return (
+    <div className="flip-3d h-28">
+      <div
+        className={`flip-inner ${outcome ? "animate-[flipIn_.7s_ease_forwards]" : ""}`}
+        style={{ transform: outcome ? "rotateY(180deg)" : "none" }}
+      >
+        {/* 正面：未翻開（霧面） */}
+        <div className="flip-front glass flex items-center justify-center text-xl font-bold">
+          {label}
+        </div>
+        {/* 背面：已翻開（總點數） */}
+        <div
+          className={`flip-back flex items-center justify-center text-3xl font-extrabold rounded-2xl ${
+            isWin ? "shadow-[0_0_24px_rgba(255,255,255,.3)]" : ""
+          }`}
+          style={{
+            background:
+              label === "閒"
+                ? "linear-gradient(135deg, rgba(103,232,249,.15), rgba(255,255,255,.06))"
+                : "linear-gradient(135deg, rgba(253,164,175,.15), rgba(255,255,255,.06))",
+            border:
+              label === "閒"
+                ? "1px solid rgba(103,232,249,.5)"
+                : "1px solid rgba(253,164,175,.5)",
+          }}
+        >
+          {value ?? 0} 點
+        </div>
       </div>
     </div>
   );
