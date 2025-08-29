@@ -1,11 +1,6 @@
-/* --- Tailwind base --- */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* ================================
-   你的既有樣式（保留）
-==================================*/
 
 /* 全域樣式 */
 body {
@@ -28,15 +23,35 @@ body {
   @apply card hover:scale-105 transform transition duration-200 cursor-pointer;
 }
 
-/* 你的動畫 */
-@keyframes floaty { 0% { transform: translateY(0px);} 50% { transform: translateY(-6px);} 100% { transform: translateY(0px);} }
-@keyframes shine { 0% { transform: translateX(-120%);} 60%,100% { transform: translateX(120%);} }
-@keyframes pulse-border { 0%,100% { box-shadow: 0 0 0px rgba(255,255,255,0.2);} 50% { box-shadow: 0 0 24px rgba(255,255,255,0.25);} }
-@keyframes shimmer { 0% { background-position: -200% 0;} 100% { background-position: 200% 0;} }
-@keyframes flipIn { 0% { transform: rotateY(0deg);} 100% { transform: rotateY(180deg);} }
-@keyframes flipOut { 0% { transform: rotateY(180deg);} 100% { transform: rotateY(360deg);} }
+/* === Glass / Glow / Shimmer / Flip Animations === */
 
-/* 卡片玻璃樣式（你版） */
+@keyframes floaty {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+  100% { transform: translateY(0px); }
+}
+@keyframes shine {
+  0% { transform: translateX(-120%); }
+  60%,100% { transform: translateX(120%); }
+}
+@keyframes pulse-border {
+  0%,100% { box-shadow: 0 0 0px rgba(255,255,255,0.2); }
+  50% { box-shadow: 0 0 24px rgba(255,255,255,0.25); }
+}
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes flipIn {
+  0% { transform: rotateY(0deg); }
+  100% { transform: rotateY(180deg); }
+}
+@keyframes flipOut {
+  0% { transform: rotateY(180deg); }
+  100% { transform: rotateY(360deg); }
+}
+
+/* 卡片玻璃樣式 */
 .glass {
   background: rgba(255,255,255,0.06);
   border: 1px solid rgba(255,255,255,0.12);
@@ -44,167 +59,56 @@ body {
 }
 
 /* 流光邊框 */
-.glow-ring { position: relative; }
+.glow-ring {
+  position: relative;
+}
 .glow-ring::before {
-  content: ""; position: absolute; inset: -1px; border-radius: 18px;
+  content: "";
+  position: absolute; inset: -1px;
+  border-radius: 18px;
   background: linear-gradient(135deg, rgba(255,0,200,.35), rgba(0,255,220,.35), rgba(255,200,80,.35));
-  filter: blur(16px); z-index: 0; pointer-events: none; opacity: .4;
+  filter: blur(16px);
+  z-index: 0; pointer-events: none; opacity: .4;
 }
 
 /* 亮面掃過 */
-.sheen { position: relative; overflow: hidden; }
+.sheen {
+  position: relative; overflow: hidden;
+}
 .sheen::after {
-  content:""; position: absolute; inset: 0;
+  content: "";
+  position: absolute; inset: 0;
   background: linear-gradient(110deg, transparent 0%, rgba(255,255,255,.15) 45%, transparent 55%);
-  transform: translateX(-120%); animation: shine 2.8s ease-in-out infinite;
+  transform: translateX(-120%);
+  animation: shine 2.8s ease-in-out infinite;
 }
 
 /* 按鈕微傾斜 */
-.tilt:hover { transform: translateY(-2px) rotateX(2deg) rotateY(-2deg); }
+.tilt:hover {
+  transform: translateY(-2px) rotateX(2deg) rotateY(-2deg);
+}
 
-/* Flip 容器（你版） */
-.flip-3d { perspective: 1000px; }
-.flip-inner { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform .7s cubic-bezier(.2,.7,.2,1); }
-.flip-front, .flip-back { position: absolute; inset: 0; -webkit-backface-visibility: hidden; backface-visibility: hidden; border-radius: 16px; }
-.flip-back { transform: rotateY(180deg); }
+/* Flip 容器（3D） */
+.flip-3d {
+  perspective: 1000px;
+}
+.flip-inner {
+  position: relative;
+  width: 100%; height: 100%;
+  transform-style: preserve-3d;
+  transition: transform .7s cubic-bezier(.2,.7,.2,1);
+}
+.flip-front, .flip-back {
+  position: absolute; inset: 0;
+  -webkit-backface-visibility: hidden; backface-visibility: hidden;
+  border-radius: 16px;
+}
+.flip-back {
+  transform: rotateY(180deg);
+}
 
 /* 彩色小圓點 */
 .dot { display:inline-block; width: 10px; height: 10px; border-radius: 9999px; }
 .dot-player { background:#67e8f9; }
 .dot-banker { background:#fda4af; }
 .dot-tie    { background:#fde68a; }
-
-/* ================================
-   兼容層（補齊我之前提供頁面會用到的 class）
-   — 不改你原本 class，僅新增可共用的樣式 —
-==================================*/
-
-/* 全域背景保留 Tailwind 顏色，必要時可直接使用 gradient */
-html, body, #__next { height: 100%; }
-
-/* 玻璃擬態（別名，讓新/舊 class 都能用） */
-.glass-card { /* 等同你的 .glass + 邊框強化 */
-  background: rgba(255,255,255,0.08);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255,255,255,0.18);
-  border-radius: 16px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
-}
-.glass-strong {
-  background: rgba(255,255,255,0.12);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-}
-
-/* 淡入動畫（把你 .animate-fade 映射為 .animate-fade-in） */
-@keyframes fade-in { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: translateY(0);} }
-.animate-fade { animation: fade-in .5s ease-out both; }     /* 你原本用的 */
-.animate-fade-in { animation: fade-in .5s ease-out both; }  /* 我提供頁面用的 */
-
-/* 漂浮/脈衝（可選） */
-@keyframes float { 0%{transform:translateY(0)} 50%{transform:translateY(-4px)} 100%{transform:translateY(0)} }
-.animate-float { animation: float 4s ease-in-out infinite; }
-@keyframes pulse-glow { 0%,100% { box-shadow: 0 0 0 rgba(250, 204, 21, 0);} 50% { box-shadow: 0 0 24px rgba(250, 204, 21, .35);} }
-.animate-pulse-glow { animation: pulse-glow 2.4s ease-in-out infinite; }
-
-/* 共用按鈕（不覆蓋你 .btn） */
-.btn-primary {
-  @apply font-bold;
-  background: #facc15; color: #111; border: none;
-}
-.btn-primary:hover { background: #fde047; }
-.btn-danger {
-  background: rgba(239, 68, 68, .85);
-  border: 1px solid rgba(239, 68, 68, .5);
-}
-.btn-danger:hover { background: rgba(239, 68, 68, 1); }
-.btn-neon {
-  position: relative; color: white;
-  background: rgba(99,102,241,.15);
-  border: 1px solid rgba(99,102,241,.4);
-  box-shadow: 0 0 20px rgba(99,102,241,.35), inset 0 0 8px rgba(99,102,241,.25);
-}
-.btn-neon:hover { box-shadow: 0 0 24px rgba(99,102,241,.6), inset 0 0 10px rgba(99,102,241,.35); }
-
-/* Shimmer / 掃光（別名） */
-.shimmer { position: relative; overflow: hidden; }
-.shimmer::after {
-  content: ""; position: absolute; inset: 0;
-  background: linear-gradient(100deg, rgba(255,255,255,0) 20%, rgba(255,255,255,.18) 40%, rgba(255,255,255,0) 60%);
-  transform: translateX(-100%); animation: shimmer 1.8s linear infinite;
-}
-.text-shine {
-  background: linear-gradient(90deg, #fff, #fde047 50%, #fff);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-}
-
-/* 翻牌（我版，與你 .flip-3d 可並存） */
-.flip-ctx { perspective: 1000px; }
-.flip-card {
-  position: relative; width: 64px; height: 92px;
-  transform-style: preserve-3d;
-  transition: transform .6s cubic-bezier(.2,.65,.3,1);
-}
-.flip-card.is-revealed { transform: rotateY(180deg); }
-.flip-front, .flip-back {
-  position: absolute; inset: 0; border-radius: 8px;
-  backface-visibility: hidden; background: #111;
-  border: 1px solid rgba(255,255,255,0.18);
-}
-.flip-front { background: #0f172a; }
-.flip-back  {
-  transform: rotateY(180deg);
-  background: radial-gradient(circle at 30% 30%, #1f2937, #0b0f19);
-}
-
-/* 卡片光暈（滑過） */
-.card-glow { position: relative; overflow: hidden; }
-.card-glow::before {
-  content: ""; position: absolute; inset: -1px;
-  background: radial-gradient(800px 120px at var(--x,50%) var(--y,0%), rgba(255,255,255,.06), transparent 40%);
-  pointer-events: none; transition: opacity .2s; opacity: 0;
-}
-.card-glow:hover::before { opacity: 1; }
-
-/* 倒數環（--p: 0~100） */
-.countdown-ring {
-  --p: 100; width: 64px; height: 64px; border-radius: 9999px;
-  background:
-    conic-gradient(#facc15 calc(var(--p)*1%), rgba(255,255,255,0.08) 0),
-    radial-gradient(farthest-side, rgba(0,0,0,0) 70%, rgba(255,255,255,.12) 72%);
-  display: grid; place-items: center; color: #fff; font-weight: 700;
-}
-
-/* 跑馬燈（公告） */
-.marquee { position: relative; overflow: hidden; white-space: nowrap; }
-.marquee-content { display: inline-block; padding-left: 100%; animation: marquee 16s linear infinite; }
-@keyframes marquee { 0%{ transform: translateX(0);} 100%{ transform: translateX(-100%);} }
-
-/* 桌布與籌碼 */
-.felt {
-  background: radial-gradient(1200px 600px at 50% -20%, rgba(16,185,129,.28), rgba(0,0,0,.65));
-  border: 1px solid rgba(16,185,129,.25);
-  box-shadow: inset 0 0 60px rgba(0,0,0,.45), 0 20px 40px rgba(0,0,0,.5);
-}
-.chip { @apply inline-flex items-center justify-center font-bold; width: 40px; height: 40px; border-radius: 9999px; color: #111;
-  box-shadow: inset 0 0 0 3px rgba(255,255,255,.85), 0 6px 12px rgba(0,0,0,.35);
-}
-.chip-yellow { background: #fde047; }
-.chip-blue   { background: #60a5fa; }
-.chip-red    { background: #f87171; }
-.chip-green  { background: #34d399; }
-
-/* 小工具 */
-.hr-faint { height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,.15), transparent); border: 0; }
-.badge { @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,0.18); }
-.center-screen { min-height: 100vh; display: grid; place-items: center; }
-.hover-pop { transition: transform .2s ease, box-shadow .2s ease; }
-.hover-pop:hover { transform: translateY(-4px) scale(1.02); }
-.no-select { user-select: none; -webkit-user-select: none; }
-.glow-text { text-shadow: 0 0 12px rgba(255,255,255,.35); }
-.table-dark th, .table-dark td { border-color: rgba(255,255,255,.08); }
-.table-dark tr:hover td { background: rgba(255,255,255,.04); }
-.input-dark { @apply w-full p-3 rounded-lg bg-black/30 border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-yellow-400; }
-a.link { color: #93c5fd; }
-a.link:hover { color: #bfdbfe; text-decoration: underline; }

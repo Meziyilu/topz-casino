@@ -29,7 +29,6 @@ export default function AuthClient() {
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error || "失敗");
-      // 登入/註冊成功 → 進大廳
       router.push("/lobby");
       router.refresh();
     } catch (err: any) {
@@ -46,16 +45,10 @@ export default function AuthClient() {
           TOPZCASINO
         </h1>
         <div className="flex gap-2 justify-center mb-4">
-          <button
-            className={`btn px-4 py-2 ${mode === "login" ? "" : "opacity-60"}`}
-            onClick={() => setMode("login")}
-          >
+          <button className={`btn px-4 py-2 ${mode === "login" ? "" : "opacity-60"}`} onClick={() => setMode("login")}>
             登入
           </button>
-          <button
-            className={`btn px-4 py-2 ${mode === "register" ? "" : "opacity-60"}`}
-            onClick={() => setMode("register")}
-          >
+          <button className={`btn px-4 py-2 ${mode === "register" ? "" : "opacity-60"}`} onClick={() => setMode("register")}>
             註冊
           </button>
         </div>

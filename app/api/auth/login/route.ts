@@ -1,37 +1,34 @@
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+// app/login/page.tsx（客戶端頁）
+"use client";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState } from "react";
 
-import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
-import { signJWT } from "@/lib/jwt";
-import bcrypt from "bcryptjs";
+export default function LoginPage() {
+  const router = useRouter();
+  const sp = useSearchParams();
+  const next = sp.get("next") || "/lobby";
 
-export async function POST(req: Request) {
-  try {
-    const { email, password } = await req.json();
-    if (!email || !password) {
-      return NextResponse.json({ error: "缺少帳密" }, { status: 400 });
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      credentials: "include",
+      body: JSON.stringify({ email, password }),
+      headers: { "Content-Type": "application/json" },
+    });
+    if (res.ok) {
+      router.replace(next); // 登入後回到原本想去的頁面
+    } else {
+      alert("登入失敗");
     }
-
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) return NextResponse.json({ error: "帳號或密碼錯誤" }, { status: 401 });
-
-    const ok = await bcrypt.compare(password, user.password);
-    if (!ok) return NextResponse.json({ error: "帳號或密碼錯誤" }, { status: 401 });
-
-    const token = await signJWT({ sub: user.id });
-    const res = NextResponse.json({
-      user: { id: user.id, email: user.email, isAdmin: user.isAdmin },
-    });
-    res.cookies.set("token", token, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: 7 * 24 * 3600,
-    });
-    return res;
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message || "Server error" }, { status: 500 });
   }
+
+  return (
+    <form onSubmit={onSubmit} className="glass p-6 rounded-xl">
+      {/* 表單略 */}
+    </form>
+  );
 }
