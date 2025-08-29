@@ -1,31 +1,25 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { z } from "zod";
 import bcrypt from "bcryptjs";
 
-export const runtime = "nodejs";
-
-const Schema = z.object({
-  email: z.string().email(),
-  password: z.string().min(6),
-  name: z.string().optional()
-});
-
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
-    const json = await req.json();
-    const { email, password, name } = Schema.parse(json);
+    const { email, password, name } = await req.json();
 
-    const exists = await prisma.user.findUnique({ where: { email } });
-    if (exists) {
-      return NextResponse.json({ error: "Email 已被註冊" }, { status: 400 });
+    if (!email || !password) {
+      return NextResponse.json({ error: "請輸入 Email 與密碼" }, { status: 400 });
     }
 
+    const exists = await prisma.user.findUnique({ where: { email } });
+    if (exists) return NextResponse.json({ error: "Email 已被註冊" }, { status: 400 });
+
     const hash = await bcrypt.hash(password, 10);
-    await prisma.user.create({ data: { email, password: hash, name } });
+    await prisma.user.create({
+      data: { email, password: hash, name: name?.trim() || null },
+    });
 
     return NextResponse.json({ ok: true });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Bad Request" }, { status: 400 });
+    return NextResponse.json({ error: e?.message || "註冊失敗" }, { status: 500 });
   }
 }
