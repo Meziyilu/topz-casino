@@ -3,7 +3,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import CardFlip from "../../../../components/CardFlip"; // 從 app/casino/baccarat/[room]/ 到 /components
 
 type Outcome = "PLAYER" | "BANKER" | "TIE" | null;
 type Phase = "BETTING" | "REVEALING" | "SETTLED";
@@ -20,7 +19,6 @@ type StateResp = {
   recent: { roundSeq: number; outcome: Outcome; p: number; b: number }[];
 };
 
-// 中文顯示
 const zhPhase: Record<Phase, string> = {
   BETTING: "下注中",
   REVEALING: "開牌中",
@@ -40,27 +38,67 @@ function pad4(n: number) {
   return n.toString().padStart(4, "0");
 }
 
+/** 內嵌的翻牌元件（不需額外檔案） */
+function CardFlip({
+  label, // "閒" | "莊"
+  value, // 點數
+  faceUp, // 是否翻開
+  highlight, // 是否金光外框（勝方）
+}: {
+  label: "閒" | "莊";
+  value: number | null;
+  faceUp: boolean;
+  highlight?: boolean;
+}) {
+  const bg =
+    label === "閒"
+      ? "linear-gradient(135deg, rgba(103,232,249,.15), rgba(255,255,255,.06))"
+      : "linear-gradient(135deg, rgba(253,164,175,.15), rgba(255,255,255,.06))";
+  const border =
+    label === "閒"
+      ? "1px solid rgba(103,232,249,.5)"
+      : "1px solid rgba(253,164,175,.5)";
+
+  return (
+    <div className="flip-3d h-28">
+      <div
+        className={`flip-inner ${faceUp ? "animate-[flipIn_.7s_ease_forwards]" : ""} ${
+          highlight ? "winner-glow" : ""
+        }`}
+        style={{ transform: faceUp ? "rotateY(180deg)" : "none" }}
+      >
+        {/* 正面：未翻開（霧面） */}
+        <div className="flip-front glass flex items-center justify-center text-xl font-bold">
+          {label}
+        </div>
+        {/* 背面：已翻開（總點數） */}
+        <div
+          className="flip-back flex items-center justify-center text-3xl font-extrabold rounded-2xl"
+          style={{ background: bg, border }}
+        >
+          {value ?? 0} 點
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function RoomPage() {
   const { room } = useParams<{ room: string }>();
   const router = useRouter();
-
   const [data, setData] = useState<StateResp | null>(null);
   const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
+  const [placing, setPlacing] = useState<null | string>(null);
+  const [err, setErr] = useState<string>("");
 
-  // 下注金額（固定四個：50 / 100 / 500 / 1000）
-  const chips = [50, 100, 500, 1000] as const;
-  const [chip, setChip] = useState<(typeof chips)[number]>(50);
-  const [placing, setPlacing] = useState<null | "PLAYER" | "BANKER" | "TIE">(null);
-
-  // 週期拉資料（每秒）
+  // 讀取狀態（每秒輪詢）
   useEffect(() => {
     let timer: any;
     let mounted = true;
 
-    async function load() {
+    async function load(force?: boolean) {
       try {
-        const url = `/api/casino/baccarat/state?room=${room}`;
+        const url = `/api/casino/baccarat/state?room=${room}${force ? "&force=restart" : ""}`;
         const res = await fetch(url, { cache: "no-store", credentials: "include" });
         const json = await res.json();
         if (!res.ok) throw new Error(json?.error || "載入失敗");
@@ -83,8 +121,8 @@ export default function RoomPage() {
     };
   }, [room]);
 
-  // 前端本地倒數（讓畫面順）
-  const [localSec, setLocalSec] = useState(0);
+  // 倒數秒數（本地同步扣）
+  const [localSec, setLocalSec] = useState<number>(0);
   useEffect(() => {
     if (!data) return;
     setLocalSec(data.secLeft);
@@ -96,7 +134,7 @@ export default function RoomPage() {
   }, [localSec]);
 
   // 下注
-  async function place(side: "PLAYER" | "BANKER" | "TIE") {
+  async function place(side: "PLAYER" | "BANKER" | "TIE", amount = 100) {
     if (!data) return;
     if (data.phase !== "BETTING") {
       setErr("目前非下注時間");
@@ -108,7 +146,7 @@ export default function RoomPage() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomCode: data.room.code, side, amount: chip }),
+        body: JSON.stringify({ roomCode: data.room.code, side, amount }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "下注失敗");
@@ -120,73 +158,63 @@ export default function RoomPage() {
     }
   }
 
-  const outcome = data?.result?.outcome ?? null;
+  const outcomeMark = useMemo(() => data?.result?.outcome ?? null, [data?.result]);
 
   return (
     <div className="min-h-screen bg-casino-bg text-white">
-      {/* 頂部資訊列 */}
+      {/* 頂部列 */}
       <div className="max-w-6xl mx-auto px-4 py-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <button className="btn glass tilt" onClick={() => router.push("/lobby")}>
+          <button className="btn glass tilt" onClick={() => router.push("/lobby")} title="回大廳">
             ← 回大廳
           </button>
-
           <div className="glass px-4 py-2 rounded-xl">
             <div className="text-sm opacity-80">房間</div>
-            <div className="text-lg font-semibold">{data?.room?.name || room}</div>
+            <div className="text-lg font-semibold">{data?.room.name || String(room)}</div>
           </div>
-
           <div className="glass px-4 py-2 rounded-xl">
             <div className="text-sm opacity-80">局序</div>
             <div className="text-lg font-semibold">{data ? pad4(data.roundSeq) : "--"}</div>
           </div>
-
           <div className="glass px-4 py-2 rounded-xl">
             <div className="text-sm opacity-80">狀態</div>
             <div className="text-lg font-semibold">{data ? zhPhase[data.phase] : "載入中"}</div>
           </div>
-
           <div className="glass px-4 py-2 rounded-xl">
             <div className="text-sm opacity-80">倒數</div>
             <div className="text-lg font-semibold">
               {typeof localSec === "number" ? `${localSec}s` : "--"}
             </div>
           </div>
-
-          <div className="opacity-60 text-xs ml-2">(時間以伺服器為準)</div>
         </div>
 
-        {err && <div className="text-red-400 text-sm">{err}</div>}
+        <div className="text-right">
+          {err && <div className="text-red-400 text-sm mb-2">{err}</div>}
+          <div className="opacity-70 text-xs">（時間以伺服器為準）</div>
+        </div>
       </div>
 
-      {/* 主內容 */}
+      {/* 內容區 */}
       <div className="max-w-6xl mx-auto px-4 grid md:grid-cols-3 gap-6 pb-16">
         {/* 左：下注區 */}
         <div className="md:col-span-2">
           <div className="glass glow-ring p-6 rounded-2xl sheen">
             <div className="text-xl font-bold mb-4">下注面板</div>
 
-            {/* 筹碼選擇 */}
-            <div className="mb-4">
-              <div className="text-sm opacity-80 mb-2">選擇籌碼：</div>
-              <div className="flex flex-wrap gap-3">
-                {chips.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setChip(c)}
-                    className={`px-5 py-2 rounded-full border transition ${
-                      chip === c
-                        ? "bg-white/20 border-white/60"
-                        : "bg-white/5 border-white/20 hover:bg-white/10"
-                    }`}
-                  >
-                    ${c.toLocaleString()}
-                  </button>
-                ))}
-              </div>
+            {/* 金額快捷（不動後端，只是前端 amount） */}
+            <div className="mb-4 flex gap-2">
+              {[50, 100, 500, 1000].map((amt) => (
+                <button
+                  key={amt}
+                  className="btn"
+                  onClick={() => place("PLAYER", amt)} // 先示範，實際下注按鈕仍在下方
+                  title={`快速壓「閒」${amt}`}
+                >
+                  {amt}
+                </button>
+              ))}
             </div>
 
-            {/* 下注按鈕 */}
             <div className="grid grid-cols-3 gap-4">
               <button
                 disabled={placing === "PLAYER" || data?.phase !== "BETTING"}
@@ -198,7 +226,6 @@ export default function RoomPage() {
                   <span className="ml-2 text-xs opacity-80">（我: {data.myBets.PLAYER}）</span>
                 )}
               </button>
-
               <button
                 disabled={placing === "TIE" || data?.phase !== "BETTING"}
                 onClick={() => place("TIE")}
@@ -209,7 +236,6 @@ export default function RoomPage() {
                   <span className="ml-2 text-xs opacity-80">（我: {data.myBets.TIE}）</span>
                 )}
               </button>
-
               <button
                 disabled={placing === "BANKER" || data?.phase !== "BETTING"}
                 onClick={() => place("BANKER")}
@@ -222,28 +248,26 @@ export default function RoomPage() {
               </button>
             </div>
 
-            {/* 翻牌/結果（含贏家金光） */}
+            {/* 翻牌/結果 */}
             {data?.phase !== "BETTING" && data?.result && (
               <div className="mt-8">
                 <div className="text-sm opacity-80 mb-2">本局結果</div>
-
                 <div className="grid grid-cols-2 gap-6 w-full max-w-xl">
                   <CardFlip
                     label="閒"
-                    total={data.result.p ?? 0}
-                    show={true}
-                    isWinner={outcome === "PLAYER"} // ★ 贏家金光
+                    value={data.result.p ?? 0}
+                    faceUp={true}
+                    highlight={data.result.outcome === "PLAYER"}
                   />
                   <CardFlip
                     label="莊"
-                    total={data.result.b ?? 0}
-                    show={true}
-                    isWinner={outcome === "BANKER"} // ★ 贏家金光
+                    value={data.result.b ?? 0}
+                    faceUp={true}
+                    highlight={data.result.outcome === "BANKER"}
                   />
                 </div>
-
                 <div className="mt-3 text-lg">
-                  結果：<span className="font-bold">{fmtOutcome(outcome)}</span>
+                  結果：<span className="font-bold">{fmtOutcome(outcomeMark)}</span>
                 </div>
               </div>
             )}
@@ -254,12 +278,11 @@ export default function RoomPage() {
           </div>
         </div>
 
-        {/* 右：路子/歷史 */}
+        {/* 右：路子 / 歷史 */}
         <div>
           <div className="glass glow-ring p-6 rounded-2xl">
             <div className="text-xl font-bold mb-4">路子（近 20 局）</div>
 
-            {/* 大路色塊（簡化） */}
             <div className="grid grid-cols-10 gap-2">
               {(data?.recent || []).map((r) => (
                 <div
@@ -284,12 +307,11 @@ export default function RoomPage() {
                   {r.outcome ? zhOutcome[r.outcome] : "—"}
                 </div>
               ))}
-              {data && data.recent.length === 0 && (
+              {(!data || (data && data.recent.length === 0)) && (
                 <div className="opacity-60 text-sm">暫無資料</div>
               )}
             </div>
 
-            {/* 明細表 */}
             <div className="mt-4 max-h-64 overflow-auto text-sm">
               <table className="w-full text-left opacity-90">
                 <thead className="opacity-70">
@@ -309,7 +331,7 @@ export default function RoomPage() {
                       <td className="py-1 pr-2">{r.b}</td>
                     </tr>
                   ))}
-                  {data && data.recent.length === 0 && (
+                  {(!data || (data && data.recent.length === 0)) && (
                     <tr>
                       <td colSpan={4} className="py-2 opacity-60">
                         暫無資料
