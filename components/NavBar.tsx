@@ -2,70 +2,86 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import useSWR from "swr";
+import { useRouter, usePathname } from "next/navigation";
+import { useState } from "react";
 
-type Me = { email: string; isAdmin: boolean } | null;
+const fetcher = (u: string) =>
+  fetch(u, { credentials: "include", cache: "no-store" }).then((r) => r.json());
 
 export default function NavBar() {
-  const [me, setMe] = useState<Me>(null);
-  const [loading, setLoading] = useState(true);
+  const { data } = useSWR("/api/auth/me", fetcher);
+  const router = useRouter();
+  const pathname = usePathname();
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    let stop = false;
-    async function load() {
-      try {
-        const res = await fetch("/api/auth/me", {
-          credentials: "include",
-          cache: "no-store",
-        });
-        if (!stop) setMe(res.ok ? await res.json() : null);
-      } catch {
-        if (!stop) setMe(null);
-      } finally {
-        if (!stop) setLoading(false);
-      }
+  async function logout() {
+    try {
+      setLoading(true);
+      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+      router.push("/auth");
+      router.refresh();
+    } finally {
+      setLoading(false);
     }
-    load();
-    const t = setInterval(load, 30000);
-    return () => { stop = true; clearInterval(t); };
-  }, []);
+  }
+
+  const isLobby = pathname?.startsWith("/lobby");
 
   return (
-    <nav className="w-full flex items-center justify-between py-3 px-4 glass glow-ring">
-      <div className="flex items-center gap-3">
-        <Link href="/lobby" className="font-black tracking-wider">TOPZCASINO</Link>
-        <Link href="/lobby" className="opacity-80 hover:opacity-100">大廳</Link>
-        <Link href="/bank" className="opacity-80 hover:opacity-100">銀行</Link>
-        <Link href="/casino/baccarat/R30" className="opacity-80 hover:opacity-100">百家 30s</Link>
-        <Link href="/casino/baccarat/R60" className="opacity-80 hover:opacity-100">百家 60s</Link>
-        <Link href="/casino/baccarat/R90" className="opacity-80 hover:opacity-100">百家 90s</Link>
-        {me?.isAdmin && <Link href="/admin" className="opacity-80 hover:opacity-100">管理員</Link>}
-      </div>
+    <header className="sticky top-0 z-40 w-full backdrop-blur bg-black/30 border-b border-white/10">
+      <div className="mx-auto max-w-6xl px-4 h-14 flex items-center justify-between">
+        <Link href="/lobby" className="font-extrabold tracking-widest text-white">
+          TOPZCASINO
+        </Link>
 
-      <div className="flex items-center gap-3">
-        {loading ? (
-          <span className="text-sm opacity-70">載入中…</span>
-        ) : me ? (
-          <>
-            <span className="text-sm opacity-80">{me.email}</span>
-            <button
-              className="btn"
-              onClick={async () => {
-                // 你的登出 API：若 /api/auth/logout 沒有，沿用你之前的 /api/auth/login?logout=1
-                await fetch("/api/auth/login?logout=1", {
-                  method: "POST",
-                  credentials: "include",
-                }).catch(() => {});
-                location.href = "/auth";
-              }}
+        <nav className="flex items-center gap-3">
+          <Link
+            href="/lobby"
+            className={`px-3 py-1.5 rounded-md text-sm ${
+              isLobby ? "bg-white/15" : "hover:bg-white/10"
+            }`}
+          >
+            大廳
+          </Link>
+          <Link
+            href="/bank"
+            className="px-3 py-1.5 rounded-md text-sm hover:bg-white/10"
+          >
+            銀行
+          </Link>
+          {data?.isAdmin ? (
+            <Link
+              href="/admin"
+              className="px-3 py-1.5 rounded-md text-sm hover:bg-white/10"
             >
-              登出
-            </button>
-          </>
-        ) : (
-          <Link href="/auth" className="btn">登入 / 註冊</Link>
-        )}
+              管理員
+            </Link>
+          ) : null}
+
+          <div className="mx-2 h-5 w-px bg-white/20" />
+
+          {data?.email ? (
+            <>
+              <span className="text-xs text-white/80 hidden sm:inline">
+                {data.email}
+              </span>
+              <button
+                onClick={logout}
+                disabled={loading}
+                className="btn px-3 py-1.5 text-sm"
+                title="登出"
+              >
+                {loading ? "登出中…" : "登出"}
+              </button>
+            </>
+          ) : (
+            <Link href="/auth" className="btn px-3 py-1.5 text-sm">
+              登入 / 註冊
+            </Link>
+          )}
+        </nav>
       </div>
-    </nav>
+    </header>
   );
 }
