@@ -1,19 +1,72 @@
 // app/lobby/page.tsx
-import NavBar from "@/components/NavBar";
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+type RoomState = {
+  room: { code: "R30" | "R60" | "R90"; name: string; durationSeconds: number };
+  roundSeq: number;
+  phase: "BETTING" | "REVEALING" | "SETTLED";
+  secLeft: number;
+};
 
-function RoomCard({ code, name, seconds }: { code: string; name: string; seconds: number }) {
+const ROOM_CODES = [
+  { code: "R30" as const, label: "30秒房" },
+  { code: "R60" as const, label: "60秒房" },
+  { code: "R90" as const, label: "90秒房" },
+];
+
+function useRoomState(code: "R30" | "R60" | "R90") {
+  const [data, setData] = useState<RoomState | null>(null);
+  useEffect(() => {
+    let timer: any;
+    const load = async () => {
+      try {
+        const r = await fetch(`/api/casino/baccarat/state?room=${code}`, {
+          cache: "no-store",
+          credentials: "include",
+        });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j?.error || "狀態讀取失敗");
+        setData({
+          room: j.room,
+          roundSeq: j.roundSeq,
+          phase: j.phase,
+          secLeft: j.secLeft,
+        });
+      } catch (e) {
+        // 靜默
+      }
+    };
+    load();
+    timer = setInterval(load, 1000);
+    return () => clearInterval(timer);
+  }, [code]);
+  return data;
+}
+
+function RoomCard({ code, label }: { code: "R30" | "R60" | "R90"; label: string }) {
+  const s = useRoomState(code);
   return (
-    <Link href={`/casino/baccarat/${code}`} className="room-card block glass glow-ring sheen">
-      <div className="p-5">
+    <Link href={`/casino/baccarat/${code}`} className="room-card glow-ring sheen block">
+      <div className="glass rounded-xl p-5">
         <div className="flex items-center justify-between">
-          <h3 className="text-xl font-bold">{name}</h3>
-          <span className="text-sm text-white/70">{seconds}s</span>
+          <h3 className="text-xl font-bold tracking-wide">{label}</h3>
+          <span className="text-xs opacity-70">代碼 {code}</span>
         </div>
-        <p className="mt-2 text-white/80 text-sm">立即入場下注</p>
+        <div className="mt-3 text-sm opacity-80">
+          局序：<b>{s?.roundSeq ?? "…"}</b>
+        </div>
+        <div className="mt-1 text-sm opacity-80">
+          狀態：<b>{s?.phase ?? "…"}</b>
+        </div>
+        <div className="mt-2">
+          <div className="text-4xl font-extrabold tabular-nums">
+            {s?.secLeft ?? "…"}<span className="text-sm ml-1">s</span>
+          </div>
+        </div>
+        <div className="mt-3 text-xs opacity-60">點擊進入房間</div>
       </div>
     </Link>
   );
@@ -21,22 +74,15 @@ function RoomCard({ code, name, seconds }: { code: string; name: string; seconds
 
 export default function LobbyPage() {
   return (
-    <main className="min-h-screen bg-casino-bg text-white">
-      <NavBar />
-      <div className="max-w-6xl mx-auto px-4 py-6">
-        <div className="mb-6 card glass">
-          <div className="animate-pulse text-white/90">
-            🎺 跑馬燈：歡迎來到 TOPZCASINO，祝您手氣旺旺！每日 00:00 局序重置，請留意各房倒數～
-          </div>
-        </div>
-
-        <h2 className="text-lg mb-3 text-white/80">百家樂房間</h2>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <RoomCard code="R30" name="30 秒房" seconds={30} />
-          <RoomCard code="R60" name="60 秒房" seconds={60} />
-          <RoomCard code="R90" name="90 秒房" seconds={90} />
+    <div className="min-h-screen bg-gradient-casino px-4 py-10">
+      <div className="max-w-6xl mx-auto">
+        <h1 className="text-3xl font-black tracking-widest mb-6">TOPZCASINO 大廳</h1>
+        <div className="grid gap-6 grid-cols-1 md:grid-cols-3">
+          {ROOM_CODES.map((r) => (
+            <RoomCard key={r.code} code={r.code} label={r.label} />
+          ))}
         </div>
       </div>
-    </main>
+    </div>
   );
 }
