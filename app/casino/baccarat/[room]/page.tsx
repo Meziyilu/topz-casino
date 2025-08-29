@@ -46,11 +46,11 @@ export default function RoomPage() {
   const [placing, setPlacing] = useState<null | "PLAYER" | "BANKER" | "TIE">(null);
   const [err, setErr] = useState<string>("");
 
-  // 面額籌碼
+  // 面額
   const chips = [50, 100, 500, 1000] as const;
   const [chip, setChip] = useState<(typeof chips)[number]>(100);
 
-  // 輪詢 state
+  // 拉資料（每秒）
   useEffect(() => {
     let timer: any;
     let mounted = true;
@@ -122,7 +122,9 @@ export default function RoomPage() {
     return data.result.outcome;
   }, [data?.result]);
 
-  const showFlip = data?.phase !== "BETTING" && !!data?.result;
+  // 是否顯示翻牌：REVEALING 就開始翻；SETTLED 顯示數字
+  const showFlip = data?.phase !== "BETTING";
+  const showNumbers = !!data?.result && data.phase === "SETTLED";
 
   return (
     <div className="min-h-screen bg-casino-bg text-white">
@@ -139,7 +141,7 @@ export default function RoomPage() {
 
           <div className="glass px-4 py-2 rounded-xl">
             <div className="text-sm opacity-80">房間</div>
-            <div className="text-lg font-semibold">{data?.room.name || room}</div>
+            <div className="text-lg font-semibold">{data?.room?.name || room}</div>
           </div>
 
           <div className="glass px-4 py-2 rounded-xl">
@@ -181,7 +183,7 @@ export default function RoomPage() {
               {[50, 100, 500, 1000].map((c) => (
                 <button
                   key={c}
-                  className={`px-4 py-2 rounded-full transition relative overflow-hidden
+                  className={`px-4 py-2 rounded-full transition
                     ${
                       c === (chip || 0)
                         ? "bg-white/25 ring-2 ring-white/70 shadow-[0_0_24px_rgba(255,255,255,.35)]"
@@ -230,17 +232,32 @@ export default function RoomPage() {
               </button>
             </div>
 
-            {/* 翻牌/結果（關鍵：key=roundId 讓每局都重新掛載） */}
-            {data?.result && data.phase !== "BETTING" && (
-              <div className="mt-8" key={data.roundId}>
-                <div className="text-sm opacity-80 mb-2">本局結果</div>
+            {/* 翻牌/結果（用 roundId 當 key，確保每局重掛載） */}
+            {showFlip && (
+              <div className="mt-8" key={data?.roundId || "r"}>
+                <div className="text-sm opacity-80 mb-2">
+                  {data?.phase === "REVEALING" ? "開牌中…" : "本局結果"}
+                </div>
                 <div className="grid grid-cols-2 gap-6 w-full max-w-xl">
-                  <FlipTile label="閒" value={data.result.p ?? 0} outcome={data.result.outcome} />
-                  <FlipTile label="莊" value={data.result.b ?? 0} outcome={data.result.outcome} />
+                  <FlipTile
+                    label="閒"
+                    // REVEALING 時先顯示 "?"，SETTLED 才塞數字
+                    value={showNumbers ? data?.result?.p ?? 0 : null}
+                    outcome={data?.result?.outcome ?? null}
+                    phase={data?.phase ?? "BETTING"}
+                  />
+                  <FlipTile
+                    label="莊"
+                    value={showNumbers ? data?.result?.b ?? 0 : null}
+                    outcome={data?.result?.outcome ?? null}
+                    phase={data?.phase ?? "BETTING"}
+                  />
                 </div>
-                <div className="mt-3 text-lg">
-                  結果：<span className="font-bold">{fmtOutcome(outcomeMark)}</span>
-                </div>
+                {showNumbers && (
+                  <div className="mt-3 text-lg">
+                    結果：<span className="font-bold">{fmtOutcome(outcomeMark)}</span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -255,7 +272,7 @@ export default function RoomPage() {
           <div className="glass glow-ring p-6 rounded-2xl">
             <div className="text-xl font-bold mb-4">路子（近 20 局）</div>
 
-            {/* 大路色塊（簡化版） */}
+            {/* 大路色塊（簡化） */}
             <div className="grid grid-cols-10 gap-2">
               {(data?.recent || []).map((r) => (
                 <div
@@ -323,32 +340,39 @@ export default function RoomPage() {
   );
 }
 
-/** 翻牌卡片（強化：rAF 兩段式 reflow，內聯 3D/背面隱藏屬性） */
+/** 翻牌卡片（REVEALING 就翻；SETTLED 再顯示數字） */
 function FlipTile({
   label,
-  value,
+  value,         // null 表示先不顯示數字（REVEALING）
   outcome,
+  phase,
 }: {
   label: "閒" | "莊";
-  value: number;
+  value: number | null;
   outcome: Outcome;
+  phase: Phase;
 }) {
   const [flipped, setFlipped] = useState(false);
   const innerRef = useRef<HTMLDivElement>(null);
+  const prevPhase = useRef<Phase>("BETTING");
 
+  // 只要 phase 變成 REVEALING 或 SETTLED，就觸發翻牌
   useEffect(() => {
-    // 每次有結果就重新觸發動畫
-    setFlipped(false);
-    // 兩段 rAF 保證瀏覽器先渲染初始狀態，再切到翻面，確保 transition 觸發
-    const i = requestAnimationFrame(() => {
-      // 讀一次 offsetHeight 觸發 reflow，保險
-      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-      innerRef.current?.offsetHeight;
-      const j = requestAnimationFrame(() => setFlipped(true));
-      return () => cancelAnimationFrame(j);
-    });
-    return () => cancelAnimationFrame(i);
-  }, [outcome]);
+    const from = prevPhase.current;
+    prevPhase.current = phase;
+    if (phase === "REVEALING" || (phase === "SETTLED" && from !== "SETTLED")) {
+      // 先 reset，再在下一幀啟動翻面
+      setFlipped(false);
+      const a = requestAnimationFrame(() => {
+        // 強制 reflow
+        // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+        innerRef.current?.offsetHeight;
+        const b = requestAnimationFrame(() => setFlipped(true));
+        return () => cancelAnimationFrame(b);
+      });
+      return () => cancelAnimationFrame(a);
+    }
+  }, [phase]);
 
   const isWin =
     (label === "閒" && outcome === "PLAYER") ||
@@ -356,8 +380,9 @@ function FlipTile({
 
   return (
     <div
-      className="h-28"
+      className="w-full"
       style={{
+        height: 140, // 固定高度，避免0高導致看不到
         perspective: "1000px",
         WebkitPerspective: "1000px",
       }}
@@ -375,7 +400,7 @@ function FlipTile({
           transition: "transform .7s cubic-bezier(.2,.7,.2,1)",
         }}
       >
-        {/* 正面 */}
+        {/* 正面（未翻） */}
         <div
           style={{
             position: "absolute",
@@ -383,13 +408,21 @@ function FlipTile({
             borderRadius: 16,
             backfaceVisibility: "hidden",
             WebkitBackfaceVisibility: "hidden",
+            background:
+              label === "閒"
+                ? "linear-gradient(135deg, rgba(103,232,249,.15), rgba(255,255,255,.06))"
+                : "linear-gradient(135deg, rgba(253,164,175,.15), rgba(255,255,255,.06))",
+            border:
+              label === "閒"
+                ? "1px solid rgba(103,232,249,.4)"
+                : "1px solid rgba(253,164,175,.4)",
           }}
-          className="glass flex items-center justify-center text-xl font-bold"
+          className="flex items-center justify-center text-xl font-bold"
         >
           {label}
         </div>
 
-        {/* 背面 */}
+        {/* 背面（已翻） */}
         <div
           style={{
             position: "absolute",
@@ -400,17 +433,17 @@ function FlipTile({
             WebkitBackfaceVisibility: "hidden",
             background:
               label === "閒"
-                ? "linear-gradient(135deg, rgba(103,232,249,.15), rgba(255,255,255,.06))"
-                : "linear-gradient(135deg, rgba(253,164,175,.15), rgba(255,255,255,.06))",
+                ? "linear-gradient(135deg, rgba(103,232,249,.25), rgba(255,255,255,.08))"
+                : "linear-gradient(135deg, rgba(253,164,175,.25), rgba(255,255,255,.08))",
             border:
               label === "閒"
-                ? "1px solid rgba(103,232,249,.5)"
-                : "1px solid rgba(253,164,175,.5)",
-            boxShadow: isWin ? "0 0 24px rgba(255,255,255,.3)" : "none",
+                ? "1px solid rgba(103,232,249,.6)"
+                : "1px solid rgba(253,164,175,.6)",
+            boxShadow: isWin ? "0 0 24px rgba(255,255,255,.35)" : "none",
           }}
           className="flex items-center justify-center text-3xl font-extrabold"
         >
-          {value ?? 0} 點
+          {value === null ? "?" : `${value} 點`}
         </div>
       </div>
     </div>
