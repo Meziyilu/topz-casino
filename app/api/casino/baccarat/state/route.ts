@@ -89,7 +89,7 @@ async function revealNowTx(tx: Prisma.TransactionClient, roundId: string) {
 
   // 只在還沒有結果時發一次牌
   if (!r.outcome) {
-    const result = dealOneRound([]);
+    const result = dealOneRound();
     await tx.round.update({
       where: { id: roundId },
       data: {
@@ -123,7 +123,7 @@ async function settleRoundTx(tx: Prisma.TransactionClient, roundId: string) {
   });
   if (!r?.outcome) {
     // 理論上不會發生（revealNowTx 已經先決定 outcome），安全起見補發
-    const result = dealOneRound([]);
+    const result = dealOneRound();
     await tx.round.update({
       where: { id: roundId },
       data: {
