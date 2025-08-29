@@ -195,3 +195,79 @@ body {
   background: linear-gradient(135deg, rgba(253,164,175,.18), rgba(255,255,255,.06));
   border: 1px solid rgba(253,164,175,.55);
 }
+/* ==== Fancy Room Banner (新增) ==== */
+.room-banner {
+  position: relative;
+  border-radius: 20px;
+  padding: 18px;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(76,0,104,.35), rgba(0,98,128,.28));
+  border: 1px solid rgba(255,255,255,.12);
+  box-shadow: inset 0 0 40px rgba(255,255,255,.06);
+}
+.room-banner .rb-layer { position: absolute; inset: 0; pointer-events: none; }
+.room-banner .rb-grid {
+  background-image:
+    linear-gradient(rgba(255,255,255,.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px);
+  background-size: 28px 28px, 28px 28px;
+  mask-image: radial-gradient(circle at 30% 50%, rgba(0,0,0,.7), transparent 60%),
+              radial-gradient(circle at 80% 10%, rgba(0,0,0,.5), transparent 55%);
+}
+.room-banner .rb-radial {
+  background: radial-gradient(800px 200px at -5% 50%, rgba(0,255,220,.12), transparent 60%),
+              radial-gradient(600px 160px at 110% 10%, rgba(255,0,200,.12), transparent 60%);
+  filter: blur(2px);
+}
+.room-banner .rb-content { position: relative; z-index: 2; }
+.rb-chip {
+  font-size: 12px; padding: 4px 10px; border-radius: 999px;
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15);
+}
+.rb-chip-blue { background: rgba(0,153,255,.18); border-color: rgba(0,153,255,.35); }
+.rb-chip-pink { background: rgba(255,0,200,.18); border-color: rgba(255,0,200,.35); }
+.rb-chip-gold { background: rgba(255,215,0,.18); border-color: rgba(255,215,0,.35); }
+.rb-value { font-weight: 800; letter-spacing: .5px; margin-right: 8px; }
+
+.rb-chips { margin-top: 10px; display: flex; gap: 8px; }
+.chip {
+  display:inline-flex; align-items:center; justify-content:center;
+  width: 34px; height: 34px; border-radius: 999px;
+  font-size: 11px; font-weight: 800;
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18);
+  text-shadow: 0 1px 2px rgba(0,0,0,.3);
+}
+.chip-50   { background: radial-gradient(circle at 30% 30%, rgba(103,232,249,.25), rgba(255,255,255,.06)); border-color: rgba(103,232,249,.5); }
+.chip-100  { background: radial-gradient(circle at 30% 30%, rgba(253,230,138,.25), rgba(255,255,255,.06)); border-color: rgba(253,230,138,.5); }
+.chip-500  { background: radial-gradient(circle at 30% 30%, rgba(253,164,175,.25), rgba(255,255,255,.06)); border-color: rgba(253,164,175,.5); }
+.chip-1000 { background: radial-gradient(circle at 30% 30%, rgba(191,186,255,.28), rgba(255,255,255,.06)); border-color: rgba(191,186,255,.55); }
+
+/* ==== Icon Road (新增：籌碼路子) ==== */
+.icon-chip {
+  width: 32px; height: 32px; border-radius: 999px;
+  display:flex; align-items:center; justify-content:center;
+  position: relative; overflow: hidden;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.18);
+  box-shadow: inset 0 0 12px rgba(0,0,0,.2), 0 1px 6px rgba(0,0,0,.25);
+}
+.icon-face {
+  width: 100%; height: 100%; border-radius: 999px;
+  display:flex; align-items:center; justify-content:center;
+  font-size: 14px; font-weight: 900;
+}
+.icon-player {
+  background: radial-gradient(circle at 35% 30%, rgba(103,232,249,.28), rgba(255,255,255,.04));
+  border: 1px solid rgba(103,232,249,.5);
+}
+.icon-banker {
+  background: radial-gradient(circle at 35% 30%, rgba(253,164,175,.28), rgba(255,255,255,.04));
+  border: 1px solid rgba(253,164,175,.5);
+}
+.icon-tie {
+  background: radial-gradient(circle at 35% 30%, rgba(253,230,138,.28), rgba(255,255,255,.04));
+  border: 1px solid rgba(253,230,138,.5);
+}
+.legend-swatch { width: 10px; height: 10px; border-radius: 999px; display:inline-block; }
+.legend-swatch.lp { background:#67e8f9; }
+.legend-swatch.lb { background:#fda4af; }
+.legend-swatch.lt { background:#fde68a; }

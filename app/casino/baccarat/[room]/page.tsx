@@ -46,7 +46,7 @@ export default function RoomPage() {
   const [placing, setPlacing] = useState<null | string>(null);
   const [err, setErr] = useState<string>("");
 
-  // 後端輪詢：保持原本流程不變
+  // 輪詢 state
   useEffect(() => {
     let timer: any;
     let mounted = true;
@@ -73,7 +73,7 @@ export default function RoomPage() {
     return () => { mounted = false; clearInterval(timer); };
   }, [room]);
 
-  // 倒數：沿用你原本邏輯
+  // 倒數（前端跟著扣）
   const [localSec, setLocalSec] = useState<number>(0);
   useEffect(() => {
     if (!data) return;
@@ -111,103 +111,94 @@ export default function RoomPage() {
     }
   }
 
-  // ======== 「翻牌顯示鎖存」：確保有 2.2s 的動畫時間 ========
-  // 當 phase 變 REVEALING 或已經有 result（已結算），鎖住顯示 2.2s
+  // 翻牌顯示鎖存（確保動畫能看到）
   const [revealLatch, setRevealLatch] = useState(false);
-  const [latchKey, setLatchKey] = useState<string>(""); // 以 roundId 變動作為動畫重置
+  const [latchKey, setLatchKey] = useState<string>("");
 
   useEffect(() => {
     if (!data) return;
-    // round 改變（新局），重置鎖
     if (data.roundId !== latchKey) {
       setLatchKey(data.roundId);
       setRevealLatch(false);
     }
     if (data.phase === "REVEALING" || (data.phase === "SETTLED" && data.result)) {
       setRevealLatch(true);
-      const t = setTimeout(() => setRevealLatch(false), 2200); // 與 CSS flipHold 對齊
+      const t = setTimeout(() => setRevealLatch(false), 2200);
       return () => clearTimeout(t);
     }
-  }, [data?.phase, data?.result, data?.roundId]); // eslint-disable-line
+  }, [data?.phase, data?.result, data?.roundId]);
 
-  const showReveal = (data?.phase === "REVEALING" || data?.phase === "SETTLED") && (data?.result || revealLatch);
+  const showReveal =
+    (data?.phase === "REVEALING" || data?.phase === "SETTLED") &&
+    (data?.result || revealLatch);
 
-  // 勝方標記
   const winner: Outcome = useMemo(() => data?.result?.outcome ?? null, [data?.result]);
 
   return (
     <div className="min-h-screen bg-casino-bg text-white">
-      {/* 頂部列 */}
-      <div className="max-w-6xl mx-auto px-4 py-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <button className="btn glass tilt" onClick={() => router.push("/lobby")} title="回大廳">
-            ← 回大廳
-          </button>
-          <div className="glass px-4 py-2 rounded-xl">
-            <div className="text-sm opacity-80">房間</div>
-            <div className="text-lg font-semibold">{data?.room.name || String(room)}</div>
-          </div>
-          <div className="glass px-4 py-2 rounded-xl">
-            <div className="text-sm opacity-80">局序</div>
-            <div className="text-lg font-semibold">{data ? pad4(data.roundSeq) : "--"}</div>
-          </div>
-          <div className="glass px-4 py-2 rounded-xl">
-            <div className="text-sm opacity-80">狀態</div>
-            <div className="text-lg font-semibold">
-              {data ? zhPhase[data.phase] : "載入中"}
+      {/* --- 新：豪華房間面板（不影響原有功能） --- */}
+      <div className="max-w-6xl mx-auto px-4 pt-8">
+        <div className="room-banner glow-ring shimmer">
+          <div className="rb-layer rb-grid" />
+          <div className="rb-layer rb-radial" />
+          <div className="rb-content">
+            <div className="flex items-center gap-4">
+              <button className="btn glass tilt" onClick={() => router.push("/lobby")} title="回大廳">
+                ← 回大廳
+              </button>
+              <div className="rb-chip rb-chip-blue">房間</div>
+              <div className="rb-value">{data?.room.name || String(room)}</div>
+              <div className="rb-chip">局序</div>
+              <div className="rb-value">{data ? pad4(data.roundSeq) : "--"}</div>
+              <div className="rb-chip rb-chip-pink">狀態</div>
+              <div className="rb-value">{data ? zhPhase[data.phase] : "載入中"}</div>
+              <div className="rb-chip rb-chip-gold">倒數</div>
+              <div className="rb-value">{typeof localSec === "number" ? `${localSec}s` : "--"}</div>
+            </div>
+
+            {/* 小籌碼飾條 */}
+            <div className="rb-chips">
+              <span className="chip chip-50">50</span>
+              <span className="chip chip-100">100</span>
+              <span className="chip chip-500">500</span>
+              <span className="chip chip-1000">1000</span>
             </div>
           </div>
-          <div className="glass px-4 py-2 rounded-xl">
-            <div className="text-sm opacity-80">倒數</div>
-            <div className="text-lg font-semibold">
-              {typeof localSec === "number" ? `${localSec}s` : "--"}
-            </div>
-          </div>
-        </div>
-        <div className="text-right">
-          {err && <div className="text-red-400 text-sm mb-2">{err}</div>}
-          <div className="opacity-70 text-xs">（時間以伺服器為準）</div>
         </div>
       </div>
 
+      {/* 原本上方資訊列 => 仍保留（如想更清爽可刪） */}
+      <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between opacity-80">
+        <div className="text-xs">（時間以伺服器為準）</div>
+        {err && <div className="text-red-400 text-sm">{err}</div>}
+      </div>
+
       {/* 內容區 */}
-      <div className="max-w-6xl mx-auto px-4 grid md:grid-cols-3 gap-6 pb-16">
-        {/* 左：下注區 */}
-        <div className="md:col-span-2">
+      <div className="max-w-6xl mx-auto px-4 grid xl:grid-cols-3 gap-6 pb-16">
+        {/* 左：下注區（佔二欄） */}
+        <div className="xl:col-span-2">
           <div className="glass glow-ring p-6 rounded-2xl sheen">
             <div className="text-xl font-bold mb-4">下注面板</div>
 
             <div className="grid grid-cols-3 gap-4">
-              <button
+              <BetButton
                 disabled={placing === "PLAYER" || data?.phase !== "BETTING"}
                 onClick={() => place("PLAYER")}
-                className="btn shimmer"
-              >
-                壓「閒」
-                {!!data?.myBets?.PLAYER && (
-                  <span className="ml-2 text-xs opacity-80">（我: {data.myBets.PLAYER}）</span>
-                )}
-              </button>
-              <button
+                label="壓「閒」"
+                mine={data?.myBets?.PLAYER}
+              />
+              <BetButton
                 disabled={placing === "TIE" || data?.phase !== "BETTING"}
                 onClick={() => place("TIE")}
-                className="btn shimmer"
-              >
-                壓「和」
-                {!!data?.myBets?.TIE && (
-                  <span className="ml-2 text-xs opacity-80">（我: {data.myBets.TIE}）</span>
-                )}
-              </button>
-              <button
+                label="壓「和」"
+                mine={data?.myBets?.TIE}
+              />
+              <BetButton
                 disabled={placing === "BANKER" || data?.phase !== "BETTING"}
                 onClick={() => place("BANKER")}
-                className="btn shimmer"
-              >
-                壓「莊」
-                {!!data?.myBets?.BANKER && (
-                  <span className="ml-2 text-xs opacity-80">（我: {data.myBets.BANKER}）</span>
-                )}
-              </button>
+                label="壓「莊」"
+                mine={data?.myBets?.BANKER}
+              />
             </div>
 
             {/* 翻牌/結果（鎖存顯示） */}
@@ -240,8 +231,9 @@ export default function RoomPage() {
           </div>
         </div>
 
-        {/* 右：路子 / 歷史 */}
-        <div className="">
+        {/* 右：路子區（原本 + 新增「圖案路子」） */}
+        <div className="space-y-6">
+          {/* 原本的「色塊路子 + 表格」 */}
           <div className="glass glow-ring p-6 rounded-2xl">
             <div className="text-xl font-bold mb-4">路子（近 20 局）</div>
 
@@ -297,19 +289,41 @@ export default function RoomPage() {
                   ))}
                   {(!data || (data && data.recent.length === 0)) && (
                     <tr>
-                      <td colSpan={4} className="py-2 opacity-60">
-                        暫無資料
-                      </td>
+                      <td colSpan={4} className="py-2 opacity-60">暫無資料</td>
                     </tr>
                   )}
                 </tbody>
               </table>
             </div>
-
           </div>
+
+          {/* 新增：圖案路子（Icon/Chip 風格） */}
+          <IconRoadCard recent={data?.recent || []} />
         </div>
       </div>
     </div>
+  );
+}
+
+/** 下注按鈕（保留你的風格、加上籌碼標示位） */
+function BetButton({
+  disabled,
+  onClick,
+  label,
+  mine,
+}: {
+  disabled?: boolean;
+  onClick: () => void;
+  label: string;
+  mine?: number;
+}) {
+  return (
+    <button disabled={disabled} onClick={onClick} className="btn shimmer tilt relative overflow-hidden">
+      {label}
+      {typeof mine === "number" && mine > 0 && (
+        <span className="ml-2 text-xs opacity-80">（我: {mine}）</span>
+      )}
+    </button>
   );
 }
 
@@ -325,7 +339,6 @@ function FlipTile({
   outcome: Outcome;
   winner: boolean;
 }) {
-  // phase 不是 BETTING（開始開牌/已結算）就翻
   const shouldFlip = !!outcome;
 
   return (
@@ -335,9 +348,7 @@ function FlipTile({
         style={{ transform: shouldFlip ? "rotateY(180deg)" : "none" }}
       >
         {/* 正面：未翻開（霧面） */}
-        <div className="flip-front">
-          {label}
-        </div>
+        <div className="flip-front">{label}</div>
 
         {/* 背面：已翻開（點數顯示 + 勝方金光） */}
         <div
@@ -347,6 +358,52 @@ function FlipTile({
         >
           <div className="text-3xl font-extrabold">{value ?? 0} 點</div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** 新增卡片：圖案路子（Icon/Chip 風格） */
+function IconRoadCard({
+  recent,
+}: {
+  recent: { roundSeq: number; outcome: Outcome; p: number; b: number }[];
+}) {
+  const iconOf = (o: Outcome) => {
+    if (o === "PLAYER") return "🅿️";
+    if (o === "BANKER") return "🅱️";
+    if (o === "TIE") return "⚖️";
+    return "•";
+  };
+  return (
+    <div className="glass glow-ring p-6 rounded-2xl">
+      <div className="text-xl font-bold mb-4">圖案路子（近 20 局）</div>
+
+      {/* 圓片籌碼樣式 */}
+      <div className="grid grid-cols-10 gap-3">
+        {recent.length > 0 ? (
+          recent.slice(0, 20).map((r) => (
+            <div key={`ico-${r.roundSeq}`} className="icon-chip" title={`#${pad4(r.roundSeq)}：${fmtOutcome(r.outcome)}`}>
+              <div
+                className={`icon-face ${
+                  r.outcome === "PLAYER" ? "icon-player" :
+                  r.outcome === "BANKER" ? "icon-banker" : "icon-tie"
+                }`}
+              >
+                {iconOf(r.outcome)}
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="opacity-60 text-sm">暫無資料</div>
+        )}
+      </div>
+
+      {/* 迷你圖例 */}
+      <div className="flex items-center gap-3 mt-4 text-xs opacity-80">
+        <span className="legend-swatch lp" /> 閒
+        <span className="legend-swatch lb" /> 莊
+        <span className="legend-swatch lt" /> 和
       </div>
     </div>
   );
