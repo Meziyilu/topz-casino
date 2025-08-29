@@ -1,79 +1,148 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import useSWR from "swr";
-import { useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import FlipTile from "@/components/FlipTile";
 
-const fetcher = (url: string) =>
-  fetch(url, { credentials: "include" }).then((r) => r.json());
+type Outcome = "PLAYER" | "BANKER" | "TIE" | null;
+
+type RoomState = {
+  room: { code: "R30" | "R60" | "R90"; name: string; durationSeconds: number };
+  day: string;
+  roundId: string;
+  roundSeq: number;
+  phase: "BETTING" | "REVEALING" | "SETTLED";
+  secLeft: number;
+  result:
+    | {
+        outcome: Outcome;
+        p: number | null;
+        b: number | null;
+      }
+    | null;
+  myBets: Record<string, number>;
+  recent: { roundSeq: number; outcome: Outcome; p: number; b: number }[];
+};
 
 export default function RoomPage() {
-  const { room } = useParams();
   const router = useRouter();
-  const [betting, setBetting] = useState(false);
+  const { room } = useParams<{ room: string }>();
+  const [data, setData] = useState<RoomState | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const { data, error, mutate } = useSWR(
-    room ? `/api/casino/baccarat/state?room=${room}` : null,
-    fetcher,
-    { refreshInterval: 1000 }
-  );
+  // 輪詢房間狀態
+  useEffect(() => {
+    let alive = true;
+    async function tick() {
+      const r = await fetch(`/api/casino/baccarat/state?room=${room}`, {
+        credentials: "include",
+        cache: "no-store",
+      });
+      const j = (await r.json()) as RoomState;
+      if (!r.ok) {
+        // 未登入導回 /auth
+        if ((j as any)?.error?.includes?.("登入")) router.push("/auth");
+        return;
+      }
+      if (alive) {
+        setData(j);
+        setLoading(false);
+      }
+    }
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [room, router]);
 
-  if (error) return <div className="text-red-500">載入失敗</div>;
-  if (!data) return <div className="text-gray-400">載入中…</div>;
+  const outcome: Outcome = data?.result?.outcome ?? null;
+  const pVal = data?.result?.p ?? null;
+  const bVal = data?.result?.b ?? null;
 
-  const placeBet = async (side: string) => {
-    setBetting(true);
-    await fetch(`/api/casino/baccarat/bet?room=${room}`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ side, amount: 100 }),
-    });
-    setBetting(false);
-    mutate();
-  };
+  if (loading) {
+    return (
+      <main className="min-h-screen flex items-center justify-center text-white">
+        載入中…
+      </main>
+    );
+  }
+
+  if (!data) {
+    return (
+      <main className="min-h-screen flex items-center justify-center text-white">
+        讀取失敗，請重試
+      </main>
+    );
+  }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 text-white bg-gradient-to-br from-purple-900 via-black to-blue-900">
-      <h1 className="text-3xl font-bold mb-4">{data.room.name}</h1>
-
-      {/* 倒數 + 狀態 */}
-      <div className="glass px-6 py-3 rounded-xl mb-6 text-center">
-        <p className="text-lg">局序：{String(data.roundSeq).padStart(4, "0")}</p>
-        <p className="text-lg">狀態：{data.phase}</p>
-        <p className="text-lg">倒數：{data.secLeft}s</p>
-      </div>
-
-      {/* 投注按鈕 */}
-      <div className="flex gap-4 mb-8">
-        {["PLAYER", "BANKER", "TIE"].map((side) => (
-          <button
-            key={side}
-            disabled={betting || data.phase !== "BETTING"}
-            onClick={() => placeBet(side)}
-            className="btn tilt"
-          >
-            {side}
-          </button>
-        ))}
-      </div>
-
-      {/* 翻牌動畫 */}
-      {data.phase !== "BETTING" && data.result && (
-        <div className="grid grid-cols-2 gap-6 w-full max-w-lg">
-          <FlipTile label="PLAYER" value={data.result.p} outcome={data.result.outcome} />
-          <FlipTile label="BANKER" value={data.result.b} outcome={data.result.outcome} />
+    <main className="min-h-screen p-6 text-white bg-gradient-to-br from-black via-purple-900 to-blue-900">
+      <div className="max-w-5xl mx-auto space-y-6">
+        {/* 房間資訊 */}
+        <div className="glass rounded-xl p-4 flex flex-wrap items-center justify-between">
+          <div className="space-y-1">
+            <div className="text-sm opacity-75">{data.room.name}（{data.room.code}）</div>
+            <div className="text-lg font-semibold">
+              局序 #{String(data.roundSeq).padStart(4, "0")}
+            </div>
+            <div className="text-sm">
+              狀態：{data.phase === "BETTING" ? "下注中" : data.phase === "REVEALING" ? "開牌中" : "已結算"}
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-sm opacity-75">倒數</div>
+            <div className="text-3xl font-bold tabular-nums">{data.secLeft}s</div>
+          </div>
         </div>
-      )}
 
-      {/* 返回大廳 */}
-      <button
-        onClick={() => router.push("/lobby")}
-        className="mt-10 px-6 py-2 rounded-lg glass hover:bg-purple-600 transition"
-      >
-        返回大廳
-      </button>
-    </div>
+        {/* 翻牌動畫 */}
+        {data.phase !== "BETTING" && data.result && (
+          <div className="grid grid-cols-2 gap-6 w-full max-w-xl mx-auto">
+            <FlipTile label="PLAYER" value={pVal} outcome={outcome} />
+            <FlipTile label="BANKER" value={bVal} outcome={outcome} />
+          </div>
+        )}
+
+        {/* 我的投注（簡版） */}
+        <div className="glass rounded-xl p-4">
+          <div className="font-semibold mb-3">我的投注</div>
+          <div className="grid grid-cols-3 gap-3 text-sm">
+            {["PLAYER", "BANKER", "TIE"].map((s) => (
+              <div key={s} className="glass rounded p-3 flex items-center justify-between">
+                <span>{s}</span>
+                <span className="font-bold">{data.myBets?.[s] ?? 0}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 近20局路子（簡版） */}
+        <div className="glass rounded-xl p-4">
+          <div className="font-semibold mb-3">近局結果</div>
+          <div className="flex flex-wrap gap-2">
+            {data.recent?.map((r) => (
+              <div key={r.roundSeq} className="px-2 py-1 rounded text-xs glass">
+                #{r.roundSeq}：
+                <span className={
+                  r.outcome === "PLAYER" ? "text-cyan-300" :
+                  r.outcome === "BANKER" ? "text-rose-300" :
+                  "text-amber-300"
+                }>
+                  {r.outcome ?? "-"}
+                </span>
+                <span className="opacity-70">（P{r.p}/B{r.b}）</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 返回大廳 */}
+        <div className="text-center">
+          <a href="/lobby" className="btn inline-block">返回大廳</a>
+        </div>
+      </div>
+    </main>
   );
 }
