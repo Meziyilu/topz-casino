@@ -128,3 +128,70 @@ body {
   filter: blur(8px);
   opacity: .6;
 }
+
+/* ==== Baccarat Flip & Winner Glow (追加) ==== */
+
+/* 3D 翻牌容器 */
+.flip-3d { perspective: 1000px; }
+.flip-inner {
+  position: relative; width: 100%; height: 100%;
+  transform-style: preserve-3d;
+  transition: transform .9s cubic-bezier(.2,.8,.2,1);
+}
+
+/* 正反面 */
+.flip-front, .flip-back {
+  position: absolute; inset: 0;
+  -webkit-backface-visibility: hidden; backface-visibility: hidden;
+  border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+}
+.flip-front { 
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  backdrop-filter: blur(14px);
+  font-weight: 800; font-size: 1.25rem;
+}
+.flip-back  { transform: rotateY(180deg); }
+
+/* 固定命名的動畫 class，避免 Tailwind 清掉 */
+.animate-flip { animation: flipHold 2.2s ease forwards; }
+
+/* 翻牌 + 停留（確保看得到）*/
+@keyframes flipHold {
+  0%   { transform: rotateY(0deg);   }
+  65%  { transform: rotateY(180deg); }
+  100% { transform: rotateY(180deg); }
+}
+
+/* 勝方金光外框（柔光+掃光） */
+.winner-glow {
+  position: relative;
+  box-shadow: 0 0 28px rgba(255,215,0,.35), 0 0 60px rgba(255,215,0,.25) inset;
+}
+.winner-glow::after {
+  content: ""; position: absolute; inset: -2px; border-radius: 18px;
+  background: conic-gradient(from 0deg,
+    rgba(255,215,0,.0) 0%,
+    rgba(255,215,0,.35) 20%,
+    rgba(255,255,255,.6) 40%,
+    rgba(255,215,0,.35) 60%,
+    rgba(255,215,0,.0) 100%);
+  filter: blur(10px); animation: goldSweep 1.6s linear infinite;
+  pointer-events: none;
+}
+@keyframes goldSweep {
+  0%   { transform: rotate(0deg);   opacity: .9; }
+  50%  { transform: rotate(180deg); opacity: .6; }
+  100% { transform: rotate(360deg); opacity: .9; }
+}
+
+/* 閒/莊背面底色（保留你原本配色語感） */
+.back-player {
+  background: linear-gradient(135deg, rgba(103,232,249,.18), rgba(255,255,255,.06));
+  border: 1px solid rgba(103,232,249,.55);
+}
+.back-banker {
+  background: linear-gradient(135deg, rgba(253,164,175,.18), rgba(255,255,255,.06));
+  border: 1px solid rgba(253,164,175,.55);
+}
