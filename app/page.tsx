@@ -2,7 +2,10 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default function Home() {
-  const token = cookies().get("token")?.value;
-  redirect(token ? "/lobby" : "/auth");
+  const hasToken = cookies().get("token")?.value;
+  redirect(hasToken ? "/lobby" : "/auth");
 }

@@ -3,9 +3,10 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "force-no-store";
 
-import NextDynamic from "next/dynamic";
+import dynamic from "next/dynamic";
 
-const AuthClient = NextDynamic(() => import("./AuthClient"), {
+// 關閉 SSR；載入時顯示 Loading
+const AuthClient = dynamic(() => import("./AuthClient"), {
   ssr: false,
   loading: () => (
     <div className="min-h-screen flex items-center justify-center text-white">
@@ -14,6 +15,6 @@ const AuthClient = NextDynamic(() => import("./AuthClient"), {
   ),
 });
 
-export default function Page() {
+export default function AuthPage() {
   return <AuthClient />;
 }
