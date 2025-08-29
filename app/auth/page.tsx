@@ -1,22 +1,31 @@
 // app/auth/page.tsx
 "use client";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
+
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
 import Link from "next/link";
 
 export default function AuthPage() {
+  // 用 Suspense 包住內層，避免 build-time 報錯
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">載入中…</div>}>
+      <AuthInner />
+    </Suspense>
+  );
+}
+
+function AuthInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const next = sp.get("next") || "/lobby";
 
   const [tab, setTab] = useState<"login" | "register">("login");
-
-  // 共用欄位
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
-  // 註冊額外欄位（可選）
   const [name, setName] = useState("");
 
   async function onLogin(e: React.FormEvent) {
@@ -27,9 +36,8 @@ export default function AuthPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     });
-    if (res.ok) {
-      router.replace(next);
-    } else {
+    if (res.ok) router.replace(next);
+    else {
       const err = await res.json().catch(() => ({}));
       alert(err?.error || "登入失敗");
     }
@@ -43,11 +51,8 @@ export default function AuthPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password, name }),
     });
-    if (res.ok) {
-      // 註冊成功後直接導去登入或直接回大廳（看你的 API 是否自動登入）
-      // 這裡預設直接回大廳
-      router.replace("/lobby");
-    } else {
+    if (res.ok) router.replace("/lobby");
+    else {
       const err = await res.json().catch(() => ({}));
       alert(err?.error || "註冊失敗");
     }
@@ -69,12 +74,14 @@ export default function AuthPage() {
           <button
             className={`py-2 rounded-md ${tab === "login" ? "bg-white/20 font-bold" : "opacity-80 hover:opacity-100"}`}
             onClick={() => setTab("login")}
+            type="button"
           >
             登入
           </button>
           <button
             className={`py-2 rounded-md ${tab === "register" ? "bg-white/20 font-bold" : "opacity-80 hover:opacity-100"}`}
             onClick={() => setTab("register")}
+            type="button"
           >
             註冊
           </button>
@@ -121,7 +128,7 @@ export default function AuthPage() {
             <div>
               <label className="block text-sm mb-1 opacity-80">Email</label>
               <input
-                className="w-full px-3 py-2 rounded-md bg-white/10 border border-white/15 focus:outline-none focus:border-white/40"
+                className="w-full px-3 py-2 rounded-md bg白/10 border border-white/15 focus:outline-none focus:border-white/40"
                 type="email"
                 required
                 value={email}
