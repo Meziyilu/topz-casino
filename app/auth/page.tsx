@@ -1,4 +1,3 @@
-// app/auth/page.tsx
 "use client";
 
 import { useRouter } from "next/navigation";
@@ -49,10 +48,7 @@ export default function AuthPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          <button
-            type="submit"
-            className="btn tilt w-full"
-          >
+          <button type="submit" className="btn tilt w-full">
             {isLogin ? "登入" : "註冊"}
           </button>
         </form>
