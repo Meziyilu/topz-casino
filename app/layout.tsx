@@ -1,6 +1,7 @@
 // app/layout.tsx
 import "./globals.css";
-import type { ReactNode, Metadata } from "next";
+import React, { type ReactNode } from "react";
+import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "TOPZCASINO",
