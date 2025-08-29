@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 type Outcome = "PLAYER" | "BANKER" | "TIE" | null;
@@ -178,16 +178,16 @@ export default function RoomPage() {
             {/* 面額籌碼 */}
             <div className="mb-5 flex items-center gap-3 flex-wrap">
               <div className="text-sm opacity-80 mr-2">選擇籌碼：</div>
-              {chips.map((c) => (
+              {[50, 100, 500, 1000].map((c) => (
                 <button
                   key={c}
                   className={`px-4 py-2 rounded-full transition relative overflow-hidden
                     ${
-                      chip === c
+                      c === (chip || 0)
                         ? "bg-white/25 ring-2 ring-white/70 shadow-[0_0_24px_rgba(255,255,255,.35)]"
                         : "bg-white/10 hover:bg-white/15 ring-1 ring-white/25"
                     }`}
-                  onClick={() => setChip(c)}
+                  onClick={() => setChip(c as any)}
                 >
                   ${c.toLocaleString()}
                 </button>
@@ -230,13 +230,13 @@ export default function RoomPage() {
               </button>
             </div>
 
-            {/* 翻牌/結果 */}
-            {showFlip && data?.result && (
+            {/* 翻牌/結果（關鍵：key=roundId 讓每局都重新掛載） */}
+            {data?.result && data.phase !== "BETTING" && (
               <div className="mt-8" key={data.roundId}>
                 <div className="text-sm opacity-80 mb-2">本局結果</div>
                 <div className="grid grid-cols-2 gap-6 w-full max-w-xl">
-                  <FlipTile label="閒" value={data.result.p ?? 0} outcome={data.result.outcome} doFlip />
-                  <FlipTile label="莊" value={data.result.b ?? 0} outcome={data.result.outcome} doFlip />
+                  <FlipTile label="閒" value={data.result.p ?? 0} outcome={data.result.outcome} />
+                  <FlipTile label="莊" value={data.result.b ?? 0} outcome={data.result.outcome} />
                 </div>
                 <div className="mt-3 text-lg">
                   結果：<span className="font-bold">{fmtOutcome(outcomeMark)}</span>
@@ -323,51 +323,81 @@ export default function RoomPage() {
   );
 }
 
-/** 翻牌卡片（中文標籤，保證每局觸發動畫） */
+/** 翻牌卡片（強化：rAF 兩段式 reflow，內聯 3D/背面隱藏屬性） */
 function FlipTile({
   label,
   value,
   outcome,
-  doFlip,
 }: {
   label: "閒" | "莊";
   value: number;
   outcome: Outcome;
-  doFlip: boolean;
 }) {
   const [flipped, setFlipped] = useState(false);
+  const innerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // 每次有結果就重新觸發動畫
     setFlipped(false);
-    if (doFlip && outcome) {
-      const t = setTimeout(() => setFlipped(true), 50);
-      return () => clearTimeout(t);
-    }
-  }, [doFlip, outcome]);
+    // 兩段 rAF 保證瀏覽器先渲染初始狀態，再切到翻面，確保 transition 觸發
+    const i = requestAnimationFrame(() => {
+      // 讀一次 offsetHeight 觸發 reflow，保險
+      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+      innerRef.current?.offsetHeight;
+      const j = requestAnimationFrame(() => setFlipped(true));
+      return () => cancelAnimationFrame(j);
+    });
+    return () => cancelAnimationFrame(i);
+  }, [outcome]);
 
   const isWin =
     (label === "閒" && outcome === "PLAYER") ||
     (label === "莊" && outcome === "BANKER");
 
   return (
-    <div className="flip-3d h-28">
+    <div
+      className="h-28"
+      style={{
+        perspective: "1000px",
+        WebkitPerspective: "1000px",
+      }}
+    >
       <div
-        className="flip-inner"
+        ref={innerRef}
         style={{
+          position: "relative",
+          width: "100%",
+          height: "100%",
+          transformStyle: "preserve-3d",
+          WebkitTransformStyle: "preserve-3d",
+          willChange: "transform",
           transform: flipped ? "rotateY(180deg)" : "none",
           transition: "transform .7s cubic-bezier(.2,.7,.2,1)",
         }}
       >
-        {/* 正面：未翻開（霧面） */}
-        <div className="flip-front glass flex items-center justify-center text-xl font-bold">
+        {/* 正面 */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: 16,
+            backfaceVisibility: "hidden",
+            WebkitBackfaceVisibility: "hidden",
+          }}
+          className="glass flex items-center justify-center text-xl font-bold"
+        >
           {label}
         </div>
-        {/* 背面：已翻開（總點數） */}
+
+        {/* 背面 */}
         <div
-          className={`flip-back flex items-center justify-center text-3xl font-extrabold rounded-2xl ${
-            isWin ? "shadow-[0_0_24px_rgba(255,255,255,.3)]" : ""
-          }`}
           style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: 16,
+            transform: "rotateY(180deg)",
+            backfaceVisibility: "hidden",
+            WebkitBackfaceVisibility: "hidden",
             background:
               label === "閒"
                 ? "linear-gradient(135deg, rgba(103,232,249,.15), rgba(255,255,255,.06))"
@@ -376,7 +406,9 @@ function FlipTile({
               label === "閒"
                 ? "1px solid rgba(103,232,249,.5)"
                 : "1px solid rgba(253,164,175,.5)",
+            boxShadow: isWin ? "0 0 24px rgba(255,255,255,.3)" : "none",
           }}
+          className="flex items-center justify-center text-3xl font-extrabold"
         >
           {value ?? 0} 點
         </div>
