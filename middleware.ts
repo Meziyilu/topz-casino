@@ -1,41 +1,42 @@
 // middleware.ts
-import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
 export function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
-  const token = req.cookies.get("token")?.value ?? "";
-  const isAuthed = !!token;
+  const token = req.cookies.get("token")?.value;
 
-  const isAuth = pathname === "/auth";
-  const isHome = pathname === "/";
-  const isProtected =
-    pathname.startsWith("/lobby") ||
-    pathname.startsWith("/bank") ||
-    pathname.startsWith("/admin") ||
-    pathname.startsWith("/casino");
+  const needsAuth =
+    pathname === "/lobby" ||
+    pathname.startsWith("/lobby/") ||
+    pathname === "/casino" ||
+    pathname.startsWith("/casino/") ||
+    pathname === "/bank" ||
+    pathname.startsWith("/bank/") ||
+    pathname === "/admin" ||
+    pathname.startsWith("/admin/");
 
-  // 未登入 → 進保護頁，導去 /auth
-  if (!isAuthed && isProtected) {
+  // 首頁：依是否登入決定去向
+  if (pathname === "/") {
+    const url = req.nextUrl.clone();
+    url.pathname = token ? "/lobby" : "/auth";
+    return NextResponse.redirect(url);
+  }
+
+  // 未登入 → 擋掉受保護頁，送去 /auth?next=...
+  if (!token && needsAuth) {
     const url = req.nextUrl.clone();
     url.pathname = "/auth";
-    const next = encodeURIComponent(pathname + (search || ""));
-    url.search = `?next=${next}`;
+    if (pathname !== "/auth") {
+      url.searchParams.set("next", pathname + (search || ""));
+    }
     return NextResponse.redirect(url);
   }
 
-  // 已登入 → 進 /auth，導回 /lobby
-  if (isAuthed && isAuth) {
+  // 已登入 → 擋掉 /auth，送去 /lobby
+  if (token && pathname === "/auth") {
     const url = req.nextUrl.clone();
     url.pathname = "/lobby";
-    url.search = "";
-    return NextResponse.redirect(url);
-  }
-
-  // 首頁 / ：依狀態導流
-  if (isHome) {
-    const url = req.nextUrl.clone();
-    url.pathname = isAuthed ? "/lobby" : "/auth";
     return NextResponse.redirect(url);
   }
 
@@ -43,12 +44,6 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    "/",
-    "/auth",
-    "/lobby",
-    "/bank",
-    "/admin/:path*",
-    "/casino/:path*",
-  ],
+  // 把會用到的路由都交給 middleware
+  matcher: ["/", "/auth", "/lobby/:path*", "/casino/:path*", "/bank/:path*", "/admin/:path*"],
 };

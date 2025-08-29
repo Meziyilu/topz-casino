@@ -5,7 +5,6 @@ export const fetchCache = "force-no-store";
 
 import NextDynamic from "next/dynamic";
 
-// 關閉 SSR，避免預渲染期觸發 useSearchParams 的限制
 const AuthClient = NextDynamic(() => import("./AuthClient"), {
   ssr: false,
   loading: () => (
