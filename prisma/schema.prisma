@@ -95,7 +95,7 @@ model Room {
 model Round {
   id           String       @id @default(cuid())
   roomId       String
-  day          DateTime     // 台北當日 00:00 (以 UTC 儲存)
+  day          DateTime     // 台北當日 00:00 (UTC 儲存)
   roundSeq     Int
   phase        RoundPhase   @default(BETTING)
   createdAt    DateTime     @default(now())
@@ -113,8 +113,8 @@ model Round {
   playerCards  Json?
   bankerCards  Json?
 
-  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  bets Bet[]
+  room  Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  bets  Bet[]
 
   @@unique([roomId, day, roundSeq]) // 同一房、同一天的局序不得重覆
   @@index([roomId, day, roundSeq])

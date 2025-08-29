@@ -1,23 +1,30 @@
+// app/api/admin/rooms/reset/route.ts
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
-import type { Prisma, RoomCode } from "@prisma/client";
 
-function taipeiDayStart(date = new Date()) {
-  const utcMs = date.getTime();
-  const tpeMs = utcMs + 8 * 3600_000;
-  const tpeDay0 = Math.floor(tpeMs / 86_400_000) * 86_400_000;
-  return new Date(tpeDay0 - 8 * 3600_000);
+const asAny = <T = any>(v: unknown) => v as T;
+
+function noStoreJson(payload: any, status = 200) {
+  return NextResponse.json(payload, {
+    status,
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+      Pragma: "no-cache",
+      Expires: "0",
+    },
+  });
 }
-
-async function createNextRoundTx(
-  tx: Prisma.TransactionClient,
-  roomId: string,
-  dayStartUtc: Date
-) {
+function taipeiDayStart(date = new Date()) {
+  const utc = date.getTime();
+  const tpe = utc + 8 * 3600_000;
+  const tpeStart = Math.floor(tpe / 86_400_000) * 86_400_000;
+  return new Date(tpeStart - 8 * 3600_000);
+}
+async function createNextRoundTx(tx: any, roomId: string, dayStartUtc: Date) {
   const latest = await tx.round.findFirst({
     where: { roomId, day: dayStartUtc },
     orderBy: [{ roundSeq: "desc" }],
@@ -25,49 +32,40 @@ async function createNextRoundTx(
   });
   const nextSeq = (latest?.roundSeq ?? 0) + 1;
   const now = new Date();
-
   return tx.round.create({
     data: {
-      roomId,
-      day: dayStartUtc,
-      roundSeq: nextSeq,
-      phase: "BETTING",
-      createdAt: now,
-      startedAt: now,
+      roomId, day: dayStartUtc, roundSeq: nextSeq,
+      phase: asAny("BETTING"), createdAt: now, startedAt: now,
     },
-    select: { id: true },
+    select: { id: true, roundSeq: true },
   });
 }
 
-/** POST { code?: "R30"|"R60"|"R90" }；缺省表示全部房間 */
 export async function POST(req: Request) {
   try {
     await requireAdmin(req);
-    const day = taipeiDayStart(new Date());
-    const body = await req.json().catch(() => ({}));
-    const code: RoomCode | undefined = body?.code;
 
-    const rooms = code
-      ? await prisma.room.findMany({ where: { code } })
-      : await prisma.room.findMany();
+    const { room: roomCode } = await req.json();
+    if (!roomCode) return noStoreJson({ error: "room 必填" }, 400);
 
-    if (!rooms.length) {
-      return NextResponse.json({ error: "找不到房間" }, { status: 404 });
-    }
+    const room = await prisma.room.findFirst({
+      where: { code: asAny(String(roomCode).toUpperCase()) },
+      select: { id: true, code: true },
+    });
+    if (!room) return noStoreJson({ error: "房間不存在" }, 404);
 
-    await prisma.$transaction(async (tx) => {
-      for (const r of rooms) {
-        await tx.round.updateMany({
-          where: { roomId: r.id, day, phase: { in: ["BETTING", "REVEALING"] } },
-          data: { phase: "SETTLED", settledAt: new Date() },
-        });
-        await createNextRoundTx(tx, r.id, day);
-      }
+    const dayStartUtc = taipeiDayStart(new Date());
+
+    await prisma.$transaction(async (tx: any) => {
+      await tx.round.updateMany({
+        where: { roomId: room.id, day: dayStartUtc },
+        data: { phase: asAny("SETTLED"), settledAt: new Date() },
+      });
+      await createNextRoundTx(tx, room.id, dayStartUtc);
     });
 
-    return NextResponse.json({ ok: true, rooms: rooms.map((r) => r.code) });
+    return noStoreJson({ ok: true });
   } catch (e: any) {
-    const status = e?.status || 500;
-    return NextResponse.json({ error: e.message || "Server error" }, { status });
+    return noStoreJson({ error: e?.message || "Server error" }, 500);
   }
 }

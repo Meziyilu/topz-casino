@@ -1,152 +1,80 @@
 // lib/baccarat.ts
-import type { BetSide, RoundOutcome } from "@prisma/client";
-
-/** 一副 52 張，花色♠♥♦♣，點數 A,2..10,J,Q,K */
-const SUITS = ["S", "H", "D", "C"] as const;
-const RANKS = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"] as const;
-
-type Card = { suit: string; rank: string; value: number };
-
-function makeDeck(): Card[] {
-  const deck: Card[] = [];
-  for (const s of SUITS) {
-    for (const r of RANKS) {
-      const v =
-        r === "A" ? 1 :
-        r === "J" || r === "Q" || r === "K" || r === "10" ? 0 :
-        parseInt(r, 10);
-      deck.push({ suit: s, rank: r, value: v });
-    }
-  }
-  return deck;
-}
-
-function shuffle<T>(arr: T[]): T[] {
-  const a = arr.slice();
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = (Math.random() * (i + 1)) | 0;
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
-function total(cards: Card[]) {
-  return cards.reduce((acc, c) => acc + c.value, 0) % 10;
-}
-
 export type DealResult = {
-  outcome: RoundOutcome;
+  outcome: "PLAYER" | "BANKER" | "TIE";
   playerTotal: number;
   bankerTotal: number;
   playerPair: boolean;
   bankerPair: boolean;
   anyPair: boolean;
   perfectPair: boolean;
-  playerCards: { suit: string; rank: string }[];
-  bankerCards: { suit: string; rank: string }[];
+  playerCards: number[];
+  bankerCards: number[];
 };
 
-/** 發一局（使用一副洗過的牌；不追蹤多副牌鞋） */
-export function dealOneRound(): DealResult {
-  let deck = shuffle(makeDeck());
-
-  const player: Card[] = [deck.pop()!, deck.pop()!];
-  const banker: Card[] = [deck.pop()!, deck.pop()!];
-
-  let pTotal = total(player);
-  let bTotal = total(banker);
-
-  // Natural
-  if (pTotal >= 8 || bTotal >= 8) {
-    return finalize(player, banker);
-  }
-
-  // Player third card rule
-  let playerThird: Card | null = null;
-  if (pTotal <= 5) {
-    playerThird = deck.pop()!;
-    player.push(playerThird);
-    pTotal = total(player);
-  }
-
-  // Banker third card rule
-  let bankerThird: Card | null = null;
-  if (!playerThird) {
-    // If player stands
-    if (bTotal <= 5) {
-      bankerThird = deck.pop()!;
-      banker.push(bankerThird);
-      bTotal = total(banker);
-    }
-  } else {
-    const pt = playerThird.value;
-    if (bTotal <= 2) {
-      bankerThird = deck.pop()!;
-      banker.push(bankerThird);
-      bTotal = total(banker);
-    } else if (bTotal === 3 && pt !== 8) {
-      bankerThird = deck.pop()!;
-      banker.push(bankerThird);
-      bTotal = total(banker);
-    } else if (bTotal === 4 && pt >= 2 && pt <= 7) {
-      bankerThird = deck.pop()!;
-      banker.push(bankerThird);
-      bTotal = total(banker);
-    } else if (bTotal === 5 && pt >= 4 && pt <= 7) {
-      bankerThird = deck.pop()!;
-      banker.push(bankerThird);
-      bTotal = total(banker);
-    } else if (bTotal === 6 && (pt === 6 || pt === 7)) {
-      bankerThird = deck.pop()!;
-      banker.push(bankerThird);
-      bTotal = total(banker);
-    }
-  }
-
-  return finalize(player, banker);
+// 0~9 的點數；簡化洗牌；可改成更擬真
+function drawCard(): number {
+  const r = Math.floor(Math.random() * 13) + 1; // 1~13
+  if (r >= 10) return 0; // JQK = 0
+  return r % 10;         // A=1, 2~9
+}
+function total(cards: number[]) {
+  return cards.reduce((a, c) => a + c, 0) % 10;
 }
 
-function finalize(player: Card[], banker: Card[]): DealResult {
-  const p = total(player);
-  const b = total(banker);
+export function dealOneRound(): DealResult {
+  const p: number[] = [drawCard(), drawCard()];
+  const b: number[] = [drawCard(), drawCard()];
 
-  const outcome: RoundOutcome =
-    p > b ? "PLAYER" : p < b ? "BANKER" : "TIE";
+  let pTotal = total(p);
+  let bTotal = total(b);
 
-  const playerPair = player[0].rank === player[1].rank;
-  const bankerPair = banker[0].rank === banker[1].rank;
+  // 天生贏不補牌
+  if (!(pTotal >= 8 || bTotal >= 8)) {
+    // 玩家補牌規則
+    if (pTotal <= 5) {
+      p.push(drawCard());
+      pTotal = total(p);
+    }
+    // 莊家補牌規則（簡化版）
+    if (bTotal <= 5) {
+      b.push(drawCard());
+      bTotal = total(b);
+    }
+  }
+
+  const outcome =
+    pTotal > bTotal ? "PLAYER" : pTotal < bTotal ? "BANKER" : "TIE";
+
+  const playerPair = p.length >= 2 && p[0] === p[1];
+  const bankerPair = b.length >= 2 && b[0] === b[1];
   const anyPair = playerPair || bankerPair;
   const perfectPair =
-    (playerPair && player[0].suit === player[1].suit) ||
-    (bankerPair && banker[0].suit === banker[1].suit);
+    (playerPair && p[0] === p[1]) || (bankerPair && b[0] === b[1]); // 示意
 
   return {
     outcome,
-    playerTotal: p,
-    bankerTotal: b,
+    playerTotal: pTotal,
+    bankerTotal: bTotal,
     playerPair,
     bankerPair,
     anyPair,
     perfectPair,
-    playerCards: player.map((c) => ({ suit: c.suit, rank: c.rank })),
-    bankerCards: banker.map((c) => ({ suit: c.suit, rank: c.rank })),
+    playerCards: p,
+    bankerCards: b,
   };
 }
 
-/** 派彩倍率（輸或不賠回 0） */
-export function payoutRatio(side: BetSide, result: DealResult): number {
+// 派彩倍率
+export function payoutRatio(
+  side: "PLAYER" | "BANKER" | "TIE" | "PLAYER_PAIR" | "BANKER_PAIR",
+  result: DealResult
+) {
   switch (side) {
-    case "PLAYER":
-      return result.outcome === "PLAYER" ? 1 : 0;
-    case "BANKER":
-      return result.outcome === "BANKER" ? 0.95 : 0;
-    case "TIE":
-      return result.outcome === "TIE" ? 8 : 0;
-    case "PLAYER_PAIR":
-      return result.playerPair ? 11 : 0;
-    case "BANKER_PAIR":
-      return result.bankerPair ? 11 : 0;
-    default:
-      return 0;
+    case "PLAYER": return result.outcome === "PLAYER" ? 1 : 0;
+    case "BANKER": return result.outcome === "BANKER" ? 0.95 : 0; // 5% 抽水
+    case "TIE":    return result.outcome === "TIE" ? 8 : 0;
+    case "PLAYER_PAIR": return result.playerPair ? 11 : 0;
+    case "BANKER_PAIR": return result.bankerPair ? 11 : 0;
+    default: return 0;
   }
 }
