@@ -7,7 +7,7 @@ export function middleware(req: NextRequest) {
   const token = req.cookies.get("token")?.value ?? "";
   const isAuthed = !!token;
 
-  const isLogin = pathname === "/login";
+  const isAuth = pathname === "/auth";
   const isHome = pathname === "/";
   const isProtected =
     pathname.startsWith("/lobby") ||
@@ -15,27 +15,27 @@ export function middleware(req: NextRequest) {
     pathname.startsWith("/admin") ||
     pathname.startsWith("/casino");
 
-  // 未登入 → 進保護頁，導去 login
+  // 未登入 → 進保護頁，導去 /auth
   if (!isAuthed && isProtected) {
     const url = req.nextUrl.clone();
-    url.pathname = "/login";
+    url.pathname = "/auth";
     const next = encodeURIComponent(pathname + (search || ""));
     url.search = `?next=${next}`;
     return NextResponse.redirect(url);
   }
 
-  // 已登入 → 進 login，導回 lobby
-  if (isAuthed && isLogin) {
+  // 已登入 → 進 /auth，導回 /lobby
+  if (isAuthed && isAuth) {
     const url = req.nextUrl.clone();
     url.pathname = "/lobby";
     url.search = "";
     return NextResponse.redirect(url);
   }
 
-  // 首頁：依狀態導流
+  // 首頁 / ：依狀態導流
   if (isHome) {
     const url = req.nextUrl.clone();
-    url.pathname = isAuthed ? "/lobby" : "/login";
+    url.pathname = isAuthed ? "/lobby" : "/auth";
     return NextResponse.redirect(url);
   }
 
@@ -44,11 +44,11 @@ export function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    "/",           // 首頁
-    "/login",      // 登入
-    "/lobby",      // 大廳
-    "/bank",       // 銀行
-    "/admin/:path*",  // 管理員
-    "/casino/:path*", // 百家樂等
+    "/",
+    "/auth",
+    "/lobby",
+    "/bank",
+    "/admin/:path*",
+    "/casino/:path*",
   ],
 };

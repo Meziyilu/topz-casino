@@ -4,5 +4,5 @@ import { redirect } from "next/navigation";
 
 export default async function Home() {
   const token = cookies().get("token")?.value;
-  redirect(token ? "/lobby" : "/login");
+  redirect(token ? "/lobby" : "/auth");
 }

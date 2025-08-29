@@ -39,9 +39,7 @@ export default function NavBar() {
         <Link href="/casino/baccarat/R30" className="opacity-80 hover:opacity-100">百家 30s</Link>
         <Link href="/casino/baccarat/R60" className="opacity-80 hover:opacity-100">百家 60s</Link>
         <Link href="/casino/baccarat/R90" className="opacity-80 hover:opacity-100">百家 90s</Link>
-        {me?.isAdmin && (
-          <Link href="/admin" className="opacity-80 hover:opacity-100">管理員</Link>
-        )}
+        {me?.isAdmin && <Link href="/admin" className="opacity-80 hover:opacity-100">管理員</Link>}
       </div>
 
       <div className="flex items-center gap-3">
@@ -53,19 +51,19 @@ export default function NavBar() {
             <button
               className="btn"
               onClick={async () => {
-                // 若已有 /api/auth/logout，這裡改呼叫登出 API
+                // 你的登出 API：若 /api/auth/logout 沒有，沿用你之前的 /api/auth/login?logout=1
                 await fetch("/api/auth/login?logout=1", {
                   method: "POST",
                   credentials: "include",
-                });
-                location.href = "/login";
+                }).catch(() => {});
+                location.href = "/auth";
               }}
             >
               登出
             </button>
           </>
         ) : (
-          <Link href="/login" className="btn">登入</Link>
+          <Link href="/auth" className="btn">登入 / 註冊</Link>
         )}
       </div>
     </nav>
