@@ -1,142 +1,181 @@
-/*
-  Warnings:
+-- Safe migration for baccarat_rooms_rounds
+-- This script is idempotent-ish: guarded with IF EXISTS / IF NOT EXISTS where possible.
 
-  - The values [ANY_PAIR,PERFECT_PAIR] on the enum `BetSide` will be removed. If these variants are still used in the database, this will fail.
-  - The values [TRANSFER_IN,TRANSFER_OUT,BET_PAYOUT] on the enum `LedgerType` will be removed. If these variants are still used in the database, this will fail.
-  - The values [REVEAL] on the enum `RoundPhase` will be removed. If these variants are still used in the database, this will fail.
-  - You are about to drop the column `day` on the `Bet` table. All the data in the column will be lost.
-  - You are about to drop the column `roomId` on the `Bet` table. All the data in the column will be lost.
-  - You are about to drop the column `roundSeq` on the `Bet` table. All the data in the column will be lost.
-  - You are about to drop the column `adminId` on the `Ledger` table. All the data in the column will be lost.
-  - You are about to drop the column `dayLocal` on the `Round` table. All the data in the column will be lost.
-  - Made the column `roundId` on table `Bet` required. This step will fail if there are existing NULL values in that column.
-  - Made the column `balanceAfter` on table `Ledger` required. This step will fail if there are existing NULL values in that column.
-  - Made the column `bankAfter` on table `Ledger` required. This step will fail if there are existing NULL values in that column.
-
-*/
--- AlterEnum
 BEGIN;
-CREATE TYPE "public"."BetSide_new" AS ENUM ('PLAYER', 'BANKER', 'TIE', 'PLAYER_PAIR', 'BANKER_PAIR');
-ALTER TABLE "public"."Bet" ALTER COLUMN "side" TYPE "public"."BetSide_new" USING ("side"::text::"public"."BetSide_new");
-ALTER TYPE "public"."BetSide" RENAME TO "BetSide_old";
-ALTER TYPE "public"."BetSide_new" RENAME TO "BetSide";
-DROP TYPE "public"."BetSide_old";
+
+------------------------------------------------------------
+-- 0) 防呆：先把可能會造成 enum 轉換失敗的舊值「用文字比較」轉成新值
+--    注意：不能直接用 enum 字面量比較（舊值已不存在），所以用 ::text
+------------------------------------------------------------
+
+-- BetSide: 移除 ANY_PAIR / PERFECT_PAIR（若存在，先收斂到較安全的目標）
+-- 這裡示範把它們都轉為 'PLAYER_PAIR'（你要改成別的映射也可）
+UPDATE "Bet"
+SET "side" = 'PLAYER_PAIR'::"BetSide"
+WHERE "side"::text IN ('ANY_PAIR', 'PERFECT_PAIR');
+
+-- LedgerType: 移除 TRANSFER_IN / TRANSFER_OUT / BET_PAYOUT
+-- 這裡示範：
+--   TRANSFER_IN / TRANSFER_OUT => 轉成 'TRANSFER'
+--   BET_PAYOUT => 轉成 'PAYOUT'
+UPDATE "Ledger"
+SET "type" = 'TRANSFER'::"LedgerType"
+WHERE "type"::text IN ('TRANSFER_IN', 'TRANSFER_OUT');
+
+UPDATE "Ledger"
+SET "type" = 'PAYOUT'::"LedgerType"
+WHERE "type"::text IN ('BET_PAYOUT');
+
+-- RoundPhase: 移除 REVEAL（若有，改成 'REVEALING'）
+UPDATE "Round"
+SET "phase" = 'REVEALING'::"RoundPhase"
+WHERE "phase"::text IN ('REVEAL');
+
+------------------------------------------------------------
+-- 1) 先安全移除可能存在的索引/約束（避免後續調整類型卡住）
+------------------------------------------------------------
+DROP INDEX IF EXISTS "idx_bet_round_side";
+DROP INDEX IF EXISTS "idx_bet_user_createdAt";
+DROP INDEX IF EXISTS "Round_room_day_seq_idx";
+DROP INDEX IF EXISTS "Round_phase_idx";
+DROP INDEX IF EXISTS "Round_createdAt_idx";
+DROP INDEX IF EXISTS "Bet_round_user_idx";
+DROP INDEX IF EXISTS "Bet_user_createdAt_idx";
+-- 若你過去 migration 建過其他索引名稱，也可在此補上 IF EXISTS 版本
+
+------------------------------------------------------------
+-- 2) 以 rename+recreate 的方式重建 ENUM 型別（刪除舊值）
+--    2.1 BetSide
+------------------------------------------------------------
+DO $$
+BEGIN
+  -- 如果舊型別存在才進行 rename，否則忽略
+  IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'BetSide') THEN
+    EXECUTE 'ALTER TYPE "BetSide" RENAME TO "BetSide_old"';
+  END IF;
+END$$;
+
+-- 建立新 BetSide（不含 ANY_PAIR / PERFECT_PAIR）
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'BetSide') THEN
+    EXECUTE 'CREATE TYPE "BetSide" AS ENUM (''PLAYER'',''BANKER'',''TIE'',''PLAYER_PAIR'',''BANKER_PAIR'')';
+  END IF;
+END$$;
+
+-- 調整欄位型別指向新 BetSide
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns 
+             WHERE table_name='Bet' AND column_name='side') THEN
+    EXECUTE 'ALTER TABLE "Bet" ALTER COLUMN "side" TYPE "BetSide" USING "side"::text::"BetSide"';
+  END IF;
+END$$;
+
+-- 刪掉舊 BetSide 型別
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'BetSide_old') THEN
+    EXECUTE 'DROP TYPE "BetSide_old"';
+  END IF;
+END$$;
+
+------------------------------------------------------------
+--    2.2 LedgerType
+------------------------------------------------------------
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'LedgerType') THEN
+    EXECUTE 'ALTER TYPE "LedgerType" RENAME TO "LedgerType_old"';
+  END IF;
+END$$;
+
+-- 新 LedgerType（不含 TRANSFER_IN/TRANSFER_OUT/BET_PAYOUT）
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'LedgerType') THEN
+    EXECUTE 'CREATE TYPE "LedgerType" AS ENUM (''DEPOSIT'',''WITHDRAW'',''BET_PLACED'',''PAYOUT'',''TRANSFER'',''ADMIN_ADJUST'')';
+  END IF;
+END$$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns 
+             WHERE table_name='Ledger' AND column_name='type') THEN
+    EXECUTE 'ALTER TABLE "Ledger" ALTER COLUMN "type" TYPE "LedgerType" USING "type"::text::"LedgerType"';
+  END IF;
+END$$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'LedgerType_old') THEN
+    EXECUTE 'DROP TYPE "LedgerType_old"';
+  END IF;
+END$$;
+
+------------------------------------------------------------
+--    2.3 RoundPhase
+------------------------------------------------------------
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'RoundPhase') THEN
+    EXECUTE 'ALTER TYPE "RoundPhase" RENAME TO "RoundPhase_old"';
+  END IF;
+END$$;
+
+-- 新 RoundPhase（不含 REVEAL）
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'RoundPhase') THEN
+    EXECUTE 'CREATE TYPE "RoundPhase" AS ENUM (''BETTING'',''REVEALING'',''SETTLED'')';
+  END IF;
+END$$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns 
+             WHERE table_name='Round' AND column_name='phase') THEN
+    EXECUTE 'ALTER TABLE "Round" ALTER COLUMN "phase" TYPE "RoundPhase" USING "phase"::text::"RoundPhase"';
+  END IF;
+END$$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'RoundPhase_old') THEN
+    EXECUTE 'DROP TYPE "RoundPhase_old"';
+  END IF;
+END$$;
+
+------------------------------------------------------------
+-- 3) 重新建立索引（用 IF NOT EXISTS 防止重複）
+------------------------------------------------------------
+
+-- 你 schema 中提到的索引們：
+CREATE INDEX IF NOT EXISTS "Round_room_day_seq_idx" ON "Round"("roomId","day","roundSeq");
+CREATE INDEX IF NOT EXISTS "Round_phase_idx"         ON "Round"("phase");
+CREATE INDEX IF NOT EXISTS "Round_createdAt_idx"     ON "Round"("createdAt");
+CREATE INDEX IF NOT EXISTS "Bet_round_user_idx"      ON "Bet"("roundId","userId");
+CREATE INDEX IF NOT EXISTS "Bet_user_createdAt_idx"  ON "Bet"("userId","createdAt");
+
+-- 舊名的輔助索引（如果你的查詢會用到，可留著）
+CREATE INDEX IF NOT EXISTS "idx_bet_round_side"      ON "Bet"("roundId","side");
+CREATE INDEX IF NOT EXISTS "idx_bet_user_createdAt"  ON "Bet"("userId","createdAt");
+
+------------------------------------------------------------
+-- 4) （可選）補齊 unique/constraint（若之前有）
+--    例：同房同日 roundSeq 唯一
+------------------------------------------------------------
+DO $$
+BEGIN
+  -- 如果沒有這個唯一約束才建立
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint 
+    WHERE conname = 'Round_room_day_seq_unique'
+  ) THEN
+    EXECUTE 'ALTER TABLE "Round"
+             ADD CONSTRAINT "Round_room_day_seq_unique"
+             UNIQUE ("roomId","day","roundSeq")';
+  END IF;
+END$$;
+
 COMMIT;
-
--- AlterEnum
-BEGIN;
-CREATE TYPE "public"."LedgerType_new" AS ENUM ('DEPOSIT', 'WITHDRAW', 'BET_PLACED', 'PAYOUT', 'TRANSFER', 'ADMIN_ADJUST');
-ALTER TABLE "public"."Ledger" ALTER COLUMN "type" TYPE "public"."LedgerType_new" USING ("type"::text::"public"."LedgerType_new");
-ALTER TYPE "public"."LedgerType" RENAME TO "LedgerType_old";
-ALTER TYPE "public"."LedgerType_new" RENAME TO "LedgerType";
-DROP TYPE "public"."LedgerType_old";
-COMMIT;
-
--- AlterEnum
-BEGIN;
-CREATE TYPE "public"."RoundPhase_new" AS ENUM ('BETTING', 'REVEALING', 'SETTLED');
-ALTER TABLE "public"."Round" ALTER COLUMN "phase" DROP DEFAULT;
-ALTER TABLE "public"."Round" ALTER COLUMN "phase" TYPE "public"."RoundPhase_new" USING ("phase"::text::"public"."RoundPhase_new");
-ALTER TYPE "public"."RoundPhase" RENAME TO "RoundPhase_old";
-ALTER TYPE "public"."RoundPhase_new" RENAME TO "RoundPhase";
-DROP TYPE "public"."RoundPhase_old";
-ALTER TABLE "public"."Round" ALTER COLUMN "phase" SET DEFAULT 'BETTING';
-COMMIT;
-
--- DropForeignKey
-ALTER TABLE "public"."Bet" DROP CONSTRAINT "Bet_roomId_fkey";
-
--- DropForeignKey
-ALTER TABLE "public"."Bet" DROP CONSTRAINT "Bet_roundId_fkey";
-
--- DropForeignKey
-ALTER TABLE "public"."Bet" DROP CONSTRAINT "Bet_userId_fkey";
-
--- DropForeignKey
-ALTER TABLE "public"."Ledger" DROP CONSTRAINT "Ledger_adminId_fkey";
-
--- DropForeignKey
-ALTER TABLE "public"."Ledger" DROP CONSTRAINT "Ledger_userId_fkey";
-
--- DropForeignKey
-ALTER TABLE "public"."Round" DROP CONSTRAINT "Round_roomId_fkey";
-
--- DropIndex
-DROP INDEX "public"."Bet_roomId_day_roundSeq_idx";
-
--- DropIndex
-DROP INDEX "public"."Bet_userId_roomId_createdAt_idx";
-
--- DropIndex
-DROP INDEX "public"."idx_bet_round_side";
-
--- DropIndex
-DROP INDEX "public"."Ledger_adminId_idx";
-
--- DropIndex
-DROP INDEX "public"."Ledger_type_target_idx";
-
--- DropIndex
-DROP INDEX "public"."Room_code_idx";
-
--- DropIndex
-DROP INDEX "public"."Round_roomId_day_idx";
-
--- DropIndex
-DROP INDEX "public"."idx_round_room_createdAt";
-
--- DropIndex
-DROP INDEX "public"."idx_round_room_startedAt";
-
--- DropIndex
-DROP INDEX "public"."uniq_round_room_day_seq";
-
--- DropIndex
-DROP INDEX "public"."User_isAdmin_idx";
-
--- AlterTable
-ALTER TABLE "public"."Bet" DROP COLUMN "day",
-DROP COLUMN "roomId",
-DROP COLUMN "roundSeq",
-ALTER COLUMN "roundId" SET NOT NULL;
-
--- AlterTable
-ALTER TABLE "public"."Ledger" DROP COLUMN "adminId",
-ALTER COLUMN "balanceAfter" SET NOT NULL,
-ALTER COLUMN "bankAfter" SET NOT NULL;
-
--- AlterTable
-ALTER TABLE "public"."Round" DROP COLUMN "dayLocal";
-
--- CreateIndex
-CREATE INDEX "Ledger_type_createdAt_idx" ON "public"."Ledger"("type", "createdAt");
-
--- CreateIndex
-CREATE INDEX "Round_roomId_day_roundSeq_idx" ON "public"."Round"("roomId", "day", "roundSeq");
-
--- CreateIndex
-CREATE INDEX "Round_phase_idx" ON "public"."Round"("phase");
-
--- CreateIndex
-CREATE INDEX "Round_createdAt_idx" ON "public"."Round"("createdAt");
-
--- CreateIndex
-CREATE INDEX "User_createdAt_idx" ON "public"."User"("createdAt");
-
--- AddForeignKey
-ALTER TABLE "public"."Ledger" ADD CONSTRAINT "Ledger_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "public"."Round" ADD CONSTRAINT "Round_roomId_fkey" FOREIGN KEY ("roomId") REFERENCES "public"."Room"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "public"."Bet" ADD CONSTRAINT "Bet_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "public"."Bet" ADD CONSTRAINT "Bet_roundId_fkey" FOREIGN KEY ("roundId") REFERENCES "public"."Round"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- RenameIndex
-ALTER INDEX "public"."idx_bet_round_user" RENAME TO "Bet_roundId_userId_idx";
-
--- RenameIndex
-ALTER INDEX "public"."idx_bet_user_created" RENAME TO "Bet_userId_createdAt_idx";

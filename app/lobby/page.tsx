@@ -1,88 +1,88 @@
-// app/lobby/page.tsx
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-type RoomState = {
-  room: { code: "R30" | "R60" | "R90"; name: string; durationSeconds: number };
-  roundSeq: number;
-  phase: "BETTING" | "REVEALING" | "SETTLED";
-  secLeft: number;
+type Room = {
+  code: string;
+  name: string;
+  durationSeconds: number;
+  secLeft?: number;
 };
 
-const ROOM_CODES = [
-  { code: "R30" as const, label: "30秒房" },
-  { code: "R60" as const, label: "60秒房" },
-  { code: "R90" as const, label: "90秒房" },
-];
-
-function useRoomState(code: "R30" | "R60" | "R90") {
-  const [data, setData] = useState<RoomState | null>(null);
-  useEffect(() => {
-    let timer: any;
-    const load = async () => {
-      try {
-        const r = await fetch(`/api/casino/baccarat/state?room=${code}`, {
-          cache: "no-store",
-          credentials: "include",
-        });
-        const j = await r.json();
-        if (!r.ok) throw new Error(j?.error || "狀態讀取失敗");
-        setData({
-          room: j.room,
-          roundSeq: j.roundSeq,
-          phase: j.phase,
-          secLeft: j.secLeft,
-        });
-      } catch (e) {
-        // 靜默
-      }
-    };
-    load();
-    timer = setInterval(load, 1000);
-    return () => clearInterval(timer);
-  }, [code]);
-  return data;
-}
-
-function RoomCard({ code, label }: { code: "R30" | "R60" | "R90"; label: string }) {
-  const s = useRoomState(code);
-  return (
-    <Link href={`/casino/baccarat/${code}`} className="room-card glow-ring sheen block">
-      <div className="glass rounded-xl p-5">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xl font-bold tracking-wide">{label}</h3>
-          <span className="text-xs opacity-70">代碼 {code}</span>
-        </div>
-        <div className="mt-3 text-sm opacity-80">
-          局序：<b>{s?.roundSeq ?? "…"}</b>
-        </div>
-        <div className="mt-1 text-sm opacity-80">
-          狀態：<b>{s?.phase ?? "…"}</b>
-        </div>
-        <div className="mt-2">
-          <div className="text-4xl font-extrabold tabular-nums">
-            {s?.secLeft ?? "…"}<span className="text-sm ml-1">s</span>
-          </div>
-        </div>
-        <div className="mt-3 text-xs opacity-60">點擊進入房間</div>
-      </div>
-    </Link>
-  );
-}
-
 export default function LobbyPage() {
+  const router = useRouter();
+  const [rooms, setRooms] = useState<Room[]>([
+    { code: "R30", name: "30秒房", durationSeconds: 30 },
+    { code: "R60", name: "60秒房", durationSeconds: 60 },
+    { code: "R90", name: "90秒房", durationSeconds: 90 },
+  ]);
+
+  // 模擬倒數（未來可直接串 API /state）
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRooms((prev) =>
+        prev.map((r) => ({
+          ...r,
+          secLeft: Math.max(0, (r.secLeft ?? r.durationSeconds) - 1),
+        }))
+      );
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
-    <div className="min-h-screen bg-gradient-casino px-4 py-10">
-      <div className="max-w-6xl mx-auto">
-        <h1 className="text-3xl font-black tracking-widest mb-6">TOPZCASINO 大廳</h1>
-        <div className="grid gap-6 grid-cols-1 md:grid-cols-3">
-          {ROOM_CODES.map((r) => (
-            <RoomCard key={r.code} code={r.code} label={r.label} />
-          ))}
+    <main className="min-h-screen bg-casino-bg text-white p-6 space-y-6">
+      {/* 🟣 跑馬燈 */}
+      <div className="glass rounded-lg p-3 text-center animate-pulse">
+        🎉 歡迎來到 TOPZ CASINO — 最新公告：每日登入送 100 金幣！
+      </div>
+
+      {/* 🔵 功能卡片：銀行 / 管理員 / 登出 */}
+      <div className="grid grid-cols-3 gap-4 max-w-3xl mx-auto">
+        <div
+          onClick={() => router.push("/bank")}
+          className="card sheen cursor-pointer text-center"
+        >
+          🏦 銀行
+        </div>
+        <div
+          onClick={() => router.push("/admin")}
+          className="card sheen cursor-pointer text-center"
+        >
+          🛠️ 管理員
+        </div>
+        <div
+          onClick={() => {
+            document.cookie = "token=; Max-Age=0; path=/";
+            router.push("/auth");
+          }}
+          className="card sheen cursor-pointer text-center"
+        >
+          🚪 登出
         </div>
       </div>
-    </div>
+
+      {/* 🟡 房間卡片 */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto mt-6">
+        {rooms.map((room) => (
+          <div
+            key={room.code}
+            onClick={() => router.push(`/casino/baccarat/${room.code}`)}
+            className="room-card glass glow-ring p-6 flex flex-col items-center justify-center"
+          >
+            <h2 className="text-xl font-bold mb-2">{room.name}</h2>
+            <p>局長: {room.durationSeconds}s</p>
+            <p className="mt-2">
+              倒數:{" "}
+              <span className="font-mono text-lg">
+                {room.secLeft ?? room.durationSeconds}s
+              </span>
+            </p>
+            <button className="btn mt-4">進入房間</button>
+          </div>
+        ))}
+      </div>
+    </main>
   );
 }
