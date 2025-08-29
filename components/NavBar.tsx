@@ -1,29 +1,72 @@
+// components/NavBar.tsx
 "use client";
 
 import Link from "next/link";
-import useSWR from "swr";
+import { useEffect, useState } from "react";
 
-const fetcher = (u: string) =>
-  fetch(u, { credentials: "include", cache: "no-store" }).then((r) => r.json());
+type Me = { email: string; isAdmin: boolean } | null;
 
 export default function NavBar() {
-  const { data: me } = useSWR("/api/auth/me", fetcher, { refreshInterval: 60000 });
-  const isAdmin = !!me?.isAdmin;
+  const [me, setMe] = useState<Me>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let stop = false;
+    async function load() {
+      try {
+        const res = await fetch("/api/auth/me", {
+          credentials: "include",
+          cache: "no-store",
+        });
+        if (!stop) setMe(res.ok ? await res.json() : null);
+      } catch {
+        if (!stop) setMe(null);
+      } finally {
+        if (!stop) setLoading(false);
+      }
+    }
+    load();
+    const t = setInterval(load, 30000);
+    return () => { stop = true; clearInterval(t); };
+  }, []);
 
   return (
-    <nav className="w-full sticky top-0 z-30 bg-black/30 backdrop-blur border-b border-white/10">
-      <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between text-white">
-        <Link href="/" className="font-extrabold tracking-wide">TOPZCASINO</Link>
-        <div className="flex items-center gap-3">
-          <Link className="hover:underline" href="/casino">大廳</Link>
-          <Link className="hover:underline" href="/casino/bank">銀行 / 錢包</Link>
-          {isAdmin && (
-            <Link className="hover:underline font-bold" href="/admin">管理員</Link>
-          )}
-          <span className="text-xs opacity-70">
-            {me?.email ? me.email : "未登入"}
-          </span>
-        </div>
+    <nav className="w-full flex items-center justify-between py-3 px-4 glass glow-ring">
+      <div className="flex items-center gap-3">
+        <Link href="/lobby" className="font-black tracking-wider">TOPZCASINO</Link>
+        <Link href="/lobby" className="opacity-80 hover:opacity-100">大廳</Link>
+        <Link href="/bank" className="opacity-80 hover:opacity-100">銀行</Link>
+        <Link href="/casino/baccarat/R30" className="opacity-80 hover:opacity-100">百家 30s</Link>
+        <Link href="/casino/baccarat/R60" className="opacity-80 hover:opacity-100">百家 60s</Link>
+        <Link href="/casino/baccarat/R90" className="opacity-80 hover:opacity-100">百家 90s</Link>
+        {me?.isAdmin && (
+          <Link href="/admin" className="opacity-80 hover:opacity-100">管理員</Link>
+        )}
+      </div>
+
+      <div className="flex items-center gap-3">
+        {loading ? (
+          <span className="text-sm opacity-70">載入中…</span>
+        ) : me ? (
+          <>
+            <span className="text-sm opacity-80">{me.email}</span>
+            <button
+              className="btn"
+              onClick={async () => {
+                // 若已有 /api/auth/logout，這裡改呼叫登出 API
+                await fetch("/api/auth/login?logout=1", {
+                  method: "POST",
+                  credentials: "include",
+                });
+                location.href = "/login";
+              }}
+            >
+              登出
+            </button>
+          </>
+        ) : (
+          <Link href="/login" className="btn">登入</Link>
+        )}
       </div>
     </nav>
   );
