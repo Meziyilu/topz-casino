@@ -8,9 +8,19 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-//////////////////////////////////////////////////////
-// Enums
-//////////////////////////////////////////////////////
+enum LedgerType {
+  DEPOSIT
+  WITHDRAW
+  BET_PLACED
+  PAYOUT
+  TRANSFER
+  ADMIN_ADJUST
+}
+
+enum BalanceTarget {
+  WALLET
+  BANK
+}
 
 enum RoomCode {
   R30
@@ -19,9 +29,9 @@ enum RoomCode {
 }
 
 enum RoundPhase {
-  BETTING // 下注中
-  REVEALING // 開牌中（翻牌動畫期）
-  SETTLED // 已結算
+  BETTING
+  REVEALING
+  SETTLED
 }
 
 enum RoundOutcome {
@@ -36,136 +46,93 @@ enum BetSide {
   TIE
   PLAYER_PAIR
   BANKER_PAIR
-  ANY_PAIR
-  PERFECT_PAIR
 }
-
-enum LedgerType {
-  TRANSFER // 銀行<->錢包 轉帳
-  ADMIN_ADJUST // 管理員調整
-  BET // 下注扣款（可選：如需記錄）
-  PAYOUT // 派彩
-}
-
-/**
- * target 我們允許到“錢包/銀行”，也允許直接標記下注的邊（PLAYER/BANKER/TIE…），
- * 這樣你的記帳就不用各處 cast any。
- */
-enum LedgerTarget {
-  WALLET
-  BANK
-  PLAYER
-  BANKER
-  TIE
-  PLAYER_PAIR
-  BANKER_PAIR
-  ANY_PAIR
-  PERFECT_PAIR
-}
-
-//////////////////////////////////////////////////////
-// Models
-//////////////////////////////////////////////////////
 
 model User {
-  id       String  @id @default(cuid())
-  email    String  @unique
-  password String
-  isAdmin  Boolean @default(false)
+  id           String   @id @default(cuid())
+  email        String   @unique
+  password     String
+  name         String?
+  isAdmin      Boolean  @default(false)
+  balance      Int      @default(0)
+  bankBalance  Int      @default(0)
+  createdAt    DateTime @default(now())
 
-  // 餘額
-  balance     Int @default(0) // 錢包
-  bankBalance Int @default(0) // 銀行
-
-  createdAt DateTime @default(now())
-
+  // relations
   bets    Bet[]
   ledgers Ledger[]
-}
 
-model Room {
-  id              String   @id @default(cuid())
-  code            RoomCode @unique
-  name            String
-  durationSeconds Int
-  createdAt       DateTime @default(now())
-
-  rounds Round[]
-  Bet    Bet[]
-}
-
-model Round {
-  id     String @id @default(cuid())
-  roomId String
-  room   Room   @relation(fields: [roomId], references: [id])
-
-  // 「台北時區」每天 00:00 換新的一天，但這裡用 UTC 存放該日起點
-  day      DateTime
-  roundSeq Int
-  phase    RoundPhase @default(BETTING)
-
-  createdAt DateTime  @default(now())
-  startedAt DateTime // 開始下注時間
-  settledAt DateTime? // 結算時間
-
-  // 結果資料
-  outcome     RoundOutcome?
-  playerTotal Int?
-  bankerTotal Int?
-  playerPair  Boolean?
-  bankerPair  Boolean?
-  anyPair     Boolean?
-  perfectPair Boolean?
-  playerCards Json?
-  bankerCards Json?
-
-  bets Bet[]
-
-  // 同一房、同一天，局序不可重複
-  @@unique([roomId, day, roundSeq])
-  // 查詢近期結果的常用排序
-  @@index([roomId, day, roundSeq])
-}
-
-model Bet {
-  id String @id @default(cuid())
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
-
-  roomId String
-  room   Room   @relation(fields: [roomId], references: [id])
-
-  roundId String
-  round   Round  @relation(fields: [roundId], references: [id])
-
-  // 冗餘欄位，方便聚合與索引
-  day      DateTime
-  roundSeq Int
-
-  side   BetSide
-  amount Int
-
-  createdAt DateTime @default(now())
-
-  @@index([roundId])
-  @@index([userId, roundId])
+  @@index([createdAt])
 }
 
 model Ledger {
-  id     String @id @default(cuid())
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
+  id           String       @id @default(cuid())
+  userId       String
+  type         LedgerType
+  target       BalanceTarget
+  delta        Int
+  memo         String?
+  balanceAfter Int
+  bankAfter    Int
+  createdAt    DateTime     @default(now())
 
-  type   LedgerType
-  target LedgerTarget
-  delta  Int
-  memo   String?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  balanceAfter Int // 當下錢包餘額
-  bankAfter    Int // 當下銀行餘額
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+}
 
+model Room {
+  id              String    @id @default(cuid())
+  code            RoomCode  @unique
+  name            String
+  durationSeconds Int
+  createdAt       DateTime  @default(now())
+
+  rounds Round[]
+}
+
+model Round {
+  id           String       @id @default(cuid())
+  roomId       String
+  day          DateTime     // 台北當日 00:00 (以 UTC 儲存)
+  roundSeq     Int
+  phase        RoundPhase   @default(BETTING)
+  createdAt    DateTime     @default(now())
+  startedAt    DateTime
+  settledAt    DateTime?
+
+  // 結果欄位（結算後才會有）
+  outcome      RoundOutcome?
+  playerTotal  Int?
+  bankerTotal  Int?
+  playerPair   Boolean?
+  bankerPair   Boolean?
+  anyPair      Boolean?
+  perfectPair  Boolean?
+  playerCards  Json?
+  bankerCards  Json?
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  bets Bet[]
+
+  @@unique([roomId, day, roundSeq]) // 同一房、同一天的局序不得重覆
+  @@index([roomId, day, roundSeq])
+  @@index([phase])
+  @@index([createdAt])
+}
+
+model Bet {
+  id        String   @id @default(cuid())
+  userId    String
+  roundId   String
+  side      BetSide
+  amount    Int
   createdAt DateTime @default(now())
 
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@index([roundId, userId])
   @@index([userId, createdAt])
 }
