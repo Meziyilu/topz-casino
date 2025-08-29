@@ -1,341 +1,138 @@
-// app/casino/baccarat/[room]/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import useSWR from "swr";
+import FlipTile from "@/components/FlipTile";
 
-type Outcome = "PLAYER" | "BANKER" | "TIE" | null;
-type Phase = "BETTING" | "REVEALING" | "SETTLED";
+const fetcher = (u: string) =>
+  fetch(u, { credentials: "include", cache: "no-store" }).then((r) => r.json());
 
-type StateResp = {
-  room: { code: string; name: string; durationSeconds: number };
-  day: string;
-  roundId: string;
-  roundSeq: number;
-  phase: Phase;
-  secLeft: number;
-  result: null | { outcome: Outcome; p: number | null; b: number | null };
-  myBets: Record<string, number>;
-  recent: { roundSeq: number; outcome: Outcome; p: number; b: number }[];
-};
+type BetSide = "PLAYER" | "BANKER" | "TIE" | "PLAYER_PAIR" | "BANKER_PAIR";
 
-const zhPhase: Record<Phase, string> = {
-  BETTING: "下注中",
-  REVEALING: "開牌中",
-  SETTLED: "已結算",
-};
-const zhOutcome: Record<NonNullable<Outcome>, string> = {
-  PLAYER: "閒",
-  BANKER: "莊",
-  TIE: "和",
-};
+export default function RoomPage({ params }: { params: { room: string } }) {
+  const roomCode = (params.room || "R60").toUpperCase();
+  const { data, mutate } = useSWR(
+    `/api/casino/baccarat/state?room=${roomCode}`,
+    fetcher,
+    { refreshInterval: 1000 }
+  );
 
-function fmtOutcome(o: Outcome) {
-  if (!o) return "—";
-  return zhOutcome[o];
-}
+  const [placing, setPlacing] = useState<BetSide | null>(null);
 
-function pad4(n: number) {
-  return n.toString().padStart(4, "0");
-}
+  // 每局觸發翻牌動畫的 key
+  const revealKey = useMemo(() => {
+    if (!data) return "init";
+    return `${data.roundId || "none"}-${data.phase}`;
+  }, [data?.roundId, data?.phase]);
 
-export default function RoomPage() {
-  const { room } = useParams<{ room: string }>();
-  const router = useRouter();
-  const [data, setData] = useState<StateResp | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [placing, setPlacing] = useState<null | string>(null);
-  const [err, setErr] = useState<string>("");
+  const secondsLeft = data ? Math.max(0, data.secLeft ?? data.secondsLeft ?? 0) : 0;
 
-  // 輪詢 state
-  useEffect(() => {
-    let timer: any;
-    let mounted = true;
-
-    async function load(force?: boolean) {
-      try {
-        const url = `/api/casino/baccarat/state?room=${room}${force ? "&force=restart" : ""}`;
-        const res = await fetch(url, { cache: "no-store", credentials: "include" });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json?.error || "載入失敗");
-        if (mounted) {
-          setData(json);
-          setErr("");
-        }
-      } catch (e: any) {
-        if (mounted) setErr(e?.message || "連線失敗");
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    }
-
-    load();
-
-    // 每秒刷新
-    timer = setInterval(load, 1000);
-    return () => {
-      mounted = false;
-      clearInterval(timer);
-    };
-  }, [room]);
-
-  // 倒數秒數（前端跟著扣，畫面更順）
-  const [localSec, setLocalSec] = useState<number>(0);
-  useEffect(() => {
-    if (!data) return;
-    setLocalSec(data.secLeft);
-  }, [data?.secLeft]);
-
-  useEffect(() => {
-    if (localSec <= 0) return;
-    const t = setInterval(() => setLocalSec((s) => Math.max(0, s - 1)), 1000);
-    return () => clearInterval(t);
-  }, [localSec]);
-
-  async function place(side: "PLAYER" | "BANKER" | "TIE", amount = 100) {
-    if (!data) return;
-    if (data.phase !== "BETTING") {
-      setErr("目前非下注時間");
-      return;
-    }
+  async function placeBet(side: BetSide) {
+    if (!data || data.phase !== "BETTING") return;
     setPlacing(side);
     try {
-      const res = await fetch("/api/casino/baccarat/bet", {
+      await fetch(`/api/casino/baccarat/bet?room=${roomCode}`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomCode: data.room.code, side, amount }),
+        body: JSON.stringify({ side, amount: 100 }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || "下注失敗");
-      setErr("");
-    } catch (e: any) {
-      setErr(e?.message || "下注失敗");
+      mutate();
     } finally {
       setPlacing(null);
     }
   }
 
-  const outcomeMark = useMemo(() => {
-    if (!data?.result) return null;
-    return data.result.outcome;
-  }, [data?.result]);
-
   return (
-    <div className="min-h-screen bg-casino-bg text-white">
-      {/* 頂部列 */}
-      <div className="max-w-6xl mx-auto px-4 py-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <button
-            className="btn glass tilt"
-            onClick={() => router.push("/lobby")}
-            title="回大廳"
-          >
-            ← 回大廳
-          </button>
-          <div className="glass px-4 py-2 rounded-xl">
-            <div className="text-sm opacity-80">房間</div>
-            <div className="text-lg font-semibold">{data?.room.name || room}</div>
-          </div>
-          <div className="glass px-4 py-2 rounded-xl">
-            <div className="text-sm opacity-80">局序</div>
-            <div className="text-lg font-semibold">{data ? pad4(data.roundSeq) : "--"}</div>
-          </div>
-          <div className="glass px-4 py-2 rounded-xl">
-            <div className="text-sm opacity-80">狀態</div>
-            <div className="text-lg font-semibold">
-              {data ? zhPhase[data.phase] : "載入中"}
-            </div>
-          </div>
-          <div className="glass px-4 py-2 rounded-xl">
-            <div className="text-sm opacity-80">倒數</div>
-            <div className="text-lg font-semibold">
-              {typeof localSec === "number" ? `${localSec}s` : "--"}
-            </div>
-          </div>
+    <div className="min-h-screen bg-casino-bg text-white p-6 flex flex-col items-center gap-6">
+      {/* 標題 */}
+      <h1 className="text-2xl font-bold tracking-wide">
+        百家樂房間 {roomCode}
+      </h1>
+
+      {/* 倒數 */}
+      {data && (
+        <div className="text-lg font-mono">
+          狀態：
+          {data.phase === "BETTING"
+            ? "下注中"
+            : data.phase === "REVEALING"
+            ? "開牌中"
+            : "已結算"}
+          {" ｜ "}
+          剩餘秒數：{secondsLeft}
         </div>
+      )}
 
-        <div className="text-right">
-          {err && <div className="text-red-400 text-sm mb-2">{err}</div>}
-          <div className="opacity-70 text-xs">（時間以伺服器為準）</div>
+      {/* 翻牌動畫區 */}
+      {data && data.phase !== "BETTING" && data.result && (
+        <div className="grid grid-cols-2 gap-6 w-full max-w-3xl items-start mt-6">
+          <FlipTile
+            label="PLAYER"
+            total={data.result.p}
+            outcome={data.result.outcome || null}
+            triggerKey={revealKey}
+          />
+          <FlipTile
+            label="BANKER"
+            total={data.result.b}
+            outcome={data.result.outcome || null}
+            triggerKey={revealKey}
+          />
         </div>
-      </div>
+      )}
+      {data && data.phase === "BETTING" && (
+        <div className="grid grid-cols-2 gap-6 w-full max-w-3xl items-start mt-6 opacity-70">
+          <FlipTile
+            label="PLAYER"
+            total={null}
+            outcome={null}
+            triggerKey={`${data.roundId}-idle`}
+          />
+          <FlipTile
+            label="BANKER"
+            total={null}
+            outcome={null}
+            triggerKey={`${data.roundId}-idle`}
+          />
+        </div>
+      )}
 
-      {/* 內容區 */}
-      <div className="max-w-6xl mx-auto px-4 grid md:grid-cols-3 gap-6 pb-16">
-        {/* 左：下注區 */}
-        <div className="md:col-span-2">
-          <div className="glass glow-ring p-6 rounded-2xl sheen">
-            <div className="text-xl font-bold mb-4">下注面板</div>
+      {/* 下注按鈕 */}
+      {data && data.phase === "BETTING" && (
+        <div className="grid grid-cols-3 gap-4 mt-8">
+          {(["PLAYER", "BANKER", "TIE"] as BetSide[]).map((side) => (
+            <button
+              key={side}
+              disabled={!!placing}
+              onClick={() => placeBet(side)}
+              className={`btn tilt ${placing === side ? "opacity-50" : ""}`}
+            >
+              下 {side === "PLAYER" ? "閒" : side === "BANKER" ? "莊" : "和"}
+            </button>
+          ))}
+        </div>
+      )}
 
-            <div className="grid grid-cols-3 gap-4">
-              <button
-                disabled={placing === "PLAYER" || data?.phase !== "BETTING"}
-                onClick={() => place("PLAYER")}
-                className="btn shimmer"
+      {/* 我的投注 */}
+      {data && data.myBets && Object.keys(data.myBets).length > 0 && (
+        <div className="mt-10 w-full max-w-lg">
+          <h2 className="text-lg font-semibold mb-2">我的投注</h2>
+          <div className="space-y-2">
+            {Object.entries<number>(data.myBets).map(([side, amt]) => (
+              <div
+                key={side}
+                className="glass p-3 rounded flex justify-between text-sm"
               >
-                壓「閒」
-                {!!data?.myBets?.PLAYER && (
-                  <span className="ml-2 text-xs opacity-80">（我: {data.myBets.PLAYER}）</span>
-                )}
-              </button>
-              <button
-                disabled={placing === "TIE" || data?.phase !== "BETTING"}
-                onClick={() => place("TIE")}
-                className="btn shimmer"
-              >
-                壓「和」
-                {!!data?.myBets?.TIE && (
-                  <span className="ml-2 text-xs opacity-80">（我: {data.myBets.TIE}）</span>
-                )}
-              </button>
-              <button
-                disabled={placing === "BANKER" || data?.phase !== "BETTING"}
-                onClick={() => place("BANKER")}
-                className="btn shimmer"
-              >
-                壓「莊」
-                {!!data?.myBets?.BANKER && (
-                  <span className="ml-2 text-xs opacity-80">（我: {data.myBets.BANKER}）</span>
-                )}
-              </button>
-            </div>
-
-            {/* 翻牌/結果 */}
-            {data?.phase !== "BETTING" && data?.result && (
-              <div className="mt-8">
-                <div className="text-sm opacity-80 mb-2">本局結果</div>
-                <div className="grid grid-cols-2 gap-6 w-full max-w-xl">
-                  <FlipTile label="閒" value={data.result.p ?? 0} outcome={data.result.outcome} />
-                  <FlipTile label="莊" value={data.result.b ?? 0} outcome={data.result.outcome} />
-                </div>
-                <div className="mt-3 text-lg">
-                  結果：<span className="font-bold">{fmtOutcome(outcomeMark)}</span>
-                </div>
+                <span>
+                  {side === "PLAYER" ? "閒" : side === "BANKER" ? "莊" : side === "TIE" ? "和" : side}
+                </span>
+                <span>{amt}</span>
               </div>
-            )}
-
-            {data?.phase === "BETTING" && (
-              <div className="mt-8 opacity-80">等待下注結束後將自動開牌…</div>
-            )}
+            ))}
           </div>
         </div>
-
-        {/* 右：路子 / 歷史 */}
-        <div className="">
-          <div className="glass glow-ring p-6 rounded-2xl">
-            <div className="text-xl font-bold mb-4">路子（近 20 局）</div>
-
-            {/* 大路色塊（簡化版） */}
-            <div className="grid grid-cols-10 gap-2">
-              {(data?.recent || []).map((r) => (
-                <div
-                  key={r.roundSeq}
-                  className="h-6 rounded flex items-center justify-center text-[10px]"
-                  style={{
-                    background:
-                      r.outcome === "PLAYER"
-                        ? "rgba(103,232,249,.25)"
-                        : r.outcome === "BANKER"
-                        ? "rgba(253,164,175,.25)"
-                        : "rgba(253,230,138,.25)",
-                    border:
-                      r.outcome === "PLAYER"
-                        ? "1px solid rgba(103,232,249,.6)"
-                        : r.outcome === "BANKER"
-                        ? "1px solid rgba(253,164,175,.6)"
-                        : "1px solid rgba(253,230,138,.6)",
-                  }}
-                  title={`#${pad4(r.roundSeq)}：${fmtOutcome(r.outcome)}  閒${r.p} / 莊${r.b}`}
-                >
-                  {r.outcome ? zhOutcome[r.outcome] : "—"}
-                </div>
-              ))}
-              {(!data || (data && data.recent.length === 0)) && (
-                <div className="opacity-60 text-sm">暫無資料</div>
-              )}
-            </div>
-
-            {/* 表格（可選） */}
-            <div className="mt-4 max-h-64 overflow-auto text-sm">
-              <table className="w-full text-left opacity-90">
-                <thead className="opacity-70">
-                  <tr>
-                    <th className="py-1 pr-2">局序</th>
-                    <th className="py-1 pr-2">結果</th>
-                    <th className="py-1 pr-2">閒點</th>
-                    <th className="py-1 pr-2">莊點</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(data?.recent || []).map((r) => (
-                    <tr key={`t-${r.roundSeq}`} className="border-t border-white/10">
-                      <td className="py-1 pr-2">{pad4(r.roundSeq)}</td>
-                      <td className="py-1 pr-2">{fmtOutcome(r.outcome)}</td>
-                      <td className="py-1 pr-2">{r.p}</td>
-                      <td className="py-1 pr-2">{r.b}</td>
-                    </tr>
-                  ))}
-                  {(!data || (data && data.recent.length === 0)) && (
-                    <tr>
-                      <td colSpan={4} className="py-2 opacity-60">
-                        暫無資料
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** 翻牌卡片（中文標籤） */
-function FlipTile({
-  label,
-  value,
-  outcome,
-}: {
-  label: "閒" | "莊";
-  value: number;
-  outcome: Outcome;
-}) {
-  const isWin =
-    (label === "閒" && outcome === "PLAYER") ||
-    (label === "莊" && outcome === "BANKER");
-  return (
-    <div className="flip-3d h-28">
-      <div
-        className={`flip-inner ${outcome ? "animate-[flipIn_.7s_ease_forwards]" : ""}`}
-        style={{ transform: outcome ? "rotateY(180deg)" : "none" }}
-      >
-        {/* 正面：未翻開（霧面） */}
-        <div className="flip-front glass flex items-center justify-center text-xl font-bold">
-          {label}
-        </div>
-        {/* 背面：已翻開（總點數） */}
-        <div
-          className={`flip-back flex items-center justify-center text-3xl font-extrabold rounded-2xl ${
-            isWin ? "shadow-[0_0_24px_rgba(255,255,255,.3)]" : ""
-          }`}
-          style={{
-            background:
-              label === "閒"
-                ? "linear-gradient(135deg, rgba(103,232,249,.15), rgba(255,255,255,.06))"
-                : "linear-gradient(135deg, rgba(253,164,175,.15), rgba(255,255,255,.06))",
-            border:
-              label === "閒"
-                ? "1px solid rgba(103,232,249,.5)"
-                : "1px solid rgba(253,164,175,.5)",
-          }}
-        >
-          {value ?? 0} 點
-        </div>
-      </div>
+      )}
     </div>
   );
 }
