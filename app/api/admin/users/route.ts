@@ -1,21 +1,26 @@
+// app/api/admin/users/route.ts
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
+import type { Prisma } from "@prisma/client";
 
 export async function GET(req: Request) {
   try {
+    // 權限：僅管理員
     await requireAdmin(req);
+
     const url = new URL(req.url);
     const q = (url.searchParams.get("q") || "").trim();
 
-    const where = q
+    // 關鍵：把 where 明確標註為 Prisma.UserWhereInput
+    const where: Prisma.UserWhereInput = q
       ? {
           OR: [
-            { email: { contains: q, mode: "insensitive" } },
-            { name: { contains: q, mode: "insensitive" } },
+            { email: { contains: q, mode: "insensitive" as const } },
+            { name:  { contains: q, mode: "insensitive" as const } },
           ],
         }
       : {};
@@ -35,9 +40,10 @@ export async function GET(req: Request) {
       },
     });
 
-    return NextResponse.json({ users });
+    return NextResponse.json({ users }, { headers: { "Cache-Control": "no-store" } });
   } catch (e: any) {
-    const status = e?.status || 500;
-    return NextResponse.json({ error: e.message || "Server error" }, { status });
+    const msg = e?.message || "Server error";
+    const code = msg.includes("管理員") ? 403 : 500;
+    return NextResponse.json({ error: msg }, { status: code });
   }
 }
