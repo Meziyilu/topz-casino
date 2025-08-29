@@ -1,88 +1,80 @@
 "use client";
 
+import Link from "next/link";
+import useSWR from "swr";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
 
-type Room = {
-  code: string;
-  name: string;
-  durationSeconds: number;
-  secLeft?: number;
-};
+const fetcher = (url: string) =>
+  fetch(url, { credentials: "include" }).then((r) => r.json());
 
 export default function LobbyPage() {
   const router = useRouter();
-  const [rooms, setRooms] = useState<Room[]>([
-    { code: "R30", name: "30秒房", durationSeconds: 30 },
-    { code: "R60", name: "60秒房", durationSeconds: 60 },
-    { code: "R90", name: "90秒房", durationSeconds: 90 },
-  ]);
+  const { data: me } = useSWR("/api/auth/me", fetcher);
 
-  // 模擬倒數（未來可直接串 API /state）
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setRooms((prev) =>
-        prev.map((r) => ({
-          ...r,
-          secLeft: Math.max(0, (r.secLeft ?? r.durationSeconds) - 1),
-        }))
-      );
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    router.push("/auth");
+  }
 
   return (
-    <main className="min-h-screen bg-casino-bg text-white p-6 space-y-6">
-      {/* 🟣 跑馬燈 */}
-      <div className="glass rounded-lg p-3 text-center animate-pulse">
-        🎉 歡迎來到 TOPZ CASINO — 最新公告：每日登入送 100 金幣！
+    <div className="min-h-screen bg-casino-bg text-white flex flex-col items-center p-6 space-y-8">
+      {/* 跑馬燈公告 */}
+      <div className="w-full bg-gradient-to-r from-purple-800 via-pink-600 to-purple-800 text-center py-2 rounded-lg animate-pulse">
+        🎉 歡迎來到 TOPZ CASINO！請理性娛樂 🎉
       </div>
 
-      {/* 🔵 功能卡片：銀行 / 管理員 / 登出 */}
-      <div className="grid grid-cols-3 gap-4 max-w-3xl mx-auto">
-        <div
-          onClick={() => router.push("/bank")}
-          className="card sheen cursor-pointer text-center"
-        >
-          🏦 銀行
-        </div>
-        <div
-          onClick={() => router.push("/admin")}
-          className="card sheen cursor-pointer text-center"
-        >
-          🛠️ 管理員
-        </div>
-        <div
-          onClick={() => {
-            document.cookie = "token=; Max-Age=0; path=/";
-            router.push("/auth");
-          }}
-          className="card sheen cursor-pointer text-center"
-        >
-          🚪 登出
-        </div>
-      </div>
+      {/* 標題 */}
+      <h1 className="text-4xl font-extrabold drop-shadow-md">大廳 Lobby</h1>
 
-      {/* 🟡 房間卡片 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto mt-6">
-        {rooms.map((room) => (
-          <div
+      {/* 房間卡片 */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl">
+        {[
+          { code: "R30", name: "百家樂 - 30秒房" },
+          { code: "R60", name: "百家樂 - 60秒房" },
+          { code: "R90", name: "百家樂 - 90秒房" },
+        ].map((room) => (
+          <Link
             key={room.code}
-            onClick={() => router.push(`/casino/baccarat/${room.code}`)}
-            className="room-card glass glow-ring p-6 flex flex-col items-center justify-center"
+            href={`/casino/baccarat/${room.code}`}
+            className="room-card glow-ring sheen tilt p-6 flex flex-col items-center justify-center"
           >
-            <h2 className="text-xl font-bold mb-2">{room.name}</h2>
-            <p>局長: {room.durationSeconds}s</p>
-            <p className="mt-2">
-              倒數:{" "}
-              <span className="font-mono text-lg">
-                {room.secLeft ?? room.durationSeconds}s
-              </span>
-            </p>
-            <button className="btn mt-4">進入房間</button>
-          </div>
+            <h2 className="text-2xl font-bold">{room.name}</h2>
+            <p className="mt-2 text-sm opacity-80">進入房間下注！</p>
+          </Link>
         ))}
       </div>
-    </main>
+
+      {/* 功能卡片 */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl mt-10">
+        {/* 銀行 */}
+        <Link
+          href="/bank"
+          className="room-card glow-ring sheen tilt p-6 flex flex-col items-center justify-center"
+        >
+          <h2 className="text-2xl font-bold">🏦 銀行</h2>
+          <p className="mt-2 text-sm opacity-80">存款 / 提款 / 餘額查詢</p>
+        </Link>
+
+        {/* 管理員（只有 admin 才顯示） */}
+        {me?.isAdmin && (
+          <Link
+            href="/admin"
+            className="room-card glow-ring sheen tilt p-6 flex flex-col items-center justify-center"
+          >
+            <h2 className="text-2xl font-bold">⚙️ 管理員面板</h2>
+            <p className="mt-2 text-sm opacity-80">管理用戶與房間</p>
+          </Link>
+        )}
+
+        {/* 登出 */}
+        <button
+          onClick={handleLogout}
+          className="room-card glow-ring sheen tilt p-6 flex flex-col items-center justify-center"
+        >
+          <h2 className="text-2xl font-bold">🚪 登出</h2>
+          <p className="mt-2 text-sm opacity-80">返回登入頁</p>
+        </button>
+      </div>
+    </div>
   );
 }
