@@ -1,80 +1,123 @@
 // lib/baccarat.ts
-export type DealResult = {
-  outcome: "PLAYER" | "BANKER" | "TIE";
-  playerTotal: number;
-  bankerTotal: number;
-  playerPair: boolean;
-  bankerPair: boolean;
-  anyPair: boolean;
-  perfectPair: boolean;
-  playerCards: number[];
-  bankerCards: number[];
-};
+export type Suit = "S" | "H" | "D" | "C";
+export type Rank = "A" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "J" | "Q" | "K";
+export type Card = `${Rank}${Suit}`;
 
-// 0~9 的點數；簡化洗牌；可改成更擬真
-function drawCard(): number {
-  const r = Math.floor(Math.random() * 13) + 1; // 1~13
-  if (r >= 10) return 0; // JQK = 0
-  return r % 10;         // A=1, 2~9
+export type Outcome = "PLAYER" | "BANKER" | "TIE";
+export type BetSide = "PLAYER" | "BANKER" | "TIE" | "PLAYER_PAIR" | "BANKER_PAIR";
+
+const RANKS: Rank[] = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+const SUITS: Suit[] = ["S","H","D","C"];
+
+function valueOf(rank: Rank): number {
+  if (rank === "A") return 1;
+  if (rank === "10" || rank === "J" || rank === "Q" || rank === "K") return 0;
+  return parseInt(rank, 10);
 }
-function total(cards: number[]) {
-  return cards.reduce((a, c) => a + c, 0) % 10;
+function total(cards: Card[]): number {
+  const v = cards.reduce((s, c) => s + valueOf(c.replace(/[SHDC]/, "") as Rank), 0);
+  return v % 10;
+}
+function mkShoe(): Card[] {
+  // 1 副牌就夠了；要更多可改 6 或 8
+  const oneDeck: Card[] = [];
+  for (const s of SUITS) for (const r of RANKS) oneDeck.push(`${r}${s}` as Card);
+  // 簡單洗牌
+  for (let i = oneDeck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [oneDeck[i], oneDeck[j]] = [oneDeck[j], oneDeck[i]];
+  }
+  return oneDeck;
 }
 
-export function dealOneRound(): DealResult {
-  const p: number[] = [drawCard(), drawCard()];
-  const b: number[] = [drawCard(), drawCard()];
+/** 依百家規則發牌，回傳完整結果（含是否需要第三張） */
+export function dealBaccarat() {
+  const shoe = mkShoe();
 
-  let pTotal = total(p);
-  let bTotal = total(b);
+  // 初始牌
+  const player: Card[] = [shoe.pop()!, shoe.pop()!];
+  const banker: Card[] = [shoe.pop()!, shoe.pop()!];
 
-  // 天生贏不補牌
-  if (!(pTotal >= 8 || bTotal >= 8)) {
-    // 玩家補牌規則
-    if (pTotal <= 5) {
-      p.push(drawCard());
-      pTotal = total(p);
+  const pTotal2 = total(player);
+  const bTotal2 = total(banker);
+
+  // 天牌（8/9）直接停
+  const natural = (pTotal2 >= 8) || (bTotal2 >= 8);
+
+  let playerDrawn: Card | null = null;
+  let bankerDrawn: Card | null = null;
+
+  if (!natural) {
+    // 閒方第三張規則
+    if (pTotal2 <= 5) {
+      playerDrawn = shoe.pop()!;
+      player.push(playerDrawn);
     }
-    // 莊家補牌規則（簡化版）
-    if (bTotal <= 5) {
-      b.push(drawCard());
-      bTotal = total(b);
+    const p3Val = playerDrawn ? valueOf(playerDrawn.replace(/[SHDC]/, "") as Rank) : null;
+
+    // 莊方第三張規則
+    const b2 = bTotal2;
+    if (playerDrawn === null) {
+      // 閒沒補牌，莊<=5 補
+      if (b2 <= 5) {
+        bankerDrawn = shoe.pop()!;
+        banker.push(bankerDrawn);
+      }
+    } else {
+      // 閒有補牌 → 依對照表
+      // 參考標準表：
+      //  b=0,1,2 → 補
+      //  b=3 → 閒第三張 != 8 才補
+      //  b=4 → 閒第三張在 2~7 補
+      //  b=5 → 閒第三張在 4~7 補
+      //  b=6 → 閒第三張在 6~7 補
+      //  b=7 → 停
+      const v = p3Val!;
+      let doDraw = false;
+      if (b2 <= 2) doDraw = true;
+      else if (b2 === 3) doDraw = v !== 8;
+      else if (b2 === 4) doDraw = v >= 2 && v <= 7;
+      else if (b2 === 5) doDraw = v >= 4 && v <= 7;
+      else if (b2 === 6) doDraw = v === 6 || v === 7;
+      if (doDraw) {
+        bankerDrawn = shoe.pop()!;
+        banker.push(bankerDrawn);
+      }
     }
   }
 
-  const outcome =
-    pTotal > bTotal ? "PLAYER" : pTotal < bTotal ? "BANKER" : "TIE";
+  const pTotal = total(player);
+  const bTotal = total(banker);
 
-  const playerPair = p.length >= 2 && p[0] === p[1];
-  const bankerPair = b.length >= 2 && b[0] === b[1];
-  const anyPair = playerPair || bankerPair;
-  const perfectPair =
-    (playerPair && p[0] === p[1]) || (bankerPair && b[0] === b[1]); // 示意
+  let outcome: Outcome = "TIE";
+  if (pTotal > bTotal) outcome = "PLAYER";
+  else if (bTotal > pTotal) outcome = "BANKER";
 
   return {
-    outcome,
+    player,
+    banker,
     playerTotal: pTotal,
     bankerTotal: bTotal,
-    playerPair,
-    bankerPair,
-    anyPair,
-    perfectPair,
-    playerCards: p,
-    bankerCards: b,
+    outcome,
+    playerPair: player[0].replace(/[SHDC]/,"") === player[1].replace(/[SHDC]/,""),
+    bankerPair: banker[0].replace(/[SHDC]/,"") === banker[1].replace(/[SHDC]/,""),
+    anyPair: false,             // 可依需求再計算更嚴謹
+    perfectPair: false,
   };
 }
 
-// 派彩倍率
-export function payoutRatio(
-  side: "PLAYER" | "BANKER" | "TIE" | "PLAYER_PAIR" | "BANKER_PAIR",
-  result: DealResult
-) {
-  switch (side) {
-    case "PLAYER": return result.outcome === "PLAYER" ? 1 : 0;
-    case "BANKER": return result.outcome === "BANKER" ? 0.95 : 0; // 5% 抽水
-    case "TIE":    return result.outcome === "TIE" ? 8 : 0;
-    case "PLAYER_PAIR": return result.playerPair ? 11 : 0;
-    case "BANKER_PAIR": return result.bankerPair ? 11 : 0;
-    default: return 0;
+/** 賠率（和 8:1；莊 0.95；閒 1:1；對子你可再擴充） */
+export function payoutRatio(side: BetSide, result: { outcome: Outcome; playerPair?: boolean; bankerPair?: boolean }): number {
+  if (side === "TIE") {
+    return result.outcome === "TIE" ? 8 : 0;
   }
+  if (side === "PLAYER") {
+    return result.outcome === "PLAYER" ? 1 : 0;
+  }
+  if (side === "BANKER") {
+    return result.outcome === "BANKER" ? 0.95 : 0;
+  }
+  if (side === "PLAYER_PAIR") return result.playerPair ? 11 : 0;
+  if (side === "BANKER_PAIR") return result.bankerPair ? 11 : 0;
+  return 0;
 }
