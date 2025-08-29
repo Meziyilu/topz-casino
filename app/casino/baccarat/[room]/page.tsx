@@ -3,10 +3,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import CardFlip from "@/components/CardFlip"; // ✅ 新增：真實翻牌元件
 
 type Outcome = "PLAYER" | "BANKER" | "TIE" | null;
 type Phase = "BETTING" | "REVEALING" | "SETTLED";
 
+// 你原本的 StateResp，保留 + 支援兩種牌面欄位
 type StateResp = {
   room: { code: string; name: string; durationSeconds: number };
   day: string;
@@ -14,11 +16,23 @@ type StateResp = {
   roundSeq: number;
   phase: Phase;
   secLeft: number;
-  result: null | { outcome: Outcome; p: number | null; b: number | null };
-  cards?: { player: any[]; banker: any[] };
+  result:
+    | null
+    | {
+        outcome: Outcome;
+        p: number | null;
+        b: number | null;
+        // 若 API 走我之前的建議，會是這兩個
+        playerCards?: Card[] | null;
+        bankerCards?: Card[] | null;
+      };
+  // 若 API 走你現在的版本，會是這個 cards：
+  cards?: { player: Card[]; banker: Card[] };
   myBets: Record<string, number>;
   recent: { roundSeq: number; outcome: Outcome; p: number; b: number }[];
 };
+
+type Card = { rank: number; suit: "S" | "H" | "D" | "C" };
 
 const zhPhase: Record<Phase, string> = {
   BETTING: "下注中",
@@ -39,6 +53,14 @@ function pad4(n: number) {
   return n.toString().padStart(4, "0");
 }
 
+// ✅ 牌面字串（A♠、10♦…）
+function cardLabel(c: Card | undefined) {
+  if (!c) return "";
+  const ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"] as const;
+  const suit: Record<Card["suit"], string> = { S: "♠", H: "♥", D: "♦", C: "♣" };
+  return `${ranks[c.rank - 1]}${suit[c.suit]}`;
+}
+
 export default function RoomPage() {
   const { room } = useParams<{ room: string }>();
   const router = useRouter();
@@ -48,7 +70,7 @@ export default function RoomPage() {
   const [placing, setPlacing] = useState<null | "PLAYER" | "BANKER" | "TIE">(null);
   const [err, setErr] = useState<string>("");
 
-  // ✅ 新增：下注金額（籌碼 + 自訂）
+  // ✅ 籌碼/金額
   const chipOptions = [50, 100, 500, 1000];
   const [amount, setAmount] = useState<number>(100);
   const isAmountValid = useMemo(() => Number.isFinite(amount) && amount > 0, [amount]);
@@ -124,14 +146,19 @@ export default function RoomPage() {
     }
   }
 
-  const outcomeMark = useMemo(() => {
-    if (!data?.result) return null;
-    return data.result.outcome;
-  }, [data?.result]);
+  const outcomeMark = useMemo(() => (data?.result ? data.result.outcome : null), [data?.result]);
+
+  // ✅ 牌面來源：同時支援 data.cards 或 result.playerCards/bankerCards
+  const playerCards = (data?.cards?.player ??
+    data?.result?.playerCards ??
+    []) as Card[];
+  const bankerCards = (data?.cards?.banker ??
+    data?.result?.bankerCards ??
+    []) as Card[];
 
   return (
     <div className="min-h-screen bg-casino-bg text-white">
-      {/* 頂部列 */}
+      {/* 頂部列（原樣） */}
       <div className="max-w-6xl mx-auto px-4 py-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button className="btn glass tilt" onClick={() => router.push("/lobby")} title="回大廳">
@@ -183,7 +210,7 @@ export default function RoomPage() {
               </div>
             </div>
 
-            {/* ✅ 籌碼列 */}
+            {/* 籌碼列（原樣） */}
             <div className="flex flex-wrap gap-2 mb-6">
               {chipOptions.map((c) => (
                 <button
@@ -223,7 +250,7 @@ export default function RoomPage() {
               </button>
             </div>
 
-            {/* 大按鈕：壓 閒／和／莊 */}
+            {/* 大按鈕：壓 閒／和／莊（原樣） */}
             <div className="grid grid-cols-3 gap-4">
               <button
                 disabled={placing === "PLAYER" || data?.phase !== "BETTING" || !isAmountValid}
@@ -280,7 +307,56 @@ export default function RoomPage() {
               </button>
             </div>
 
-            {/* 翻牌/結果 */}
+            {/* ✅ 新增：真實翻牌區（不取代你原本的 FlipTile） */}
+            {(data?.phase === "REVEALING" || data?.phase === "SETTLED") && (
+              <div className="mt-8 space-y-4">
+                <div className="text-sm opacity-80">開牌動畫</div>
+
+                {/* 閒牌三張 */}
+                <div className="flex items-center gap-4">
+                  <div className="w-10 text-center opacity-80">閒</div>
+                  <div className="flex gap-3">
+                    {[0, 1, 2].map((i) => (
+                      <CardFlip
+                        key={`p-${i}`}
+                        backText={cardLabel(playerCards[i])}
+                        frontText="？"
+                        delay={[100, 800, 1400][i]}
+                        highlight={data?.result?.outcome === "PLAYER"}
+                        w={90}
+                        h={128}
+                      />
+                    ))}
+                  </div>
+                  <div className="ml-2 min-w-[80px] text-lg">
+                    {typeof data?.result?.p === "number" ? `${data!.result!.p} 點` : ""}
+                  </div>
+                </div>
+
+                {/* 莊牌三張 */}
+                <div className="flex items-center gap-4">
+                  <div className="w-10 text-center opacity-80">莊</div>
+                  <div className="flex gap-3">
+                    {[0, 1, 2].map((i) => (
+                      <CardFlip
+                        key={`b-${i}`}
+                        backText={cardLabel(bankerCards[i])}
+                        frontText="？"
+                        delay={[400, 1100, 1700][i]}
+                        highlight={data?.result?.outcome === "BANKER"}
+                        w={90}
+                        h={128}
+                      />
+                    ))}
+                  </div>
+                  <div className="ml-2 min-w-[80px] text-lg">
+                    {typeof data?.result?.b === "number" ? `${data!.result!.b} 點` : ""}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 你原本的翻牌/結果（保留） */}
             {data?.phase !== "BETTING" && data?.result && (
               <div className="mt-8">
                 <div className="text-sm opacity-80 mb-2">本局結果</div>
@@ -371,7 +447,7 @@ export default function RoomPage() {
   );
 }
 
-/** 翻牌卡片（帶勝方金光） */
+/** 翻牌卡片（帶勝方金光）——（原樣保留） */
 function FlipTile({
   label,
   value,
