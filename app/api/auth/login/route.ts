@@ -1,23 +1,16 @@
-import { NextRequest, NextResponse } from "next/server";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import bcrypt from "bcryptjs";
 import { signJWT } from "@/lib/jwt";
+import bcrypt from "bcryptjs";
 
-export const runtime = "nodejs";
-
-export async function POST(req: NextRequest) {
-  const url = new URL(req.url);
-  // signout: POST /api/auth/login?signout=1
-  if (url.searchParams.get("signout")) {
-    const res = NextResponse.redirect(new URL("/", req.url));
-    res.cookies.set("token", "", { path: "/", maxAge: 0 });
-    return res;
-  }
-
+export async function POST(req: Request) {
   try {
     const { email, password } = await req.json();
     if (!email || !password) {
-      return NextResponse.json({ error: "缺少 email 或 password" }, { status: 400 });
+      return NextResponse.json({ error: "缺少帳密" }, { status: 400 });
     }
 
     const user = await prisma.user.findUnique({ where: { email } });
@@ -26,17 +19,19 @@ export async function POST(req: NextRequest) {
     const ok = await bcrypt.compare(password, user.password);
     if (!ok) return NextResponse.json({ error: "帳號或密碼錯誤" }, { status: 401 });
 
-    const token = await signJWT({ sub: user.id, email: user.email });
-    const res = NextResponse.json({ ok: true });
+    const token = await signJWT({ sub: user.id });
+    const res = NextResponse.json({
+      user: { id: user.id, email: user.email, isAdmin: user.isAdmin },
+    });
     res.cookies.set("token", token, {
       httpOnly: true,
       sameSite: "lax",
-      secure: true,
+      secure: process.env.NODE_ENV === "production",
       path: "/",
-      maxAge: 60 * 60 * 24 * 7
+      maxAge: 7 * 24 * 3600,
     });
     return res;
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Bad Request" }, { status: 400 });
+    return NextResponse.json({ error: e.message || "Server error" }, { status: 500 });
   }
 }

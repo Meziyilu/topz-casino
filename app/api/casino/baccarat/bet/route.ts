@@ -4,6 +4,7 @@ export const revalidate = 0;
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getUserFromRequest } from "@/lib/auth";
+import type { BetSide, RoundPhase } from "@prisma/client";
 
 function noStoreJson(payload: any, status = 200) {
   return NextResponse.json(payload, {
@@ -16,72 +17,71 @@ function noStoreJson(payload: any, status = 200) {
   });
 }
 
+const SIDES: BetSide[] = ["PLAYER", "BANKER", "TIE", "PLAYER_PAIR", "BANKER_PAIR"];
+
 export async function POST(req: Request) {
   try {
     const me = await getUserFromRequest(req);
-    if (!me) return noStoreJson({ error: "尚未登入" }, 401);
+    if (!me) return noStoreJson({ error: "未登入" }, 401);
 
-    const body = await req.json().catch(() => ({}));
-    const roomCode = String(body?.roomCode || "");
-    const side = String(body?.side || "");
-    const amount = Number(body?.amount || 0);
+    const { roundId, side, amount } = await req.json();
 
-    if (!roomCode) return noStoreJson({ error: "缺少房間代碼" }, 400);
-    if (!["PLAYER", "BANKER", "TIE", "PLAYER_PAIR", "BANKER_PAIR", "ANY_PAIR", "PERFECT_PAIR"].includes(side)) {
-      return noStoreJson({ error: "side 非法" }, 400);
+    if (!roundId || !side || !amount) {
+      return noStoreJson({ error: "缺少參數" }, 400);
     }
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return noStoreJson({ error: "amount 必須是大於 0 的數字" }, 400);
+    if (!SIDES.includes(side)) {
+      return noStoreJson({ error: "不支援的投注項" }, 400);
     }
-
-    const room = await prisma.room.findUnique({ where: { code: roomCode as any } });
-    if (!room) return noStoreJson({ error: "房間不存在" }, 404);
-
-    const round = await prisma.round.findFirst({
-      where: { roomId: room.id },
-      orderBy: { roundSeq: "desc" },
-      select: { id: true, roundSeq: true, phase: true },
-    });
-    if (!round) return noStoreJson({ error: "尚未建立任何局數" }, 500);
-    if (round.phase !== "BETTING") return noStoreJson({ error: "非下注階段" }, 400);
+    const amt = parseInt(String(amount), 10);
+    if (!amt || amt <= 0) {
+      return noStoreJson({ error: "金額必須 > 0" }, 400);
+    }
 
     const result = await prisma.$transaction(async (tx) => {
-      const u = await tx.user.findUnique({ where: { id: me.id }, select: { balance: true, bankBalance: true } });
-      if (!u) throw new Error("找不到使用者");
-      if (u.balance < amount) throw new Error("餘額不足");
+      const round = await tx.round.findUnique({
+        where: { id: String(roundId) },
+        select: { id: true, phase: true },
+      });
+      if (!round) throw new Error("找不到該局");
+      if ((round.phase as RoundPhase) !== "BETTING") throw new Error("非下注時間");
 
-      const afterDebit = await tx.user.update({
+      const u = await tx.user.findUnique({ where: { id: me.id } });
+      if (!u) throw new Error("找不到使用者");
+      if (u.balance < amt) throw new Error("錢包餘額不足");
+
+      const after = await tx.user.update({
         where: { id: me.id },
-        data: { balance: { decrement: amount } },
+        data: { balance: { decrement: amt } },
         select: { balance: true, bankBalance: true },
       });
 
-      await tx.bet.create({
+      const bet = await tx.bet.create({
         data: {
           userId: me.id,
-          roundId: round.id, // ✅ 只用 roundId 關聯該局
-          side: side as any,
-          amount,
+          roundId: round.id,
+          side: side as BetSide,
+          amount: amt,
         },
+        select: { id: true },
       });
 
       await tx.ledger.create({
         data: {
           userId: me.id,
-          type: "BET" as any,
-          target: "WALLET" as any,
-          delta: -amount,
-          memo: `下注 ${side} (房間 ${room.code} #${round.roundSeq})`,
-          balanceAfter: afterDebit.balance,
-          bankAfter: afterDebit.bankBalance,
+          type: "BET_PLACED",
+          target: "WALLET",
+          delta: -amt,
+          memo: `下注 ${side}`,
+          balanceAfter: after.balance,
+          bankAfter: after.bankBalance,
         },
       });
 
-      return { balance: afterDebit.balance };
+      return { betId: bet.id, balance: after.balance };
     });
 
-    return noStoreJson({ ok: true, balance: result.balance });
+    return noStoreJson(result);
   } catch (e: any) {
-    return noStoreJson({ error: e?.message || "下注失敗" }, 400);
+    return noStoreJson({ error: e.message || "Server error" }, 400);
   }
 }

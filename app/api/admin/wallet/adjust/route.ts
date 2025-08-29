@@ -16,63 +16,67 @@ function noStoreJson(payload: any, status = 200) {
   });
 }
 
-type Target = "WALLET" | "BANK";
-
+/** POST { userId: string, target: "WALLET"|"BANK", delta: number, memo?: string } */
 export async function POST(req: Request) {
   try {
-    const admin = await requireAdmin(req);
+    await requireAdmin(req);
+    const { userId, target, delta, memo } = await req.json();
 
-    const body = await req.json().catch(() => ({}));
-    const userId = String(body?.userId || "");
-    const target = String(body?.target || "WALLET").toUpperCase() as Target;
-    const delta = Number(body?.delta || 0);
-    const memo = String(body?.memo || "");
-
-    if (!userId) return noStoreJson({ error: "缺少 userId" }, 400);
-    if (!["WALLET", "BANK"].includes(target)) return noStoreJson({ error: "target 僅能 WALLET/BANK" }, 400);
-    if (!Number.isFinite(delta) || delta === 0) return noStoreJson({ error: "delta 必須為非 0 數字" }, 400);
+    if (!userId || (target !== "WALLET" && target !== "BANK") || typeof delta !== "number") {
+      return noStoreJson({ error: "參數不完整" }, 400);
+    }
+    if (!delta || delta === 0) return noStoreJson({ error: "調整金額不可為 0" }, 400);
 
     const out = await prisma.$transaction(async (tx) => {
-      const u = await tx.user.findUnique({
-        where: { id: userId },
-        select: { balance: true, bankBalance: true },
-      });
+      const u = await tx.user.findUnique({ where: { id: String(userId) } });
       if (!u) throw new Error("找不到使用者");
 
-      let nextBalance = u.balance;
-      let nextBank = u.bankBalance;
-
-      if (target === "WALLET") nextBalance += delta;
-      else nextBank += delta;
-
-      if (nextBalance < 0 || nextBank < 0) throw new Error("調整後餘額不可小於 0");
-
-      const after = await tx.user.update({
-        where: { id: userId },
-        data: {
-          balance: nextBalance,
-          bankBalance: nextBank,
-        },
-        select: { balance: true, bankBalance: true },
-      });
-
-      await tx.ledger.create({
-        data: {
-          userId,
-          type: "ADMIN_ADJUST" as any,
-          target: target as any,
-          delta,
-          memo: memo || `管理員(${admin.email})調整 ${target === "WALLET" ? "錢包" : "銀行"} ${delta > 0 ? "+" : ""}${delta}`,
-          balanceAfter: after.balance,
-          bankAfter: after.bankBalance,
-        },
-      });
-
-      return after;
+      if (target === "WALLET") {
+        const newBal = u.balance + delta;
+        if (newBal < 0) throw new Error("錢包餘額不可為負");
+        const after = await tx.user.update({
+          where: { id: u.id },
+          data: { balance: { increment: delta } },
+          select: { balance: true, bankBalance: true },
+        });
+        await tx.ledger.create({
+          data: {
+            userId: u.id,
+            type: "ADMIN_ADJUST",
+            target: "WALLET",
+            delta,
+            memo: memo || "管理員調整",
+            balanceAfter: after.balance,
+            bankAfter: after.bankBalance,
+          },
+        });
+        return after;
+      } else {
+        const newBank = u.bankBalance + delta;
+        if (newBank < 0) throw new Error("銀行餘額不可為負");
+        const after = await tx.user.update({
+          where: { id: u.id },
+          data: { bankBalance: { increment: delta } },
+          select: { balance: true, bankBalance: true },
+        });
+        await tx.ledger.create({
+          data: {
+            userId: u.id,
+            type: "ADMIN_ADJUST",
+            target: "BANK",
+            delta,
+            memo: memo || "管理員調整",
+            balanceAfter: after.balance,
+            bankAfter: after.bankBalance,
+          },
+        });
+        return after;
+      }
     });
 
-    return noStoreJson({ ok: true, balance: out.balance, bank: out.bankBalance });
+    return noStoreJson(out);
   } catch (e: any) {
-    return noStoreJson({ error: e?.message || "Server error" }, 500);
+    const status = e?.status || 400;
+    return noStoreJson({ error: e.message || "Server error" }, status);
   }
 }
