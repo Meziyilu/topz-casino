@@ -1,92 +1,234 @@
-/* ===== 背景：深色銀河（低顆粒） ===== */
-.lobby-cosmos{
+/* app/globals.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =========================
+   主題變數（深/淺色）
+   ========================= */
+:root {
+  /* 淺色（保留，預設用 dark） */
+  --bg: #f6f7fb;
+  --fg: #0b0f1a;
+  --card: rgba(255,255,255,0.75);
+  --border: rgba(0,0,0,0.12);
+  --ring: rgba(0,0,0,0.25);
+}
+
+:root[data-theme="dark"] {
+  --bg: #0b0f1a;         /* 深宇宙底色 */
+  --fg: #e6f0ff;         /* 文字 */
+  --card: rgba(17, 24, 39, 0.55); /* glass 卡片 */
+  --border: rgba(255,255,255,0.12);
+  --ring: rgba(147,197,253,0.25);
+}
+
+/* =========================
+   全域基底
+   ========================= */
+html, body {
+  height: 100%;
+}
+
+body {
+  color: var(--fg);
+  background: var(--bg);
+  min-height: 100vh;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* =========================
+   宇宙背景（只動背景，不動版面）
+   ========================= */
+/* 星雲層（柔和流動） */
+body::before {
+  content: "";
+  position: fixed;
+  inset: -20vmax;
+  z-index: -2;
   background:
-    radial-gradient(900px 600px at 20% 10%, rgba(94,129,244,.15), transparent 60%),
-    radial-gradient(800px 500px at 80% 20%, rgba(168,85,247,.14), transparent 60%),
-    radial-gradient(900px 700px at 50% 90%, rgba(20,184,166,.12), transparent 60%),
-    linear-gradient(180deg, #0A0F1C 0%, #0A0E19 55%, #090E18 100%);
-  position:absolute; inset:0;
-  animation:lobbyNebula 20s ease-in-out infinite alternate;
-  filter:saturate(110%);
+    radial-gradient(40vmax 40vmax at 10% 20%, rgba(56,189,248,0.14), transparent 60%),
+    radial-gradient(48vmax 48vmax at 80% 10%, rgba(168,85,247,0.13), transparent 60%),
+    radial-gradient(36vmax 36vmax at 60% 80%, rgba(16,185,129,0.10), transparent 60%);
+  filter: blur(24px) saturate(1.1);
+  animation: nebulaDrift 28s ease-in-out infinite alternate;
+  pointer-events: none;
 }
-@keyframes lobbyNebula{from{transform:translateY(0)}to{transform:translateY(-10px)}}
 
-.lobby-stars::before,.lobby-stars::after{
-  content:""; position:absolute; inset:0; pointer-events:none;
+/* 星點層（微微閃爍） */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
   background-image:
-    radial-gradient(2px 2px at 12% 22%, rgba(255,255,255,.6) 50%, transparent 52%),
-    radial-gradient(2px 2px at 72% 12%, rgba(255,255,255,.5) 50%, transparent 52%),
-    radial-gradient(2px 2px at 35% 65%, rgba(255,255,255,.55) 50%, transparent 52%),
-    radial-gradient(2px 2px at 88% 72%, rgba(255,255,255,.55) 50%, transparent 52%);
-}
-.lobby-stars::before{animation:starsBlink 3.8s ease-in-out infinite; opacity:.7}
-.lobby-stars::after{animation:starsBlink 5.2s ease-in-out infinite .8s; opacity:.55}
-@keyframes starsBlink{0%,100%{opacity:.55}50%{opacity:.9}}
-
-/* ===== 跑馬燈 bar ===== */
-.marquee.bar{
-  height:46px; border-radius:14px;
-  background:rgba(16,22,36,.55);
-  border:1px solid rgba(255,255,255,.16);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 10px 30px rgba(0,0,0,.35);
-  overflow:hidden; display:flex; align-items:center; padding:0 12px;
-}
-.marquee-track{display:flex; gap:80px; white-space:nowrap; animation:marqueeRun 22s linear infinite}
-.marquee-text{opacity:.95; font-weight:700; letter-spacing:.3px}
-@keyframes marqueeRun{from{transform:translateX(0)}to{transform:translateX(-50%)}}
-
-/* ===== 膠囊（資訊/動作） ===== */
-.capsule{
-  border-radius:14px; padding:14px 16px;
-  background:rgba(17,24,39,.45);
-  border:1px solid rgba(255,255,255,.18);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 8px 26px rgba(0,0,0,.35);
-}
-.capsule-lg .capsule-value{font-size:28px; font-weight:800; letter-spacing:2px}
-.capsule .capsule-title{font-size:12px; opacity:.75; margin-bottom:6px}
-.capsule .capsule-value{font-size:18px; font-weight:700}
-
-/* 可點的膠囊 */
-.capsule.link{display:flex; align-items:center; justify-content:center; font-weight:700}
-.capsule.link:hover{border-color:rgba(255,255,255,.35)}
-
-/* ===== 房間卡 ===== */
-.room-card{
-  display:block; border-radius:18px; padding:18px;
-  background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
-  border:1px solid rgba(255,255,255,.16);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 12px 34px rgba(0,0,0,.38);
-  transition:transform .18s ease, border-color .18s ease, box-shadow .18s ease;
-}
-.room-card:hover{transform:translateY(-2px); border-color:rgba(255,255,255,.32)}
-.room-head .room-sub{font-size:12px; opacity:.7}
-.room-head .room-title{font-size:22px; font-weight:800; margin-top:4px}
-.room-head .room-desc{opacity:.8; margin-top:4px}
-.room-foot{display:flex; justify-content:space-between; align-items:center; margin-top:16px}
-.room-tag{
-  font-size:12px; padding:6px 10px; border-radius:999px;
-  background:rgba(255,255,255,.09); border:1px solid rgba(255,255,255,.22)
-}
-.room-enter{
-  padding:8px 14px; border-radius:12px; border:1px solid rgba(255,255,255,.22);
-  background:rgba(255,255,255,.06); font-weight:700
+    radial-gradient(2px 2px at 10% 20%, rgba(255,255,255,0.45) 40%, transparent 42%),
+    radial-gradient(2px 2px at 30% 80%, rgba(255,255,255,0.3) 40%, transparent 42%),
+    radial-gradient(1.5px 1.5px at 70% 30%, rgba(255,255,255,0.35) 40%, transparent 42%),
+    radial-gradient(1.5px 1.5px at 85% 65%, rgba(255,255,255,0.25) 40%, transparent 42%),
+    radial-gradient(1.5px 1.5px at 50% 50%, rgba(255,255,255,0.3) 40%, transparent 42%);
+  background-repeat: repeat;
+  animation: twinkle 5.2s ease-in-out infinite;
+  pointer-events: none;
+  opacity: 0.75;
 }
 
-/* ===== Coming 卡 ===== */
-.coming-card{
-  border-radius:18px; padding:18px;
-  background:rgba(17,24,39,.45);
-  border:1px solid rgba(255,255,255,.16);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 12px 34px rgba(0,0,0,.38);
-  position:relative;
-}
-.coming-title{font-size:20px; font-weight:800; margin-bottom:6px}
-.coming-desc{opacity:.92}
-.coming-badge{
-  position:absolute; left:18px; bottom:16px;
-  font-size:12px; padding:6px 10px; border-radius:999px;
-  background:rgba(250,204,21,.18); border:1px solid rgba(250,204,21,.4)
+/* =========================
+   常用 UI：glass / btn / ring
+   ========================= */
+@layer components {
+  .glass {
+    background: var(--card);
+    backdrop-filter: blur(10px) saturate(1.2);
+    -webkit-backdrop-filter: blur(10px) saturate(1.2);
+    border: 1px solid var(--border);
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium transition;
+    background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+    border: 1px solid var(--border);
+  }
+  .btn:hover { box-shadow: 0 0 0 3px var(--ring); }
+
+  .glow-ring { box-shadow: 0 0 0 1px var(--border), 0 0 24px rgba(59,130,246,0.10); }
+
+  .tilt { transform: perspective(800px) rotateX(0.8deg) rotateY(-0.8deg); }
+
+  .strong-outline {
+    border: 2px solid rgba(255,255,255,0.18);
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.08) inset, 0 0 24px rgba(255,255,255,0.06);
+  }
 }
 
-/* 小標題 */
-.lobby-section-title{font-weight:800; opacity:.95; letter-spacing:.3px}
+/* =========================
+   翻牌（百家樂）
+   ========================= */
+.flip-3d { perspective: 1000px; }
+.flip-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+}
+.flip-front, .flip-back {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  border-radius: 0.75rem;
+}
+.flip-front {
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+  border: 1px solid var(--border);
+}
+.flip-back {
+  transform: rotateY(180deg);
+}
+
+@keyframes flipIn {
+  0%   { transform: rotateY(0deg); }
+  100% { transform: rotateY(180deg); }
+}
+
+/* =========================
+   Sheen（亮片掃光）
+   ========================= */
+.sheen {
+  position: relative;
+  overflow: hidden;
+}
+.sheen::after {
+  content: "";
+  position: absolute;
+  top: -40%;
+  left: -60%;
+  width: 30%;
+  height: 180%;
+  transform: rotate(20deg);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
+  animation: sheenMove 3.6s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes sheenMove {
+  0%   { left: -60%; }
+  60%  { left: 140%; }
+  100% { left: 140%; }
+}
+
+/* =========================
+   跑馬燈（marquee）
+   ========================= */
+.marquee {
+  position: relative;
+  overflow: hidden;
+  white-space: nowrap;
+  mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+}
+.marquee__inner {
+  display: inline-block;
+  padding-left: 2rem;
+  animation: marqueeMove 18s linear infinite;
+}
+@keyframes marqueeMove {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* =========================
+   動畫：星雲/星點
+   ========================= */
+@keyframes nebulaDrift {
+  0%   { transform: translate3d(0,0,0) scale(1);     filter: blur(24px) saturate(1.1); }
+  50%  { transform: translate3d(-2%,1%,0) scale(1.03); filter: blur(26px) saturate(1.15); }
+  100% { transform: translate3d(2%,-1%,0) scale(1.05); filter: blur(28px) saturate(1.18); }
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 0.6; }
+  50%      { opacity: 0.9; }
+}
+
+/* =========================
+   細節：表格/捲軸
+   ========================= */
+table th { font-weight: 600; }
+::-webkit-scrollbar {
+  width: 10px; height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.18);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.06);
+  border-radius: 8px;
+}
+
+/* =========================
+   卡片邊框強化（大廳）
+   ========================= */
+.card-frame-strong {
+  border: 2px solid rgba(255,255,255,0.22);
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.10) inset,
+    0 12px 40px rgba(0,0,0,0.35),
+    0 0 60px rgba(59,130,246,0.10);
+}
+
+/* =========================
+   背景可切換（需要時）
+   ========================= */
+/* 若未來想在特定容器上使用，外層加 class="cosmic-bg" 即可 */
+.cosmic-bg {
+  position: relative;
+}
+.cosmic-bg::before,
+.cosmic-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
