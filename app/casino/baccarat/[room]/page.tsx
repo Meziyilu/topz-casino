@@ -15,13 +15,10 @@ type StateResp = {
   phase: Phase;
   secLeft: number;
   result: null | { outcome: Outcome; p: number | null; b: number | null };
-  cards?: { player: any[]; banker: any[] }; // 可能是 "Q♥" 或 {rank,suit}
+  cards?: { player: any[]; banker: any[] };
   myBets: Record<string, number>;
+  balance: number | null; // ⭐ 從 state API 帶回錢包
   recent: { roundSeq: number; outcome: Exclude<Outcome, null>; p: number; b: number }[];
-
-  // ✅ 新增：錢包/銀行餘額（API 會帶）
-  balance?: number;
-  bankBalance?: number;
 };
 
 const zhPhase: Record<Phase, string> = {
@@ -42,42 +39,22 @@ function pad4(n: number) {
   return n.toString().padStart(4, "0");
 }
 
-/** 安全把 {rank,suit} 或字串卡面轉成 "Q♥" 顯示 */
+/** 把 {rank,suit} 或字串卡面轉成 "Q♥" 顯示（安全） */
 function cardToLabel(c: any): string {
   if (c == null) return "?";
   if (typeof c === "string") return c;
 
   const rankMap: Record<string | number, string> = {
-    1: "A",
-    11: "J",
-    12: "Q",
-    13: "K",
-    A: "A",
-    J: "J",
-    Q: "Q",
-    K: "K",
-    a: "A",
-    j: "J",
-    q: "Q",
-    k: "K",
+    1: "A", 11: "J", 12: "Q", 13: "K",
+    A: "A", J: "J", Q: "Q", K: "K",
+    a: "A", j: "J", q: "Q", k: "K",
   };
   const suitMap: Record<string | number, string> = {
-    S: "♠",
-    s: "♠",
-    0: "♠",
-    H: "♥",
-    h: "♥",
-    1: "♥",
-    D: "♦",
-    d: "♦",
-    2: "♦",
-    C: "♣",
-    c: "♣",
-    3: "♣",
-    SPADE: "♠",
-    HEART: "♥",
-    DIAMOND: "♦",
-    CLUB: "♣",
+    S: "♠", s: "♠", 0: "♠",
+    H: "♥", h: "♥", 1: "♥",
+    D: "♦", d: "♦", 2: "♦",
+    C: "♣", c: "♣", 3: "♣",
+    SPADE: "♠", HEART: "♥", DIAMOND: "♦", CLUB: "♣",
   };
 
   let r = (c.rank ?? c.value ?? "?") as string | number;
@@ -90,6 +67,13 @@ function cardToLabel(c: any): string {
   return `${rStr}${sStr}`;
 }
 
+function formatTime(d = new Date()) {
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  const ss = String(d.getSeconds()).padStart(2, "0");
+  return `${hh}:${mm}:${ss}`;
+}
+
 export default function RoomPage() {
   const { room } = useParams<{ room: string }>();
   const router = useRouter();
@@ -99,12 +83,19 @@ export default function RoomPage() {
   const [placing, setPlacing] = useState<null | "PLAYER" | "BANKER" | "TIE">(null);
   const [err, setErr] = useState("");
 
+  // 目前時間
+  const [nowStr, setNowStr] = useState(formatTime());
+  useEffect(() => {
+    const t = setInterval(() => setNowStr(formatTime()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
   // 籌碼/金額
   const chipOptions = [50, 100, 500, 1000];
   const [amount, setAmount] = useState<number>(100);
   const isAmountValid = useMemo(() => Number.isFinite(amount) && amount > 0, [amount]);
 
-  // 輪詢 state
+  // 輪詢 state（包含 balance）
   useEffect(() => {
     let timer: any;
     let mounted = true;
@@ -134,7 +125,7 @@ export default function RoomPage() {
     };
   }, [room]);
 
-  // 倒數本地同步，畫面順暢
+  // 倒數本地同步
   const [localSec, setLocalSec] = useState(0);
   useEffect(() => {
     if (!data) return;
@@ -162,6 +153,8 @@ export default function RoomPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "下注失敗");
       setErr("");
+
+      // 下完注後，等下一輪 state 輪詢會自動更新 balance/myBets/倒數等
     } catch (e: any) {
       setErr(e?.message || "下注失敗");
     } finally {
@@ -171,38 +164,41 @@ export default function RoomPage() {
 
   const outcomeMark = useMemo(() => (data?.result ? data.result.outcome : null), [data?.result]);
 
+  // 下注資訊
+  const myBetPlayer = data?.myBets?.PLAYER ?? 0;
+  const myBetTie = data?.myBets?.TIE ?? 0;
+  const myBetBanker = data?.myBets?.BANKER ?? 0;
+  const myBetTotal = myBetPlayer + myBetTie + myBetBanker;
+
   return (
     <div className="min-h-screen bg-casino-bg text-white">
       {/* 頂部列 */}
-      <div className="max-w-6xl mx-auto px-4 py-6 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-4 py-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button className="btn glass tilt" onClick={() => router.push("/lobby")} title="回大廳">
             ← 回大廳
           </button>
 
-          <InfoPill title="房間" value={data?.room.name || room} />
+          <InfoPill title="房間" value={data?.room.name || String(room)} />
           <InfoPill title="局序" value={data ? pad4(data.roundSeq) : "--"} />
           <InfoPill title="狀態" value={data ? zhPhase[data.phase] : "載入中"} />
           <InfoPill title="倒數" value={typeof localSec === "number" ? `${localSec}s` : "--"} />
-
-          {/* ✅ 新增：錢包餘額 / 銀行餘額（隨輪詢更新） */}
-          <InfoPill title="錢包餘額" value={data?.balance ?? "--"} />
-          <InfoPill title="銀行餘額" value={data?.bankBalance ?? "--"} />
         </div>
 
-        <div className="text-right">
-          {err && <div className="text-red-400 text-sm mb-2">{err}</div>}
-          <div className="opacity-70 text-xs">（時間以伺服器為準）</div>
+        {/* 目前時間 + 錢包餘額（來自 state API） */}
+        <div className="flex items-center gap-3">
+          <InfoPill title="目前時間" value={nowStr} />
+          <InfoPill title="錢包餘額" value={data?.balance ?? "—"} />
         </div>
       </div>
 
       {/* 內容 */}
-      <div className="max-w-6xl mx-auto px-4 grid md:grid-cols-3 gap-6 pb-16">
-        {/* 左：下注＋結果 */}
-        <div className="md:col-span-2">
+      <div className="max-w-7xl mx-auto px-4 grid lg:grid-cols-3 gap-6 pb-16">
+        {/* 左：下注＋結果（佔兩欄） */}
+        <div className="lg:col-span-2">
           <div className="glass glow-ring p-6 rounded-2xl sheen">
             {/* 金額列 */}
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
               <div className="text-xl font-bold">下注面板</div>
               <div className="text-sm opacity-80">
                 單注金額：
@@ -252,6 +248,15 @@ export default function RoomPage() {
               >
                 清除
               </button>
+            </div>
+
+            {/* 下注資訊小卡 */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <InfoCard title="目前選擇" value={`${amount} 元`} />
+              <InfoCard title="我壓閒" value={`${myBetPlayer} 元`} color="cyan" />
+              <InfoCard title="我壓和" value={`${myBetTie} 元`} color="amber" />
+              <InfoCard title="我壓莊" value={`${myBetBanker} 元`} color="rose" />
+              <InfoCard title="本局合計" value={`${myBetTotal} 元`} wide />
             </div>
 
             {/* 壓 閒/和/莊 */}
@@ -312,6 +317,8 @@ export default function RoomPage() {
               {data?.phase === "BETTING" && (
                 <div className="mt-3 opacity-80">等待下注結束後將自動開牌…</div>
               )}
+
+              {err && <div className="text-red-400 text-sm mt-3">{err}</div>}
             </div>
           </div>
         </div>
@@ -433,6 +440,34 @@ function InfoPill({ title, value }: { title: string; value: string | number | un
   );
 }
 
+function InfoCard({
+  title,
+  value,
+  color,
+  wide,
+}: {
+  title: string;
+  value: string | number;
+  color?: "cyan" | "amber" | "rose";
+  wide?: boolean;
+}) {
+  const border =
+    color === "cyan"
+      ? "border-cyan-400/50"
+      : color === "amber"
+      ? "border-amber-300/50"
+      : color === "rose"
+      ? "border-rose-400/50"
+      : "border-white/20";
+
+  return (
+    <div className={`glass rounded-xl p-3 ${border} border ${wide ? "col-span-2 md:col-span-2" : ""}`}>
+      <div className="text-xs opacity-70">{title}</div>
+      <div className="text-lg font-bold mt-1">{value}</div>
+    </div>
+  );
+}
+
 function BetButton({
   label,
   rate,
@@ -528,17 +563,17 @@ function CardList({
       <div className="flex gap-3 justify-center items-center min-h-[88px]">
         {cards && cards.length > 0 ? (
           cards.map((raw, i) => {
-            const label = cardToLabel(raw);
+            const lbl = cardToLabel(raw);
             return (
               <div
-                key={`${label}-${i}`}
+                key={`${lbl}-${i}`}
                 className="w-14 h-20 rounded-xl bg-white/10 border border-white/20 
                            flex items-center justify-center text-lg font-bold
                            animate-[flipIn_.6s_ease_forwards]"
                 style={{ animationDelay: `${i * 0.28}s` }}
-                title={label}
+                title={lbl}
               >
-                {label}
+                {lbl}
               </div>
             );
           })

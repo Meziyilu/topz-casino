@@ -6,9 +6,9 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifyJWT } from "@/lib/jwt";
 import type { Prisma } from "@prisma/client";
-import { dealRound, payoutRatio } from "@/lib/baccarat";
+import { dealRound } from "@/lib/baccarat"; // 需提供完整一局（含牌面/點數/對子）
 
-// ---------- 小工具 ----------
+// ----------------- 小工具 -----------------
 const asAny = <T = any>(v: unknown) => v as T;
 
 function noStoreJson(payload: any, status = 200) {
@@ -36,11 +36,11 @@ async function getUser(req: Request) {
   if (!payload?.sub) return null;
   return prisma.user.findUnique({
     where: { id: String(payload.sub) },
-    select: { id: true, email: true, isAdmin: true, balance: true, bankBalance: true },
+    select: { id: true, email: true, isAdmin: true, balance: true },
   });
 }
 
-// 台北當日 00:00（UTC 表示）
+// 台北日 00:00（用 UTC 儲存）
 function taipeiDayStart(date = new Date()) {
   const utc = date.getTime();
   const tpe = utc + 8 * 3600_000;
@@ -48,7 +48,7 @@ function taipeiDayStart(date = new Date()) {
   return new Date(tpeStart - 8 * 3600_000);
 }
 
-// ---------- 交易內工具 ----------
+// ----------------- 資料庫交易工具 -----------------
 async function createNextRoundTx(
   tx: Prisma.TransactionClient,
   roomId: string,
@@ -56,7 +56,7 @@ async function createNextRoundTx(
 ) {
   const latest = await tx.round.findFirst({
     where: { roomId, day: dayStartUtc },
-    orderBy: [{ roundSeq: "desc" }],
+    orderBy: { roundSeq: "desc" },
     select: { roundSeq: true },
   });
   const nextSeq = (latest?.roundSeq ?? 0) + 1;
@@ -86,7 +86,7 @@ async function createNextRoundTx(
   });
 }
 
-// 在「翻到 REVEALING 的瞬間」產生一次牌並寫入（若尚未有）
+// 在切到 REVEALING 的瞬間，若尚未有結果，發一次牌並寫入
 async function ensureCardsOnReveal(
   tx: Prisma.TransactionClient,
   roundId: string
@@ -98,34 +98,30 @@ async function ensureCardsOnReveal(
       outcome: true,
       playerTotal: true,
       bankerTotal: true,
-      playerPair: true,
-      bankerPair: true,
-      anyPair: true,
-      perfectPair: true,
       playerCards: true,
       bankerCards: true,
     },
   });
-  if (r?.outcome) return; // 已有結果 & 牌面，不重發
+  if (r?.outcome) return;
 
-  const result = dealRound(); // ✅ 由 lib/baccarat 產生一局（含牌面與點數）
+  const result = dealRound(); // { outcome, playerTotal, bankerTotal, playerPair, bankerPair, anyPair, perfectPair, playerCards, bankerCards }
   await tx.round.update({
     where: { id: roundId },
     data: {
       outcome: asAny(result.outcome),
       playerTotal: result.playerTotal,
       bankerTotal: result.bankerTotal,
-      playerPair: result.playerPair,
-      bankerPair: result.bankerPair,
-      anyPair: result.anyPair,
-      perfectPair: result.perfectPair,
-      playerCards: asAny(result.playerCards),
-      bankerCards: asAny(result.bankerCards),
+      playerPair: result.playerPair ?? false,
+      bankerPair: result.bankerPair ?? false,
+      anyPair: result.anyPair ?? false,
+      perfectPair: result.perfectPair ?? false,
+      playerCards: asAny(result.playerCards ?? []),
+      bankerCards: asAny(result.bankerCards ?? []),
     },
   });
 }
 
-// 結算（不重發牌，只派彩與設置 settledAt）
+// 結算（不重發牌）
 async function settleRoundTx(tx: Prisma.TransactionClient, roundId: string) {
   const r = await tx.round.findUnique({
     where: { id: roundId },
@@ -138,45 +134,76 @@ async function settleRoundTx(tx: Prisma.TransactionClient, roundId: string) {
       bankerPair: true,
     },
   });
-  if (!r?.outcome) return; // 理論上 REVEALING 已經產生
+  if (!r?.outcome) return;
 
   const bets = await tx.bet.findMany({
     where: { roundId },
     select: { id: true, userId: true, side: true, amount: true },
   });
 
+  // 基本賠率
+  const baseRate: Record<string, number> = {
+    PLAYER: 1.0,
+    BANKER: 0.95,
+    TIE: 8.0,
+    PLAYER_PAIR: 11.0,
+    BANKER_PAIR: 11.0,
+  };
+
   for (const b of bets) {
-    // 和局退注：若 outcome=TIE 且非 TIE，則不輸不贏（這裡給 0）
-    if (r.outcome === asAny("TIE") && b.side !== asAny("TIE")) continue;
+    // 和局退非和注
+    if (r.outcome === asAny("TIE") && b.side !== asAny("TIE")) {
+      const after = await tx.user.update({
+        where: { id: b.userId },
+        data: { balance: { increment: b.amount } },
+        select: { balance: true, bankBalance: true },
+      });
+      await tx.ledger.create({
+        data: {
+          userId: b.userId,
+          type: asAny("PAYOUT"),
+          target: asAny("WALLET"),
+          delta: b.amount,
+          memo: `和局退注`,
+          balanceAfter: after.balance,
+          bankAfter: after.bankBalance,
+        },
+      });
+      continue;
+    }
 
-    const ratio = payoutRatio(asAny(b.side), {
-      outcome: asAny(r.outcome),
-      playerTotal: r.playerTotal ?? 0,
-      bankerTotal: r.bankerTotal ?? 0,
-      playerPair: r.playerPair ?? false,
-      bankerPair: r.bankerPair ?? false,
-    });
+    // 一般派彩
+    let win = 0;
+    if (b.side === asAny("PLAYER") && r.outcome === asAny("PLAYER")) {
+      win = Math.floor(b.amount * baseRate.PLAYER);
+    } else if (b.side === asAny("BANKER") && r.outcome === asAny("BANKER")) {
+      win = Math.floor(b.amount * baseRate.BANKER);
+    } else if (b.side === asAny("TIE") && r.outcome === asAny("TIE")) {
+      win = Math.floor(b.amount * baseRate.TIE);
+    } else if (b.side === asAny("PLAYER_PAIR") && r.playerPair) {
+      win = Math.floor(b.amount * baseRate.PLAYER_PAIR);
+    } else if (b.side === asAny("BANKER_PAIR") && r.bankerPair) {
+      win = Math.floor(b.amount * baseRate.BANKER_PAIR);
+    }
 
-    const win = Math.floor(b.amount * ratio);
-    if (win <= 0) continue;
-
-    const after = await tx.user.update({
-      where: { id: b.userId },
-      data: { balance: { increment: win } },
-      select: { balance: true, bankBalance: true },
-    });
-
-    await tx.ledger.create({
-      data: {
-        userId: b.userId,
-        type: asAny("PAYOUT"),
-        target: asAny("WALLET"),
-        delta: win,
-        memo: `派彩 ${b.side} 中獎`,
-        balanceAfter: after.balance,
-        bankAfter: after.bankBalance,
-      },
-    });
+    if (win > 0) {
+      const after = await tx.user.update({
+        where: { id: b.userId },
+        data: { balance: { increment: win } },
+        select: { balance: true, bankBalance: true },
+      });
+      await tx.ledger.create({
+        data: {
+          userId: b.userId,
+          type: asAny("PAYOUT"),
+          target: asAny("WALLET"),
+          delta: win,
+          memo: `派彩 ${String(b.side)} +${win}`,
+          balanceAfter: after.balance,
+          bankAfter: after.bankBalance,
+        },
+      });
+    }
   }
 
   await tx.round.update({
@@ -185,15 +212,16 @@ async function settleRoundTx(tx: Prisma.TransactionClient, roundId: string) {
   });
 }
 
-// ---------- Handler ----------
+// ----------------- Handler -----------------
 export async function GET(req: Request) {
   try {
+    const me = await getUser(req);
+
     const url = new URL(req.url);
     const roomCode = String(url.searchParams.get("room") || "R60").toUpperCase();
     const force = String(url.searchParams.get("force") || "");
-    const me = await getUser(req); // ✅ 這裡會帶 balance/bankBalance
 
-    // 房間
+    // 找房間
     const room = await prisma.room.findFirst({
       where: { code: asAny(roomCode) },
       select: { id: true, code: true, name: true, durationSeconds: true },
@@ -202,22 +230,22 @@ export async function GET(req: Request) {
 
     const dayStartUtc = taipeiDayStart(new Date());
 
-    // 管理員強制重啟
+    // 管理員強制重啟（結掉當日局 -> 新開）
     if (force === "restart") {
       if (!me?.isAdmin) return noStoreJson({ error: "需要管理員權限" }, 403);
       await prisma.$transaction(async (tx) => {
         await tx.round.updateMany({
-          where: { roomId: room.id, day: dayStartUtc },
+          where: { roomId: room.id, day: dayStartUtc, phase: asAny({ not: "SETTLED" }) },
           data: { phase: asAny("SETTLED"), settledAt: new Date() },
         });
         await createNextRoundTx(tx, room.id, dayStartUtc);
       });
     }
 
-    // 取當日最新局
+    // 取當日最新一局（若沒有就建一局）
     let round = await prisma.round.findFirst({
       where: { roomId: room.id, day: dayStartUtc },
-      orderBy: [{ roundSeq: "desc" }],
+      orderBy: { roundSeq: "desc" },
       select: {
         id: true,
         createdAt: true,
@@ -238,11 +266,11 @@ export async function GET(req: Request) {
       );
     }
 
-    // 狀態推進 + 倒數
+    // 狀態推進與倒數
     const now = Date.now();
     const startMs = new Date(round.startedAt ?? round.createdAt).getTime();
     const betLeft = Math.max(0, room.durationSeconds - Math.floor((now - startMs) / 1000));
-    const revealDuration = 6; // 稍微拉長，動畫更有時間
+    const revealDuration = 6; // 開牌展示秒數
 
     let phase: "BETTING" | "REVEALING" | "SETTLED" = (round.phase as any) || "BETTING";
     let secLeft = 0;
@@ -250,7 +278,6 @@ export async function GET(req: Request) {
     if (phase === "BETTING") {
       secLeft = betLeft;
       if (secLeft === 0) {
-        // 切到 REVEALING 並發一次牌
         await prisma.$transaction(async (tx) => {
           await tx.round.update({
             where: { id: round!.id },
@@ -262,8 +289,8 @@ export async function GET(req: Request) {
         secLeft = revealDuration;
 
         // 重新撈含牌面
-        round = await prisma.round.findUnique({
-          where: { id: round.id },
+        round = (await prisma.round.findUnique({
+          where: { id: round!.id },
           select: {
             id: true,
             createdAt: true,
@@ -276,15 +303,12 @@ export async function GET(req: Request) {
             playerCards: true,
             bankerCards: true,
           },
-        });
+        }))!;
       }
     }
 
     if (phase === "REVEALING") {
-      const revealElapsed = Math.max(
-        0,
-        Math.floor((now - startMs) / 1000) - room.durationSeconds
-      );
+      const revealElapsed = Math.max(0, Math.floor((now - startMs) / 1000) - room.durationSeconds);
       secLeft = Math.max(0, revealDuration - revealElapsed);
       if (secLeft === 0) {
         await prisma.$transaction(async (tx) => settleRoundTx(tx, round!.id));
@@ -294,20 +318,17 @@ export async function GET(req: Request) {
 
     if (phase === "SETTLED") {
       const hasNext = await prisma.round.findFirst({
-        where: {
-          roomId: room.id,
-          day: dayStartUtc,
-          roundSeq: asAny({ gt: round.roundSeq }),
-        },
+        where: { roomId: room.id, day: dayStartUtc, roundSeq: asAny({ gt: round.roundSeq }) },
         select: { id: true },
       });
       if (!hasNext) {
         await prisma.$transaction(async (tx) => createNextRoundTx(tx, room.id, dayStartUtc));
       }
+
       // 撈最新一局
-      round = await prisma.round.findFirst({
+      round = (await prisma.round.findFirst({
         where: { roomId: room.id, day: dayStartUtc },
-        orderBy: [{ roundSeq: "desc" }],
+        orderBy: { roundSeq: "desc" },
         select: {
           id: true,
           createdAt: true,
@@ -320,28 +341,22 @@ export async function GET(req: Request) {
           playerCards: true,
           bankerCards: true,
         },
-      });
+      }))!;
 
-      phase = (round!.phase as any) || "BETTING";
-      const st = new Date(round!.startedAt ?? round!.createdAt).getTime();
+      phase = (round.phase as any) || "BETTING";
+      const st = new Date(round.startedAt ?? round.createdAt).getTime();
       if (phase === "BETTING") {
         secLeft = Math.max(0, room.durationSeconds - Math.floor((Date.now() - st) / 1000));
       } else if (phase === "REVEALING") {
-        const revElapsed = Math.max(
-          0,
-          Math.floor((Date.now() - st) / 1000) - room.durationSeconds
-        );
+        const revElapsed = Math.max(0, Math.floor((Date.now() - st) / 1000) - room.durationSeconds);
         secLeft = Math.max(0, revealDuration - revElapsed);
       } else {
         secLeft = 0;
       }
     }
 
-    // 我的投注（roundId 聚合）+ 餘額
+    // 我的投注（對齊 bet API：以 roundId 聚合）
     let myBets: Record<string, number> = {};
-    let balance: number | null = null;
-    let bankBalance: number | null = null;
-
     if (me && round) {
       const rows = await prisma.bet.groupBy({
         by: ["side"],
@@ -351,55 +366,44 @@ export async function GET(req: Request) {
       for (const r of rows) {
         (myBets as any)[r.side as any] = (r as any)._sum.amount ?? 0;
       }
-      balance = me.balance ?? 0;
-      bankBalance = me.bankBalance ?? 0;
     }
 
-    // 今日近 20 局結果
+    // 今日近 20 局（已結算）
     const recentRows = await prisma.round.findMany({
       where: { roomId: room.id, day: dayStartUtc, phase: asAny("SETTLED") },
-      orderBy: [{ roundSeq: "desc" }],
+      orderBy: { roundSeq: "desc" },
       take: 20,
-      select: {
-        roundSeq: true,
-        outcome: true,
-        playerTotal: true,
-        bankerTotal: true,
-      },
+      select: { roundSeq: true, outcome: true, playerTotal: true, bankerTotal: true },
     });
 
     return noStoreJson({
       room: { code: room.code, name: room.name, durationSeconds: room.durationSeconds },
       day: dayStartUtc,
-      roundId: round!.id,
-      roundSeq: round!.roundSeq,
+      roundId: round.id,
+      roundSeq: round.roundSeq,
       phase,
       secLeft,
       result:
         phase !== "BETTING"
           ? {
-              outcome: (round!.outcome ?? null) as any,
-              p: round!.playerTotal ?? null,
-              b: round!.bankerTotal ?? null,
+              outcome: (round.outcome ?? null) as any,
+              p: round.playerTotal ?? null,
+              b: round.bankerTotal ?? null,
             }
           : null,
-      // 翻牌時帶出牌面
       cards:
         phase !== "BETTING"
           ? {
-              player: (round!.playerCards as any) ?? [],
-              banker: (round!.bankerCards as any) ?? [],
+              player: (round.playerCards as any) ?? [],
+              banker: (round.bankerCards as any) ?? [],
             }
           : undefined,
-
-      // ✅ 新增回傳：餘額
-      balance,
-      bankBalance,
-
       myBets,
+      // ⭐ 新增：把目前使用者錢包一起帶回前端（若未登入則為 null）
+      balance: me?.balance ?? null,
       recent: recentRows.map((r) => ({
         roundSeq: r.roundSeq,
-        outcome: r.outcome,
+        outcome: r.outcome as any,
         p: r.playerTotal ?? 0,
         b: r.bankerTotal ?? 0,
       })),
