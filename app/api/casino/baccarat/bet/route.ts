@@ -1,134 +1,75 @@
 // app/api/casino/baccarat/bet/route.ts
 export const dynamic = "force-dynamic";
-export const revalidate = 0;
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getUserFromRequest } from "@/lib/auth";
 
+const asAny = <T = any>(v: unknown) => v as T;
+
 function noStoreJson(payload: any, status = 200) {
   return NextResponse.json(payload, {
     status,
     headers: {
-      "Cache-Control":
-        "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
       Pragma: "no-cache",
       Expires: "0",
     },
   });
 }
 
+// 台北當天 00:00（用 UTC 儲存）
 function taipeiDayStart(date = new Date()) {
-  const utc = date.getTime();
-  const tpe = utc + 8 * 3600_000;
-  const tpeStart = Math.floor(tpe / 86_400_000) * 86_400_000;
-  return new Date(tpeStart - 8 * 3600_000);
+  const ms = date.getTime() + 8 * 3600_000;
+  const startMs = Math.floor(ms / 86_400_000) * 86_400_000;
+  return new Date(startMs - 8 * 3600_000);
 }
-
-type Side = "PLAYER" | "BANKER" | "TIE";
 
 export async function POST(req: Request) {
   try {
-    const url = new URL(req.url);
-
-    // 1) 驗身分
     const me = await getUserFromRequest(req);
-    if (!me) return noStoreJson({ error: "請先登入" }, 401);
+    if (!me) return noStoreJson({ error: "未登入" }, 401);
 
-    // 2) 驗輸入
-    const body = await req.json().catch(() => ({}));
-    const roomCode = String(body?.roomCode || "").toUpperCase();
-    const side: Side = body?.side;
-    const amount = Number(body?.amount);
+    const body = await req.json();
+    const { roomCode, side, amount } = body as {
+      roomCode: string;
+      side: "PLAYER" | "BANKER" | "TIE" | "PLAYER_PAIR" | "BANKER_PAIR";
+      amount: number;
+    };
 
-    if (!["R30", "R60", "R90"].includes(roomCode)) {
-      return noStoreJson({ error: "房間代碼錯誤" }, 400);
-    }
-    if (!["PLAYER", "BANKER", "TIE"].includes(String(side))) {
-      return noStoreJson({ error: "下注方位錯誤" }, 400);
-    }
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return noStoreJson({ error: "下注金額需為正整數" }, 400);
+    if (!roomCode || !side || !amount || amount <= 0) {
+      return noStoreJson({ error: "參數錯誤" }, 400);
     }
 
-    // 3) 取房間
+    // 找房間
     const room = await prisma.room.findFirst({
-      where: { code: roomCode as any },
-      select: { id: true, durationSeconds: true },
+      where: { code: asAny(roomCode) },
+      select: { id: true, code: true, durationSeconds: true },
     });
     if (!room) return noStoreJson({ error: "房間不存在" }, 404);
 
-    const dayStartUtc = taipeiDayStart(new Date());
-
-    // 4) 今日最新一局（沒有就自動開第一局）
-    let round = await prisma.round.findFirst({
-      where: { roomId: room.id, day: dayStartUtc },
+    // 找當日最新局（必須在 BETTING）
+    const day = taipeiDayStart(new Date());
+    const round = await prisma.round.findFirst({
+      where: { roomId: room.id, day },
       orderBy: [{ roundSeq: "desc" }],
-      select: {
-        id: true,
-        roundSeq: true,
-        phase: true,
-        startedAt: true,
-        createdAt: true,
-      },
+      select: { id: true, phase: true },
     });
-
-    if (!round) {
-      const now = new Date();
-      round = await prisma.$transaction(async (tx) => {
-        return tx.round.create({
-          data: {
-            roomId: room.id,
-            day: dayStartUtc,
-            roundSeq: 1,
-            phase: "BETTING" as any,
-            createdAt: now,
-            startedAt: now,
-          },
-          select: {
-            id: true,
-            roundSeq: true,
-            phase: true,
-            startedAt: true,
-            createdAt: true,
-          },
-        });
-      });
+    if (!round) return noStoreJson({ error: "目前無進行中的局" }, 400);
+    if ((round.phase as any) !== "BETTING") {
+      return noStoreJson({ error: "非下注時間" }, 400);
     }
 
-    // 5) 是否仍在下注時間
-    const startMs = new Date(round.startedAt ?? round.createdAt).getTime();
-    const elapsed = Math.floor((Date.now() - startMs) / 1000);
-    const betWindow = room.durationSeconds; // 與 /state 同參數
-    const stillBetting = round.phase === "BETTING" && elapsed < betWindow;
+    // 餘額檢查
+    const user = await prisma.user.findUnique({
+      where: { id: me.id },
+      select: { balance: true, bankBalance: true },
+    });
+    if (!user) return noStoreJson({ error: "使用者不存在" }, 404);
+    if (user.balance < amount) return noStoreJson({ error: "餘額不足" }, 400);
 
-    if (!stillBetting) {
-      return noStoreJson(
-        {
-          error: "目前非下注時間",
-          debug: {
-            phase: round.phase,
-            elapsed,
-            betWindow,
-            roundId: round.id,
-            roundSeq: round.roundSeq,
-          },
-        },
-        400
-      );
-    }
-
-    // 6) 交易：餘額→扣款→建立 Bet(roundId)→Ledger
-    const result = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.findUnique({
-        where: { id: me.id },
-        select: { balance: true, bankBalance: true },
-      });
-      if (!user) throw new Error("使用者不存在");
-      if (user.balance < amount) {
-        return { ok: false as const, error: "餘額不足" };
-      }
-
+    // 下注：扣款 + 建Bet + 記帳
+    const bet = await prisma.$transaction(async (tx) => {
       const after = await tx.user.update({
         where: { id: me.id },
         data: { balance: { decrement: amount } },
@@ -138,18 +79,17 @@ export async function POST(req: Request) {
       const bet = await tx.bet.create({
         data: {
           userId: me.id,
-          roundId: round!.id, // ✅ 你的 Bet 只有 roundId，不要寫 roomId
-          side: side as any,
+          roundId: round.id, // ✅ 只存 roundId
+          side: asAny(side),
           amount,
         },
-        select: { id: true, side: true, amount: true },
       });
 
       await tx.ledger.create({
         data: {
           userId: me.id,
-          type: "BET_PLACED" as any,
-          target: "WALLET" as any,
+          type: asAny("BET_PLACED"),
+          target: asAny("WALLET"),
           delta: -amount,
           memo: `下注 ${side} ${amount}`,
           balanceAfter: after.balance,
@@ -157,19 +97,10 @@ export async function POST(req: Request) {
         },
       });
 
-      return { ok: true as const, betId: bet.id, balance: after.balance };
+      return bet;
     });
 
-    if (!result.ok) {
-      return noStoreJson({ error: result.error }, 400);
-    }
-
-    return noStoreJson({
-      ok: true,
-      betId: result.betId,
-      balance: result.balance,
-      message: "下注成功",
-    });
+    return noStoreJson({ ok: true, betId: bet.id });
   } catch (e: any) {
     return noStoreJson({ error: e?.message || "Server error" }, 500);
   }
