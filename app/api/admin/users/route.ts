@@ -4,10 +4,10 @@ export const revalidate = 0;
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth";
-import bcrypt from "bcryptjs";
+import type { Prisma } from "@prisma/client";
+import { getUserFromRequest } from "@/lib/auth";
 
-function noStoreJson(payload: any, status = 200) {
+function json(payload: any, status = 200) {
   return NextResponse.json(payload, {
     status,
     headers: {
@@ -18,26 +18,30 @@ function noStoreJson(payload: any, status = 200) {
   });
 }
 
+// 取得使用者清單（可搜尋 q）
 export async function GET(req: Request) {
   try {
-    await requireAdmin(req);
+    const me = await getUserFromRequest(req);
+    if (!me?.isAdmin) return json({ error: "需要管理員權限" }, 403);
+
     const url = new URL(req.url);
     const q = (url.searchParams.get("q") || "").trim();
+    const take = Math.min(Number(url.searchParams.get("take") || 100), 200);
 
-    const where =
-      q.length > 0
-        ? {
-            OR: [
-              { email: { contains: q, mode: "insensitive" } },
-              { name: { contains: q, mode: "insensitive" } },
-            ],
-          }
-        : {};
+    const where: Prisma.UserWhereInput = q
+      ? {
+          OR: [
+            { email: { contains: q, mode: "insensitive" as Prisma.QueryMode } },
+            // 如果 User.name 在 schema 裡是可選欄位，照樣可以用 contains 搜尋
+            { name: { contains: q, mode: "insensitive" as Prisma.QueryMode } },
+          ],
+        }
+      : {};
 
     const users = await prisma.user.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      take: 100,
+      take,
       select: {
         id: true,
         email: true,
@@ -49,36 +53,8 @@ export async function GET(req: Request) {
       },
     });
 
-    return noStoreJson({ users });
+    return json({ users });
   } catch (e: any) {
-    return noStoreJson({ error: e?.message || "Server error" }, e?.status || 500);
-  }
-}
-
-export async function POST(req: Request) {
-  try {
-    await requireAdmin(req);
-    const body = await req.json().catch(() => ({}));
-    const { email, password, isAdmin = false, name } = body || {};
-
-    if (!email || !password) {
-      return noStoreJson({ error: "email 與 password 為必填" }, 400);
-    }
-
-    const hashed = await bcrypt.hash(String(password), 10);
-
-    const user = await prisma.user.create({
-      data: {
-        email: String(email),
-        password: hashed,
-        isAdmin: Boolean(isAdmin),
-        name: name ? String(name) : null,
-      },
-      select: { id: true, email: true, isAdmin: true, name: true, createdAt: true },
-    });
-
-    return noStoreJson({ user });
-  } catch (e: any) {
-    return noStoreJson({ error: e?.message || "Server error" }, e?.status || 500);
+    return json({ error: e?.message || "Server error" }, 500);
   }
 }
