@@ -101,7 +101,7 @@ model Round {
   startedAt    DateTime
   settledAt    DateTime?
 
-  // 結果／牌面
+  // 結果欄位（結算後才會有）
   outcome      RoundOutcome?
   playerTotal  Int?
   bankerTotal  Int?
@@ -115,7 +115,7 @@ model Round {
   room  Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
   bets  Bet[]
 
-  @@unique([roomId, day, roundSeq])
+  @@unique([roomId, day, roundSeq]) // 同一房、同一天的局序不得重覆
   @@index([roomId, day, roundSeq])
   @@index([phase])
   @@index([createdAt])

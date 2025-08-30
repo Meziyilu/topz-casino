@@ -1,3 +1,44 @@
+-- === PATCH 1: 補上 enum LedgerType::TRANSFER（給 shadow DB 重播歷史遷移時用） ===
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_type t
+    JOIN pg_enum e ON e.enumtypid = t.oid
+    WHERE t.typname = 'LedgerType'
+      AND e.enumlabel = 'TRANSFER'
+  ) THEN
+    ALTER TYPE "LedgerType" ADD VALUE 'TRANSFER';
+  END IF;
+END $$;
+
+-- === PATCH 2（可選，保險）: 若歷史曾用 REVEAL，確保 REVEALING 存在 ===
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM pg_type t
+    JOIN pg_enum e ON e.enumtypid = t.oid
+    WHERE t.typname = 'RoundPhase'
+      AND e.enumlabel = 'REVEAL'
+  ) AND NOT EXISTS (
+    SELECT 1
+    FROM pg_type t
+    JOIN pg_enum e ON e.enumtypid = t.oid
+    WHERE t.typname = 'RoundPhase'
+      AND e.enumlabel = 'REVEALING'
+  )
+  THEN
+    ALTER TYPE "RoundPhase" ADD VALUE 'REVEALING';
+  END IF;
+END $$;
+
+-- 下面開始是你原本這個遷移檔的內容（請保留）…
+/*
+...（原本 migration.sql 內容原樣保留）...
+*/
+
+
 -- Safe migration for baccarat_rooms_rounds
 -- This script is idempotent-ish: guarded with IF EXISTS / IF NOT EXISTS where possible.
 
