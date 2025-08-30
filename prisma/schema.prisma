@@ -12,7 +12,7 @@ model User {
   email       String   @unique
   password    String
   isAdmin     Boolean  @default(false)
-
+  name        String?
   balance     Int      @default(0)   // 錢包餘額
   bankBalance Int      @default(0)   // 銀行餘額
 
