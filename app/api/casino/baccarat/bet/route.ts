@@ -83,15 +83,16 @@ export async function POST(req: Request) {
 
     // 5) 下單 + 餘額扣款 + 建 ledger（交易內）
     const created = await prisma.$transaction(async (tx) => {
-      // 寫 Bet：🔥 一定要帶 roomId，對齊 DB 的 NOT NULL
+      // ✅ 型別逃逸：即便 Prisma Client 目前沒有 roomId 的型別，也能編譯通過；
+      //    同時會把 roomId 寫進資料庫（你 DB 已是 NOT NULL）。
       const bet = await tx.bet.create({
-        data: {
+        data: asAny({
           userId: me.id,
           roundId: round!.id,
-          roomId: room.id, // 🔥 重點：補上 roomId
+          roomId: room.id, // 需要 NOT NULL：保留寫入
           side: asAny(side),
           amount,
-        },
+        }),
         select: { id: true },
       });
 
