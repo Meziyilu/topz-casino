@@ -26,10 +26,7 @@
 /* =========================
    全域基底
    ========================= */
-html, body {
-  height: 100%;
-}
-
+html, body { height: 100%; }
 body {
   color: var(--fg);
   background: var(--bg);
@@ -39,14 +36,13 @@ body {
 }
 
 /* =========================
-   宇宙背景（只動背景，不動版面）
+   宇宙背景（元件版）
+   對應 <div class="cosmic-sky" />, <div class="cosmic-sky nebula" />, <div class="cosmic-particles" />
    ========================= */
-/* 星雲層（柔和流動） */
-body::before {
-  content: "";
+.cosmic-sky {
   position: fixed;
   inset: -20vmax;
-  z-index: -2;
+  z-index: 0;
   background:
     radial-gradient(40vmax 40vmax at 10% 20%, rgba(56,189,248,0.14), transparent 60%),
     radial-gradient(48vmax 48vmax at 80% 10%, rgba(168,85,247,0.13), transparent 60%),
@@ -55,20 +51,25 @@ body::before {
   animation: nebulaDrift 28s ease-in-out infinite alternate;
   pointer-events: none;
 }
-
-/* 星點層（微微閃爍） */
-body::after {
-  content: "";
+.cosmic-sky.nebula {
+  inset: -30vmax;
+  background:
+    radial-gradient(32vmax 32vmax at 20% 70%, rgba(99,102,241,0.16), transparent 60%),
+    radial-gradient(36vmax 36vmax at 85% 65%, rgba(236,72,153,0.12), transparent 60%),
+    radial-gradient(28vmax 28vmax at 45% 20%, rgba(59,130,246,0.12), transparent 60%);
+  filter: blur(30px) saturate(1.2);
+  animation-duration: 34s;
+}
+.cosmic-particles {
   position: fixed;
   inset: 0;
-  z-index: -1;
+  z-index: 1;
   background-image:
     radial-gradient(2px 2px at 10% 20%, rgba(255,255,255,0.45) 40%, transparent 42%),
     radial-gradient(2px 2px at 30% 80%, rgba(255,255,255,0.3) 40%, transparent 42%),
     radial-gradient(1.5px 1.5px at 70% 30%, rgba(255,255,255,0.35) 40%, transparent 42%),
     radial-gradient(1.5px 1.5px at 85% 65%, rgba(255,255,255,0.25) 40%, transparent 42%),
     radial-gradient(1.5px 1.5px at 50% 50%, rgba(255,255,255,0.3) 40%, transparent 42%);
-  background-repeat: repeat;
   animation: twinkle 5.2s ease-in-out infinite;
   pointer-events: none;
   opacity: 0.75;
@@ -84,18 +85,14 @@ body::after {
     -webkit-backdrop-filter: blur(10px) saturate(1.2);
     border: 1px solid var(--border);
   }
-
   .btn {
     @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium transition;
     background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
     border: 1px solid var(--border);
   }
   .btn:hover { box-shadow: 0 0 0 3px var(--ring); }
-
   .glow-ring { box-shadow: 0 0 0 1px var(--border), 0 0 24px rgba(59,130,246,0.10); }
-
   .tilt { transform: perspective(800px) rotateX(0.8deg) rotateY(-0.8deg); }
-
   .strong-outline {
     border: 2px solid rgba(255,255,255,0.18);
     box-shadow: 0 0 0 1px rgba(255,255,255,0.08) inset, 0 0 24px rgba(255,255,255,0.06);
@@ -106,75 +103,86 @@ body::after {
    翻牌（百家樂）
    ========================= */
 .flip-3d { perspective: 1000px; }
-.flip-inner {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  transform-style: preserve-3d;
-}
+.flip-inner { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; }
 .flip-front, .flip-back {
-  position: absolute;
-  inset: 0;
-  backface-visibility: hidden;
-  border-radius: 0.75rem;
+  position: absolute; inset: 0; backface-visibility: hidden; border-radius: 0.75rem;
 }
 .flip-front {
   display: flex; align-items: center; justify-content: center;
   background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
   border: 1px solid var(--border);
 }
-.flip-back {
-  transform: rotateY(180deg);
-}
-
-@keyframes flipIn {
-  0%   { transform: rotateY(0deg); }
-  100% { transform: rotateY(180deg); }
-}
+.flip-back { transform: rotateY(180deg); }
+@keyframes flipIn { 0% { transform: rotateY(0deg); } 100% { transform: rotateY(180deg); } }
 
 /* =========================
    Sheen（亮片掃光）
    ========================= */
-.sheen {
-  position: relative;
-  overflow: hidden;
-}
+.sheen { position: relative; overflow: hidden; }
 .sheen::after {
-  content: "";
-  position: absolute;
-  top: -40%;
-  left: -60%;
-  width: 30%;
-  height: 180%;
-  transform: rotate(20deg);
+  content: ""; position: absolute; top: -40%; left: -60%;
+  width: 30%; height: 180%; transform: rotate(20deg);
   background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
-  animation: sheenMove 3.6s linear infinite;
-  pointer-events: none;
+  animation: sheenMove 3.6s linear infinite; pointer-events: none;
 }
-
-@keyframes sheenMove {
-  0%   { left: -60%; }
-  60%  { left: 140%; }
-  100% { left: 140%; }
-}
+@keyframes sheenMove { 0%{ left:-60%; } 60%{ left:140%; } 100%{ left:140%; } }
 
 /* =========================
-   跑馬燈（marquee）
+   跑馬燈（對應 page.tsx 的 .marquee-container / .marquee-track）
+   使用 CSS 變數：--marquee-speed（秒）
    ========================= */
-.marquee {
+.marquee-container{
   position: relative;
   overflow: hidden;
   white-space: nowrap;
   mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
 }
-.marquee__inner {
+.marquee-track{
+  display: inline-flex;
+  gap: 4rem;
+  align-items: center;
+  padding-block: .4rem;
+  will-change: transform;
+  animation: marqueeSlide linear infinite;
+  animation-duration: var(--marquee-speed, 90s);
+  /* 提升銳利度 */
+  text-rendering: optimizeLegibility;
+}
+.marquee-track > span{
   display: inline-block;
-  padding-left: 2rem;
-  animation: marqueeMove 18s linear infinite;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+
+/* 舊的 .marquee/.marquee__inner 仍保留，給其它頁可相容 */
+.marquee { position: relative; overflow: hidden; white-space: nowrap;
+  mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+}
+.marquee__inner { display: inline-block; padding-left: 2rem; animation: marqueeMove 18s linear infinite; }
+
+@keyframes marqueeSlide {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
 }
 @keyframes marqueeMove {
-  0%   { transform: translateX(0); }
+  0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }
+}
+
+/* =========================
+   卡片底部流光（對應 .glow-bar）
+   ========================= */
+.glow-bar{
+  background:
+    linear-gradient(90deg, rgba(59,130,246,0) 0%, rgba(59,130,246,.65) 50%, rgba(59,130,246,0) 100%);
+  filter: blur(.6px);
+  opacity: .85;
+  animation: glowBarMove 2.8s ease-in-out infinite;
+}
+@keyframes glowBarMove {
+  0%,100% { transform: translateX(-10%); }
+  50%     { transform: translateX(10%); }
 }
 
 /* =========================
@@ -185,27 +193,15 @@ body::after {
   50%  { transform: translate3d(-2%,1%,0) scale(1.03); filter: blur(26px) saturate(1.15); }
   100% { transform: translate3d(2%,-1%,0) scale(1.05); filter: blur(28px) saturate(1.18); }
 }
-
-@keyframes twinkle {
-  0%, 100% { opacity: 0.6; }
-  50%      { opacity: 0.9; }
-}
+@keyframes twinkle { 0%,100%{ opacity:.6; } 50%{ opacity:.9; } }
 
 /* =========================
    細節：表格/捲軸
    ========================= */
 table th { font-weight: 600; }
-::-webkit-scrollbar {
-  width: 10px; height: 10px;
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.18);
-  border-radius: 8px;
-}
-::-webkit-scrollbar-track {
-  background: rgba(255,255,255,0.06);
-  border-radius: 8px;
-}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 8px; }
+::-webkit-scrollbar-track { background: rgba(255,255,255,0.06); border-radius: 8px; }
 
 /* =========================
    卡片邊框強化（大廳）
@@ -221,14 +217,29 @@ table th { font-weight: 600; }
 /* =========================
    背景可切換（需要時）
    ========================= */
-/* 若未來想在特定容器上使用，外層加 class="cosmic-bg" 即可 */
-.cosmic-bg {
-  position: relative;
+.cosmic-bg { position: relative; }
+.cosmic-bg::before, .cosmic-bg::after { content:""; position:absolute; inset:0; pointer-events:none; }
+
+/* =========================
+   Utilities：提供 bg-casino-bg 給容器使用
+   ========================= */
+@layer utilities{
+  .bg-casino-bg{
+    background:
+      radial-gradient(1200px 600px at 10% -10%, rgba(99,102,241,0.10), transparent 60%),
+      radial-gradient(1000px 500px at 110% 10%, rgba(236,72,153,0.08), transparent 60%),
+      linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.00) 60%),
+      var(--bg);
+  }
 }
-.cosmic-bg::before,
-.cosmic-bg::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
+
+/* =========================
+   無障礙：降低動態
+   ========================= */
+@media (prefers-reduced-motion: reduce){
+  .cosmic-sky, .cosmic-sky.nebula, .cosmic-particles,
+  .marquee-track, .marquee__inner, .sheen::after, .glow-bar {
+    animation-duration: 0.001s !important;
+    animation-iteration-count: 1 !important;
+  }
 }

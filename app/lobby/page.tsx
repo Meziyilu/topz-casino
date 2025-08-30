@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import Script from "next/script"; // ✅ 新增：用來載入客服腳本
 
 /** 小工具 */
 function formatTime(d = new Date()) {
@@ -374,6 +375,19 @@ export default function LobbyPage() {
       <footer className="max-w-7xl mx-auto px-4 pb-10 pt-6 opacity-70 text-xs relative z-10">
         © {new Date().getFullYear()} TOPZ Casino. All rights reserved.
       </footer>
+
+      {/* ✅ 新增：Tawk.to 客服（afterInteractive，不影響水合） */}
+      <Script id="tawk-to" strategy="afterInteractive">{`
+        var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
+        (function(){
+          var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
+          s1.async=true;
+          s1.src='https://embed.tawk.to/68b349c7d19aeb19234310df/1j3u5gcnb';
+          s1.charset='UTF-8';
+          s1.setAttribute('crossorigin','*');
+          s0.parentNode.insertBefore(s1,s0);
+        })();
+      `}</Script>
     </div>
   );
 }
