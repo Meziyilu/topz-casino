@@ -3,10 +3,8 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import prisma, { Prisma, $Enums } from "@/lib/prisma";
 import { verifyJWT } from "@/lib/jwt";
-
-const asAny = <T = any>(v: unknown) => v as T;
 
 function noStoreJson(payload: any, status = 200) {
   return NextResponse.json(payload, {
@@ -34,6 +32,9 @@ function taipeiDayStart(date = new Date()) {
   const tpeStart = Math.floor(tpe / 86_400_000) * 86_400_000;
   return new Date(tpeStart - 8 * 3600_000);
 }
+function addDays(d: Date, days: number) {
+  return new Date(d.getTime() + days * 86_400_000);
+}
 
 export async function POST(req: Request) {
   try {
@@ -41,6 +42,7 @@ export async function POST(req: Request) {
     const token = readTokenFromHeaders(req);
     const payload = token ? await verifyJWT(token).catch(() => null) : null;
     if (!payload?.sub) return noStoreJson({ error: "未登入" }, 401);
+
     const me = await prisma.user.findUnique({
       where: { id: String(payload.sub) },
       select: { id: true, balance: true },
@@ -49,48 +51,62 @@ export async function POST(req: Request) {
 
     // 2) 解析 body
     const body = await req.json().catch(() => ({}));
-    const roomCode = String(body.roomCode || "").toUpperCase();
-    const side = String(body.side || "");
+    const roomCode = String(body.roomCode || "").toUpperCase().trim();
+    const sideStr = String(body.side || "").toUpperCase().trim();
     const amount = Number(body.amount || 0);
 
     if (!roomCode) return noStoreJson({ error: "缺少 roomCode" }, 400);
-    if (!["PLAYER", "BANKER", "TIE"].includes(side))
-      return noStoreJson({ error: "side 不合法" }, 400);
-    if (!Number.isFinite(amount) || amount <= 0)
-      return noStoreJson({ error: "金額不合法" }, 400);
 
-    // 3) 找房間與當日最新一局
+    // 轉為 Prisma Enum，避免 as-any
+    const validSides: Array<$Enums.BetSide> = ["PLAYER", "BANKER", "TIE", "PLAYER_PAIR", "BANKER_PAIR"];
+    if (!validSides.includes(sideStr as $Enums.BetSide)) {
+      return noStoreJson({ error: "side 不合法" }, 400);
+    }
+    const side = sideStr as $Enums.BetSide;
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return noStoreJson({ error: "金額不合法" }, 400);
+    }
+
+    // 3) 找房間
     const room = await prisma.room.findFirst({
-      where: { code: asAny(roomCode) },
+      where: { code: roomCode as unknown as $Enums.RoomCode },
       select: { id: true, durationSeconds: true },
     });
     if (!room) return noStoreJson({ error: "房間不存在" }, 404);
 
+    // 4) 找當日最新一局（用區間而不是等於）
     const dayStartUtc = taipeiDayStart(new Date());
+    const dayEndUtc = addDays(dayStartUtc, 1);
+
     const round = await prisma.round.findFirst({
-      where: { roomId: room.id, day: dayStartUtc },
+      where: {
+        roomId: room.id,
+        day: { gte: dayStartUtc, lt: dayEndUtc },
+      },
       orderBy: { roundSeq: "desc" },
       select: { id: true, phase: true, startedAt: true, createdAt: true },
     });
     if (!round) return noStoreJson({ error: "本日尚未開局" }, 400);
 
-    if (round.phase !== asAny("BETTING"))
+    if (round.phase !== "BETTING") {
       return noStoreJson({ error: "非下注時間" }, 400);
+    }
 
-    // 4) 餘額檢查
-    if (me.balance < amount)
+    // 5) 餘額檢查
+    if (me.balance < amount) {
       return noStoreJson({ error: "餘額不足" }, 400);
+    }
 
-    // 5) 下單 + 餘額扣款 + 建 ledger（交易內）
+    // 6) 交易：建立下注、扣錢、寫入 ledger
     const created = await prisma.$transaction(async (tx) => {
-      // ✅ Prisma 6.15：使用關聯 connect，且包含必填的 room
       const bet = await tx.bet.create({
         data: {
           amount,
-          side: asAny(side),
+          side,
           user:  { connect: { id: me.id } },
           round: { connect: { id: round.id } },
-          room:  { connect: { id: room.id } }, // ← 必填關聯（你的 BetCreateInput 要求）
+          room:  { connect: { id: room.id } }, // Bet.room 為必填關聯
         },
         select: { id: true },
       });
@@ -104,8 +120,8 @@ export async function POST(req: Request) {
       await tx.ledger.create({
         data: {
           userId: me.id,
-          type: asAny("BET_PLACED"),
-          target: asAny("WALLET"),
+          type: "BET_PLACED",
+          target: "WALLET",
           delta: -amount,
           memo: `下注 ${side} -${amount}`,
           balanceAfter: after.balance,
