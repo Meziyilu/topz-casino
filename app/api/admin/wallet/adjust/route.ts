@@ -1,61 +1,77 @@
 // app/api/admin/wallet/adjust/route.ts
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { verifyJWT } from "@/lib/jwt";
+import { requireAdmin } from "@/lib/auth";
 
 function noStoreJson(payload: any, status = 200) {
   return NextResponse.json(payload, {
     status,
     headers: {
-      "Cache-Control": "no-store, no-cache, must-revalidate",
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+      Pragma: "no-cache",
+      Expires: "0",
     },
   });
 }
 
-function readTokenFromHeaders(req: Request): string | null {
-  const raw = req.headers.get("cookie");
-  if (!raw) return null;
-  const m = raw.match(/(?:^|;\s*)token=([^;]+)/);
-  return m ? decodeURIComponent(m[1]) : null;
-}
-
-async function getAdmin(req: Request) {
-  const token = readTokenFromHeaders(req);
-  if (!token) return null;
-  const payload = await verifyJWT(token).catch(() => null);
-  if (!payload?.sub) return null;
-  const u = await prisma.user.findUnique({ where: { id: String(payload.sub) } });
-  return u?.isAdmin ? u : null;
-}
-
 export async function POST(req: Request) {
   try {
-    const me = await getAdmin(req);
-    if (!me) return noStoreJson({ error: "需要管理員權限" }, 403);
+    await requireAdmin(req);
+    const body = await req.json().catch(() => ({}));
+    const { userId, amount, target = "WALLET", memo = "" } = body || {};
 
-    const { userId, delta, note } = await req.json();
-    if (!userId || !delta) return noStoreJson({ error: "缺少參數" }, 400);
+    if (!userId || !Number.isFinite(Number(amount))) {
+      return noStoreJson({ error: "userId / amount 不正確" }, 400);
+    }
+    if (!["WALLET", "BANK"].includes(String(target))) {
+      return noStoreJson({ error: "target 僅支援 WALLET / BANK" }, 400);
+    }
 
-    const user = await prisma.user.findUnique({ where: { id: String(userId) } });
-    if (!user) return noStoreJson({ error: "找不到用戶" }, 404);
+    const amt = Math.trunc(Number(amount));
 
-    const after = await prisma.user.update({
-      where: { id: userId },
-      data: { balance: { increment: delta } },
-      select: { balance: true, bankBalance: true },
+    const result = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({ where: { id: String(userId) } });
+      if (!user) throw new Error("使用者不存在");
+
+      let balanceAfter = user.balance;
+      let bankAfter = user.bankBalance;
+
+      if (target === "WALLET") balanceAfter = user.balance + amt;
+      else bankAfter = user.bankBalance + amt;
+
+      if (balanceAfter < 0 || bankAfter < 0) {
+        throw new Error("金額不可為負");
+      }
+
+      const updated = await tx.user.update({
+        where: { id: user.id },
+        data:
+          target === "WALLET"
+            ? { balance: { increment: amt } }
+            : { bankBalance: { increment: amt } },
+        select: { balance: true, bankBalance: true },
+      });
+
+      const ledger = await tx.ledger.create({
+        data: {
+          userId: user.id,
+          type: "ADMIN_ADJUST",
+          target: target as any, // BalanceTarget
+          delta: amt,
+          memo: memo ? String(memo) : null,
+          balanceAfter: updated.balance,
+          bankAfter: updated.bankBalance,
+        },
+      });
+
+      return { updated, ledger };
     });
 
-    await prisma.ledger.create({
-      data: {
-        userId,
-        type: delta >= 0 ? "ADMIN_ADD" : "ADMIN_DEDUCT",
-        amount: delta,
-        note: note || `管理員調整 ${delta}`,
-      },
-    });
-
-    return noStoreJson({ ok: true, balance: after.balance });
+    return noStoreJson({ ok: true, ...result });
   } catch (e: any) {
-    return noStoreJson({ error: e.message || "Server error" }, 500);
+    return noStoreJson({ error: e?.message || "Server error" }, e?.status || 500);
   }
 }

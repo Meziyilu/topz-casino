@@ -1,31 +1,34 @@
 // app/api/admin/users/[id]/route.ts
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { verifyJWT } from "@/lib/jwt";
+import { requireAdmin } from "@/lib/auth";
 
 function noStoreJson(payload: any, status = 200) {
-  return NextResponse.json(payload, { status, headers: { "Cache-Control": "no-store" } });
-}
-function readTokenFromHeaders(req: Request) {
-  const raw = req.headers.get("cookie");
-  if (!raw) return null;
-  const m = raw.match(/(?:^|;\s*)token=([^;]+)/);
-  return m ? decodeURIComponent(m[1]) : null;
-}
-async function getAdmin(req: Request) {
-  const token = readTokenFromHeaders(req);
-  if (!token) return null;
-  const payload = await verifyJWT(token).catch(() => null);
-  if (!payload?.sub) return null;
-  const u = await prisma.user.findUnique({ where: { id: String(payload.sub) } });
-  return u?.isAdmin ? u : null;
+  return NextResponse.json(payload, {
+    status,
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+      Pragma: "no-cache",
+      Expires: "0",
+    },
+  });
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
-  const me = await getAdmin(req);
-  if (!me) return noStoreJson({ error: "需要管理員權限" }, 403);
+export async function DELETE(
+  req: Request,
+  ctx: { params: { id: string } }
+) {
+  try {
+    await requireAdmin(req);
+    const id = ctx.params.id;
+    if (!id) return noStoreJson({ error: "缺少 id" }, 400);
 
-  const userId = params.id;
-  await prisma.user.delete({ where: { id: userId } });
-  return noStoreJson({ ok: true });
+    await prisma.user.delete({ where: { id } });
+    return noStoreJson({ ok: true });
+  } catch (e: any) {
+    return noStoreJson({ error: e?.message || "Server error" }, e?.status || 500);
+  }
 }

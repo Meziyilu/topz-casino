@@ -1,43 +1,58 @@
 // app/api/admin/ledger/route.ts
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { verifyJWT } from "@/lib/jwt";
+import { requireAdmin } from "@/lib/auth";
 
 function noStoreJson(payload: any, status = 200) {
-  return NextResponse.json(payload, { status, headers: { "Cache-Control": "no-store" } });
-}
-function readTokenFromHeaders(req: Request) {
-  const raw = req.headers.get("cookie");
-  if (!raw) return null;
-  const m = raw.match(/(?:^|;\s*)token=([^;]+)/);
-  return m ? decodeURIComponent(m[1]) : null;
-}
-async function getAdmin(req: Request) {
-  const token = readTokenFromHeaders(req);
-  if (!token) return null;
-  const payload = await verifyJWT(token).catch(() => null);
-  if (!payload?.sub) return null;
-  const u = await prisma.user.findUnique({ where: { id: String(payload.sub) } });
-  return u?.isAdmin ? u : null;
+  return NextResponse.json(payload, {
+    status,
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+      Pragma: "no-cache",
+      Expires: "0",
+    },
+  });
 }
 
 export async function GET(req: Request) {
-  const me = await getAdmin(req);
-  if (!me) return noStoreJson({ error: "需要管理員權限" }, 403);
+  try {
+    await requireAdmin(req);
+    const url = new URL(req.url);
+    const userId = url.searchParams.get("userId") || "";
+    const limit = Math.max(10, Math.min(200, Number(url.searchParams.get("limit") || 50)));
+    const cursor = url.searchParams.get("cursor") || undefined;
 
-  const logs = await prisma.ledger.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 100,
-    include: { user: { select: { email: true } } },
-  });
-  return noStoreJson(
-    logs.map((l) => ({
-      id: l.id,
-      user: l.user.email,
-      type: l.type,
-      amount: l.amount,
-      note: l.note,
-      createdAt: l.createdAt,
-    }))
-  );
+    const where = userId ? { userId } : {};
+
+    const rows = await prisma.ledger.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      select: {
+        id: true,
+        userId: true,
+        type: true,
+        delta: true,
+        memo: true,
+        balanceAfter: true,
+        bankAfter: true,
+        createdAt: true,
+        user: { select: { email: true } },
+      },
+    });
+
+    let nextCursor: string | undefined = undefined;
+    if (rows.length > limit) {
+      nextCursor = rows[limit].id;
+      rows.splice(limit);
+    }
+
+    return noStoreJson({ items: rows, nextCursor });
+  } catch (e: any) {
+    return noStoreJson({ error: e?.message || "Server error" }, e?.status || 500);
+  }
 }
