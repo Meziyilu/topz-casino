@@ -376,6 +376,29 @@ export default function LobbyPage() {
         © {new Date().getFullYear()} TOPZ Casino. All rights reserved.
       </footer>
 
+      {/* ✅ Minnit Chat 容器（保持官方屬性） */}
+      <div className="max-w-7xl mx-auto px-4 pb-8 pt-2 relative z-10">
+        <span
+          className="minnit-chat-sembed"
+          style={{ display: "none" }}
+          data-chatname="https://organizations.minnit.chat/719691555913932/c/Main?embed"
+          data-style="width:90%; height:500px; max-height:90vh;"
+          data-version="1.52"
+        >
+          Chat
+        </span>
+        <p className="powered-by-minnit mt-2 text-xs opacity-60">
+          <a
+            href="https://minnit.chat"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:opacity-100"
+          >
+            Add a group chat to your website with Minnit Chat
+          </a>
+        </p>
+      </div>
+
       {/* ✅ 新增：Tawk.to 客服（afterInteractive，不影響水合） */}
       <Script id="tawk-to" strategy="afterInteractive">{`
         var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
@@ -388,6 +411,14 @@ export default function LobbyPage() {
           s0.parentNode.insertBefore(s1,s0);
         })();
       `}</Script>
+
+      {/* ✅ Minnit Chat Script */}
+      <Script
+        id="minnit-embed"
+        src="https://minnit.chat/js/embed.js?c=1752216300"
+        strategy="afterInteractive"
+        defer
+      />
     </div>
   );
 }
