@@ -67,7 +67,7 @@ export async function POST(req: Request) {
     if (!room) return noStoreJson({ error: "房間不存在" }, 404);
 
     const dayStartUtc = taipeiDayStart(new Date());
-    let round = await prisma.round.findFirst({
+    const round = await prisma.round.findFirst({
       where: { roomId: room.id, day: dayStartUtc },
       orderBy: { roundSeq: "desc" },
       select: { id: true, phase: true, startedAt: true, createdAt: true },
@@ -83,16 +83,14 @@ export async function POST(req: Request) {
 
     // 5) 下單 + 餘額扣款 + 建 ledger（交易內）
     const created = await prisma.$transaction(async (tx) => {
-      // ✅ 型別逃逸：即便 Prisma Client 目前沒有 roomId 的型別，也能編譯通過；
-      //    同時會把 roomId 寫進資料庫（你 DB 已是 NOT NULL）。
+      // ✅ 僅寫 roundId；不寫 roomId，可同時相容「有/沒有 Bet.roomId 的 schema」
       const bet = await tx.bet.create({
-        data: asAny({
+        data: {
           userId: me.id,
-          roundId: round!.id,
-          roomId: room.id, // 需要 NOT NULL：保留寫入
+          roundId: round.id,
           side: asAny(side),
           amount,
-        }),
+        },
         select: { id: true },
       });
 
