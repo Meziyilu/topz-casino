@@ -8,6 +8,8 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/* ===== Enums ===== */
+
 enum LedgerType {
   DEPOSIT
   WITHDRAW
@@ -48,6 +50,8 @@ enum BetSide {
   BANKER_PAIR
 }
 
+/* ===== Models ===== */
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -58,6 +62,7 @@ model User {
   bankBalance  Int      @default(0)
   createdAt    DateTime @default(now())
 
+  // relations
   bets    Bet[]
   ledgers Ledger[]
 
@@ -89,6 +94,7 @@ model Room {
   createdAt       DateTime  @default(now())
 
   rounds Round[]
+  bets   Bet[]     // 反查 Bet.roomId
 }
 
 model Round {
@@ -101,7 +107,7 @@ model Round {
   startedAt    DateTime
   settledAt    DateTime?
 
-  // 結果欄位（結算後才會有）
+  // 結果（結算後）
   outcome      RoundOutcome?
   playerTotal  Int?
   bankerTotal  Int?
@@ -115,7 +121,7 @@ model Round {
   room  Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
   bets  Bet[]
 
-  @@unique([roomId, day, roundSeq])
+  @@unique([roomId, day, roundSeq]) // 同一房、同一天的局序不得重覆
   @@index([roomId, day, roundSeq])
   @@index([phase])
   @@index([createdAt])
@@ -125,13 +131,16 @@ model Bet {
   id        String   @id @default(cuid())
   userId    String
   roundId   String
+  roomId    String   // ✅ 必填：與目前 DB 對齊（NOT NULL）
   side      BetSide
   amount    Int
   createdAt DateTime @default(now())
 
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  room  Room  @relation(fields: [roomId], references: [id], onDelete: Cascade)
 
   @@index([roundId, userId])
   @@index([userId, createdAt])
+  @@index([roomId, roundId])
 }
