@@ -115,7 +115,7 @@ model Round {
   room  Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
   bets  Bet[]
 
-  @@unique([roomId, day, roundSeq]) // 同一房、同一天的局序不得重覆
+  @@unique([roomId, day, roundSeq])
   @@index([roomId, day, roundSeq])
   @@index([phase])
   @@index([createdAt])
