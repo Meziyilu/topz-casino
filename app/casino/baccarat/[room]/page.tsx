@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import CardSVG from "@/components/CardSVG";
 
 type Outcome = "PLAYER" | "BANKER" | "TIE" | null;
 type Phase = "BETTING" | "REVEALING" | "SETTLED";
@@ -15,7 +16,7 @@ type StateResp = {
   phase: Phase;
   secLeft: number;
   result: null | { outcome: Outcome; p: number | null; b: number | null };
-  cards?: { player: any[]; banker: any[] }; // 可能是 "Q♥" 或 {rank,suit}
+  cards?: { player: any[]; banker: any[] };
   myBets: Record<string, number>;
   recent: { roundSeq: number; outcome: Exclude<Outcome, null>; p: number; b: number }[];
 };
@@ -36,34 +37,6 @@ function fmtOutcome(o: Outcome) {
 }
 function pad4(n: number) {
   return n.toString().padStart(4, "0");
-}
-
-/** 安全把 {rank,suit} 或字串卡面轉成 "Q♥" 顯示 */
-function cardToLabel(c: any): string {
-  if (c == null) return "?";
-  if (typeof c === "string") return c;
-
-  const rankMap: Record<string | number, string> = {
-    1: "A", 11: "J", 12: "Q", 13: "K",
-    A: "A", J: "J", Q: "Q", K: "K",
-    a: "A", j: "J", q: "Q", k: "K",
-  };
-  const suitMap: Record<string | number, string> = {
-    S: "♠", s: "♠", 0: "♠",
-    H: "♥", h: "♥", 1: "♥",
-    D: "♦", d: "♦", 2: "♦",
-    C: "♣", c: "♣", 3: "♣",
-    SPADE: "♠", HEART: "♥", DIAMOND: "♦", CLUB: "♣",
-  };
-
-  let r = (c.rank ?? c.value ?? "?") as string | number;
-  let s = (c.suit ?? c.s ?? "?") as string | number;
-
-  const rStr =
-    typeof r === "number" ? rankMap[r] ?? String(r) : rankMap[r] ?? String(r).toUpperCase();
-  const sStr = suitMap[s] ?? suitMap[String(s).toUpperCase()] ?? "■";
-
-  return `${rStr}${sStr}`;
 }
 
 export default function RoomPage() {
@@ -198,7 +171,6 @@ export default function RoomPage() {
                   disabled={data?.phase !== "BETTING"}
                   className={`px-3 py-1 rounded-full border transition
                     ${amount === c ? "border-white/70 bg-white/10" : "border-white/20 hover:border-white/40"}`}
-                  title={`下注 ${c}`}
                 >
                   {c}
                 </button>
@@ -355,31 +327,17 @@ export default function RoomPage() {
             </div>
           </div>
 
-          {/* 表情路子（簡化 6x6） */}
+          {/* 表情路子 → 改用 🔵🔴🟡 */}
           <div className="glass glow-ring p-6 rounded-2xl">
             <div className="text-xl font-bold mb-4">表情路子</div>
             <div className="grid grid-cols-6 gap-3">
               {(data?.recent || []).slice(0, 36).map((r) => (
                 <div
                   key={`emo-${r.roundSeq}`}
-                  className="w-8 h-8 rounded-md flex items-center justify-center text-xs"
-                  style={{
-                    background:
-                      r.outcome === "PLAYER"
-                        ? "rgba(103,232,249,.22)"
-                        : r.outcome === "BANKER"
-                        ? "rgba(253,164,175,.22)"
-                        : "rgba(253,230,138,.22)",
-                    border:
-                      r.outcome === "PLAYER"
-                        ? "1px solid rgba(103,232,249,.6)"
-                        : r.outcome === "BANKER"
-                        ? "1px solid rgba(253,164,175,.6)"
-                        : "1px solid rgba(253,230,138,.6)",
-                  }}
+                  className="w-8 h-8 rounded-md flex items-center justify-center text-base bg-white/5 border border-white/10"
                   title={`#${pad4(r.roundSeq)}：${fmtOutcome(r.outcome)}  閒${r.p} / 莊${r.b}`}
                 >
-                  {r.outcome === "PLAYER" ? "😀" : r.outcome === "BANKER" ? "😎" : "😐"}
+                  {r.outcome === "PLAYER" ? "🔵" : r.outcome === "BANKER" ? "🔴" : "🟡"}
                 </div>
               ))}
               {(!data || (data && data.recent.length === 0)) &&
@@ -499,21 +457,17 @@ function CardList({
 
       <div className="flex gap-3 justify-center items-center min-h-[88px]">
         {cards && cards.length > 0 ? (
-          cards.map((raw, i) => {
-            const label = cardToLabel(raw);
-            return (
-              <div
-                key={`${label}-${i}`}
-                className="w-14 h-20 rounded-xl bg-white/10 border border-white/20 
-                           flex items-center justify-center text-lg font-bold
-                           animate-[flipIn_.6s_ease_forwards]"
-                style={{ animationDelay: `${i * 0.28}s` }}
-                title={label}
-              >
-                {label}
-              </div>
-            );
-          })
+          cards.map((raw, i) => (
+            <div
+              key={`${i}`}
+              className="w-14 h-20 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center
+                         animate-[flipIn_.6s_ease_forwards]"
+              style={{ animationDelay: `${i * 0.28}s` }}
+              title="card"
+            >
+              <CardSVG card={raw} />
+            </div>
+          ))
         ) : (
           <>
             <GhostCard />
