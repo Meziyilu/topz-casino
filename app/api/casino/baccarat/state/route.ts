@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifyJWT } from "@/lib/jwt";
 import type { Prisma } from "@prisma/client";
-import { dealOneRound, payoutRatio } from "@/lib/baccarat"; // ✅ 對齊 lib：用 dealOneRound
+import { dealOneRound, payoutRatio } from "@/lib/baccarat";
 
 // ---------- 小工具 ----------
 const asAny = <T = any>(v: unknown) => v as T;
@@ -103,9 +103,9 @@ async function ensureCardsOnReveal(tx: Prisma.TransactionClient, roundId: string
       bankerCards: true,
     },
   });
-  if (r?.outcome) return; // 已有結果了，不重發
+  if (r?.outcome) return; // 已有結果，不重發
 
-  const result = dealOneRound(); // ✅ 對齊 lib：無參數
+  const result = dealOneRound(); // 從 lib 產生一局
   await tx.round.update({
     where: { id: roundId },
     data: {
@@ -145,7 +145,7 @@ async function settleRoundTx(tx: Prisma.TransactionClient, roundId: string) {
   });
 
   for (const b of bets) {
-    // 和局退注：若 outcome=TIE 且下注非 TIE，視為 0（不增不減）
+    // 和局退注：若 outcome=TIE 且下注非 TIE
     if (r.outcome === asAny("TIE") && b.side !== asAny("TIE")) continue;
 
     const ratio = payoutRatio(asAny(b.side), {
@@ -192,7 +192,7 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const roomCode = String(url.searchParams.get("room") || "R60").toUpperCase();
     const force = String(url.searchParams.get("force") || "");
-    const me = await getUser(req);
+    const me = await getUser(req); // ← 這裡宣告一次，後面不要再宣告
 
     // 房間
     const room = await prisma.room.findFirst({
@@ -243,8 +243,9 @@ export async function GET(req: Request) {
     const now = Date.now();
     const startMs = new Date(round.startedAt ?? round.createdAt).getTime();
     const betLeft = Math.max(0, room.durationSeconds - Math.floor((now - startMs) / 1000));
-    const revealDuration = 6; // ✅ 拉長開牌動畫時間
+    const revealDuration = 6; // 拉長開牌動畫時間
 
+    // 🔧 這裡要用 || ，不是兩個空白
     let phase: "BETTING" | "REVEALING" | "SETTLED" = (round.phase as any) || "BETTING";
     let secLeft = 0;
 
@@ -323,6 +324,7 @@ export async function GET(req: Request) {
         },
       });
 
+      // 🔧 這裡也要用 ||
       phase = (round!.phase as any) || "BETTING";
       const st = new Date(round!.startedAt ?? round!.createdAt).getTime();
       if (phase === "BETTING") {
@@ -340,7 +342,6 @@ export async function GET(req: Request) {
 
     // 我的投注（roundId 聚合）
     let myBets: Record<string, number> = {};
-    const me = await getUser(req);
     if (me && round) {
       const rows = await prisma.bet.groupBy({
         by: ["side"],
@@ -375,7 +376,7 @@ export async function GET(req: Request) {
               b: round!.bankerTotal ?? null,
             }
           : null,
-      // ✅ 前端需要的牌面（REVEALING/SETTLED 才會有）
+      // 前端需要的牌面（REVEALING/SETTLED 才會有）
       cards:
         phase !== "BETTING"
           ? {
