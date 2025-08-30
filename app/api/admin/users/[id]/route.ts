@@ -1,33 +1,31 @@
 // app/api/admin/users/[id]/route.ts
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import prisma from "@/lib/prisma";
 import { verifyJWT } from "@/lib/jwt";
 
-// PATCH /api/admin/users/[id]
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  const user = await verifyJWT(req);
-  if (!user?.isAdmin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id } = params;
-  const body = await req.json();
-  const { isAdmin } = body;
-
-  const u = await prisma.user.update({
-    where: { id },
-    data: { isAdmin: Boolean(isAdmin) },
-  });
-
-  return NextResponse.json({ user: u });
+function noStoreJson(payload: any, status = 200) {
+  return NextResponse.json(payload, { status, headers: { "Cache-Control": "no-store" } });
+}
+function readTokenFromHeaders(req: Request) {
+  const raw = req.headers.get("cookie");
+  if (!raw) return null;
+  const m = raw.match(/(?:^|;\s*)token=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+async function getAdmin(req: Request) {
+  const token = readTokenFromHeaders(req);
+  if (!token) return null;
+  const payload = await verifyJWT(token).catch(() => null);
+  if (!payload?.sub) return null;
+  const u = await prisma.user.findUnique({ where: { id: String(payload.sub) } });
+  return u?.isAdmin ? u : null;
 }
 
-// DELETE /api/admin/users/[id]
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
-  const user = await verifyJWT(req);
-  if (!user?.isAdmin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const me = await getAdmin(req);
+  if (!me) return noStoreJson({ error: "需要管理員權限" }, 403);
 
-  const { id } = params;
-
-  await prisma.user.delete({ where: { id } });
-
-  return NextResponse.json({ ok: true });
+  const userId = params.id;
+  await prisma.user.delete({ where: { id: userId } });
+  return noStoreJson({ ok: true });
 }
