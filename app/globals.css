@@ -1,215 +1,108 @@
-/* app/globals.css */
-
-/* ---------- Tailwind base ---------- */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ---------- CSS Variables (Dark/Light) ---------- */
+/* 基本主題 */
 :root {
-  --cosmic-bg-1: #060716;          /* 深夜藍 */
-  --cosmic-bg-2: #0a0b1f;          /* 深太空藍 */
-  --cosmic-nebula-1: 255, 99, 132; /* 玫紅雲氣 */
-  --cosmic-nebula-2: 56, 189, 248; /* 青藍雲氣 */
-  --cosmic-nebula-3: 192, 132, 252;/* 紫光雲氣 */
-  --cosmic-star: 255, 255, 255;    /* 星點 */
-  --card-border: rgba(255,255,255,.16);
-  --card-border-strong: rgba(255,255,255,.28);
-}
-:root[data-theme="light"] {
-  --cosmic-bg-1: #e8eef7;
-  --cosmic-bg-2: #f4f7fb;
-  --cosmic-nebula-1: 255, 179, 186; /* 淺玫紅 */
-  --cosmic-nebula-2: 126, 214, 255; /* 淺青藍 */
-  --cosmic-nebula-3: 204, 178, 255; /* 淺紫 */
-  --cosmic-star: 30, 41, 59;        /* 深色星點 */
-  --card-border: rgba(0,0,0,.10);
-  --card-border-strong: rgba(0,0,0,.22);
+  --bg-dark: #050510;
+  --bg-light: #f4f7ff;
+  --text-dark: #fefefe;
+  --text-light: #222;
 }
 
-/* ---------- 基底：宇宙背景（不動你的排版） ---------- */
-html, body {
-  height: 100%;
+html[data-theme="dark"] {
+  --bg: var(--bg-dark);
+  --text: var(--text-dark);
 }
+html[data-theme="light"] {
+  --bg: var(--bg-light);
+  --text: var(--text-light);
+}
+
 body {
-  @apply text-white antialiased;
-  background: radial-gradient(1200px 800px at 20% 10%, rgba(var(--cosmic-nebula-2), .12), transparent 60%),
-              radial-gradient(900px 700px at 80% 30%, rgba(var(--cosmic-nebula-3), .10), transparent 60%),
-              radial-gradient(1000px 900px at 50% 80%, rgba(var(--cosmic-nebula-1), .10), transparent 60%),
-              linear-gradient(180deg, var(--cosmic-bg-1), var(--cosmic-bg-2));
-  position: relative;
-  overflow-x: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Inter", sans-serif;
 }
 
-/* 星雲流動（body::before） */
-body::before {
-  content: "";
-  position: fixed;
-  inset: -10% -10% -10% -10%;
-  background:
-    radial-gradient(600px 400px at 15% 20%, rgba(var(--cosmic-nebula-2), .18), transparent 60%),
-    radial-gradient(500px 380px at 85% 25%, rgba(var(--cosmic-nebula-3), .16), transparent 65%),
-    radial-gradient(700px 520px at 50% 85%, rgba(var(--cosmic-nebula-1), .14), transparent 60%);
-  filter: blur(40px) saturate(120%);
-  animation: nebulaFloat 24s ease-in-out infinite alternate;
-  pointer-events: none;
-  z-index: -2;
-}
-
-/* 星點閃爍（body::after） */
-body::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  background-image:
-    radial-gradient(1px 1px at 10% 20%, rgba(var(--cosmic-star), .9), transparent 40%),
-    radial-gradient(1px 1px at 30% 80%, rgba(var(--cosmic-star), .7), transparent 40%),
-    radial-gradient(1px 1px at 70% 30%, rgba(var(--cosmic-star), .75), transparent 40%),
-    radial-gradient(1px 1px at 85% 65%, rgba(var(--cosmic-star), .6), transparent 40%),
-    radial-gradient(1px 1px at 45% 55%, rgba(var(--cosmic-star), .8), transparent 40%);
-  animation: starsTwinkle 6s ease-in-out infinite;
-  pointer-events: none;
-  z-index: -1;
-}
-
-/* 背景動畫 Keyframes */
-@keyframes nebulaFloat {
-  0%   { transform: translate3d(-2%, -1%, 0) scale(1);   filter: blur(40px) saturate(120%); }
-  50%  { transform: translate3d(2%, 1%, 0) scale(1.03);  filter: blur(46px) saturate(130%); }
-  100% { transform: translate3d(-1%, 2%, 0) scale(1.06); filter: blur(50px) saturate(135%); }
-}
-@keyframes starsTwinkle {
-  0%, 100% { opacity: .9; transform: translateY(0px); }
-  50%      { opacity: .6; transform: translateY(-0.5px); }
-}
-
-/* 提供給頁面用的語意背景（不影響布局） */
-.bg-casino-bg {
-  background: transparent; /* 背景交由 body 處理，保留語意 class 以免程式出錯 */
-}
-
-/* ---------- 卡片/玻璃質感（原樣，僅強化邊框可讀性） ---------- */
+/* Glass 效果 */
 .glass {
-  backdrop-filter: blur(10px) saturate(1.2);
-  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.04));
-  border: 1px solid var(--card-border);
-  border-radius: 16px;
-}
-.glow-ring {
-  box-shadow:
-    inset 0 0 0 1px var(--card-border),
-    0 6px 22px rgba(0,0,0,.28),
-    0 0 28px rgba(255,255,255,.06);
-}
-.card-strong {
-  border: 1px solid var(--card-border-strong);
+  backdrop-filter: blur(12px) saturate(150%);
+  background: rgba(255, 255, 255, 0.08);
 }
 
-/* 亮面掃光（按鈕/卡片可覆用） */
-.sheen {
-  position: relative;
-  overflow: hidden;
-}
-.sheen::after {
-  content: "";
-  position: absolute;
-  inset: -30% -60% auto -60%;
-  height: 200%;
-  transform: rotate(25deg);
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,.10), transparent);
-  animation: sheenMove 3.8s ease-in-out infinite;
-  pointer-events: none;
-}
-@keyframes sheenMove {
-  0%   { transform: translateX(-40%) rotate(25deg); }
-  60%  { transform: translateX(120%) rotate(25deg); }
-  100% { transform: translateX(120%) rotate(25deg); }
-}
-
-/* 輕微 3D 浮動（可用在卡片/按鈕） */
-.tilt {
-  transform: translateZ(0);
-  transition: transform .2s ease, box-shadow .2s ease;
-}
-.tilt:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 24px rgba(0,0,0,.25);
-}
-
-/* ---------- Flip 牌面動畫（原本元件使用） ---------- */
-.flip-3d {
-  perspective: 900px;
-}
-.flip-inner {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  transform-style: preserve-3d;
-}
-.flip-front, .flip-back {
-  position: absolute;
+/* --- 宇宙背景 --- */
+.cosmic-sky {
+  position: fixed;
   inset: 0;
-  backface-visibility: hidden;
-  border-radius: 16px;
+  background: radial-gradient(circle at 20% 20%, rgba(75,0,130,0.3), transparent 60%),
+              radial-gradient(circle at 80% 30%, rgba(0,191,255,0.25), transparent 70%),
+              radial-gradient(circle at 50% 80%, rgba(255,20,147,0.2), transparent 60%);
+  z-index: 0;
+  animation: nebulaFlow 40s ease-in-out infinite alternate;
 }
-.flip-front {
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(255,255,255,.06);
-  border: 1px solid var(--card-border);
-}
-.flip-back {
-  transform: rotateY(180deg);
-}
-@keyframes flipIn {
-  0%   { transform: rotateY(0deg); }
-  100% { transform: rotateY(180deg); }
+.cosmic-sky.nebula {
+  mix-blend-mode: screen;
+  opacity: 0.35;
 }
 
-/* ---------- 跑馬燈（保留原效果） ---------- */
-.marquee {
-  --gap: 2rem;
-  display: flex;
+@keyframes nebulaFlow {
+  0% { transform: scale(1) translate(0, 0); }
+  50% { transform: scale(1.2) translate(-2%, 2%); }
+  100% { transform: scale(1) translate(2%, -2%); }
+}
+
+/* 粒子閃爍 */
+.cosmic-particles::before,
+.cosmic-particles::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image: radial-gradient(circle, white 1px, transparent 1px);
+  background-size: 3px 3px;
+  animation: starsBlink 6s linear infinite;
+  opacity: 0.25;
+}
+.cosmic-particles::after {
+  background-size: 2px 2px;
+  animation-duration: 9s;
+  opacity: 0.15;
+}
+
+@keyframes starsBlink {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 0.35; }
+}
+
+/* Glow bar */
+.glow-bar {
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.5), transparent);
+  animation: glowSlide 2s infinite linear;
+}
+@keyframes glowSlide {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
+}
+
+/* 跑馬燈 */
+.marquee-container {
   overflow: hidden;
-  gap: var(--gap);
+  white-space: nowrap;
+  border-top: 1px solid rgba(255,255,255,.15);
+  border-bottom: 1px solid rgba(255,255,255,.15);
+  background: rgba(255,255,255,.05);
 }
-.marquee__inner {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: var(--gap);
-  min-width: 100%;
-  animation: marqueeMove 18s linear infinite;
+.marquee-track {
+  display: inline-block;
+  padding-left: 100%;
+  animation: marquee linear infinite;
 }
-@keyframes marqueeMove {
-  0%   { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
+.marquee-track span {
+  margin-right: 3rem;
+  font-weight: bold;
+  letter-spacing: 0.05em;
 }
-
-/* ---------- 實用小工具（按鈕、邊距等，維持舊版習慣） ---------- */
-.btn {
-  @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium;
-  background: rgba(255,255,255,.06);
-  border: 1px solid var(--card-border);
-  transition: transform .2s ease, background .2s ease, border-color .2s ease;
-}
-.btn:hover {
-  background: rgba(255,255,255,.10);
-  border-color: var(--card-border-strong);
-}
-.btn:active { transform: translateY(1px); }
-
-/* 支援頁面使用到的自訂動畫名（tailwind arbitrary keyframes 已用） */
-@keyframes pulseGlow {
-  0%,100% { box-shadow: 0 0 0 rgba(255,215,0,0); }
-  50%     { box-shadow: 0 0 24px rgba(255,215,0,.45); }
-}
-
-/* 表格、滾動條（微調可讀性） */
-table { border-collapse: separate; border-spacing: 0; }
-th, td { border-color: rgba(255,255,255,.08); }
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,.12);
-  border-radius: 999px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
 }
