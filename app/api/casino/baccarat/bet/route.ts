@@ -83,15 +83,14 @@ export async function POST(req: Request) {
 
     // 5) 下單 + 餘額扣款 + 建 ledger（交易內）
     const created = await prisma.$transaction(async (tx) => {
-      // ✅ 關聯 connect（Prisma 6.15.0 BetCreateInput 要這種寫法）
+      // ✅ Prisma 6.15：使用關聯 connect，且包含必填的 room
       const bet = await tx.bet.create({
         data: {
           amount,
           side: asAny(side),
           user:  { connect: { id: me.id } },
           round: { connect: { id: round.id } },
-          // 若你的 Bet schema 有 room 關聯且為必填，解開下面這行：
-          // room: { connect: { id: room.id } },
+          room:  { connect: { id: room.id } }, // ← 必填關聯（你的 BetCreateInput 要求）
         },
         select: { id: true },
       });
