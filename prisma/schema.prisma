@@ -1,4 +1,4 @@
-// prisma/schema.prisma  — TOPZ Casino v1.1.1
+// prisma/schema.prisma — TOPZ Casino v1.1.1 (patched)
 
 generator client {
   provider = "prisma-client-js"
@@ -58,7 +58,7 @@ model User {
   email        String   @unique
   password     String
   name         String?
-  avatarUrl    String?
+  avatarUrl    String?          // ✅ 保留一個就好（移除重複）
   isAdmin      Boolean  @default(false)
   balance      Int      @default(0)   // 錢包
   bankBalance  Int      @default(0)   // 銀行
@@ -96,6 +96,7 @@ model Room {
   createdAt       DateTime  @default(now())
 
   rounds Round[]
+  bets   Bet[]    // ✅ 方便由房間回查下注（可選但實用）
 }
 
 model Round {
@@ -134,13 +135,16 @@ model Bet {
   id        String   @id @default(cuid())
   userId    String
   roundId   String
+  roomId    String            // ✅ 新增：直帶 roomId，便於查詢與稽核
   side      BetSide
   amount    Int
   createdAt DateTime @default(now())
 
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  room  Room  @relation(fields: [roomId], references: [id], onDelete: Cascade)
 
+  @@index([roomId])
   @@index([roundId, userId])
   @@index([userId, createdAt])
 }
