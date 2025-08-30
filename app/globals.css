@@ -1,111 +1,92 @@
-/* === 銀河背景：柔和流動 + 星點閃爍（不顆粒） === */
-.galaxy-bg {
+/* ===== 背景：深色銀河（低顆粒） ===== */
+.lobby-cosmos{
   background:
-    radial-gradient(1200px 800px at 10% 20%, rgba(88,101,242,0.20), transparent 60%),
-    radial-gradient(900px 600px at 80% 10%, rgba(147,51,234,0.18), transparent 60%),
-    radial-gradient(1000px 900px at 50% 90%, rgba(16,185,129,0.18), transparent 65%),
-    linear-gradient(180deg, #0b0f1a, #0a0e19 35%, #070b14 100%);
-  animation: nebulaShift 18s ease-in-out infinite alternate;
-  filter: saturate(110%) hue-rotate(-2deg);
+    radial-gradient(900px 600px at 20% 10%, rgba(94,129,244,.15), transparent 60%),
+    radial-gradient(800px 500px at 80% 20%, rgba(168,85,247,.14), transparent 60%),
+    radial-gradient(900px 700px at 50% 90%, rgba(20,184,166,.12), transparent 60%),
+    linear-gradient(180deg, #0A0F1C 0%, #0A0E19 55%, #090E18 100%);
+  position:absolute; inset:0;
+  animation:lobbyNebula 20s ease-in-out infinite alternate;
+  filter:saturate(110%);
 }
-@keyframes nebulaShift {
-  from { transform: translateY(0px) scale(1); }
-  to   { transform: translateY(-12px) scale(1.02); }
-}
+@keyframes lobbyNebula{from{transform:translateY(0)}to{transform:translateY(-10px)}}
 
-/* 柔和星點 */
-.galaxy-stars::before,
-.galaxy-stars::after {
-  content:"";
-  position:absolute; inset:0; pointer-events:none;
+.lobby-stars::before,.lobby-stars::after{
+  content:""; position:absolute; inset:0; pointer-events:none;
   background-image:
-    radial-gradient(2px 2px at 20% 30%, rgba(255,255,255,0.65) 50%, transparent 51%),
-    radial-gradient(2px 2px at 70% 10%, rgba(255,255,255,0.55) 50%, transparent 51%),
-    radial-gradient(2px 2px at 40% 60%, rgba(255,255,255,0.5) 50%, transparent 51%),
-    radial-gradient(2px 2px at 80% 70%, rgba(255,255,255,0.6) 50%, transparent 51%);
+    radial-gradient(2px 2px at 12% 22%, rgba(255,255,255,.6) 50%, transparent 52%),
+    radial-gradient(2px 2px at 72% 12%, rgba(255,255,255,.5) 50%, transparent 52%),
+    radial-gradient(2px 2px at 35% 65%, rgba(255,255,255,.55) 50%, transparent 52%),
+    radial-gradient(2px 2px at 88% 72%, rgba(255,255,255,.55) 50%, transparent 52%);
 }
-.galaxy-stars::before { animation: starBlink 3.6s ease-in-out infinite; opacity:.7; }
-.galaxy-stars::after  { animation: starBlink 5.2s ease-in-out infinite .8s; opacity:.55; }
-@keyframes starBlink {
-  0%,100% { opacity:.55; filter: blur(0px); }
-  50%     { opacity:.9;  filter: blur(0.3px); }
+.lobby-stars::before{animation:starsBlink 3.8s ease-in-out infinite; opacity:.7}
+.lobby-stars::after{animation:starsBlink 5.2s ease-in-out infinite .8s; opacity:.55}
+@keyframes starsBlink{0%,100%{opacity:.55}50%{opacity:.9}}
+
+/* ===== 跑馬燈 bar ===== */
+.marquee.bar{
+  height:46px; border-radius:14px;
+  background:rgba(16,22,36,.55);
+  border:1px solid rgba(255,255,255,.16);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 10px 30px rgba(0,0,0,.35);
+  overflow:hidden; display:flex; align-items:center; padding:0 12px;
+}
+.marquee-track{display:flex; gap:80px; white-space:nowrap; animation:marqueeRun 22s linear infinite}
+.marquee-text{opacity:.95; font-weight:700; letter-spacing:.3px}
+@keyframes marqueeRun{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+/* ===== 膠囊（資訊/動作） ===== */
+.capsule{
+  border-radius:14px; padding:14px 16px;
+  background:rgba(17,24,39,.45);
+  border:1px solid rgba(255,255,255,.18);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 8px 26px rgba(0,0,0,.35);
+}
+.capsule-lg .capsule-value{font-size:28px; font-weight:800; letter-spacing:2px}
+.capsule .capsule-title{font-size:12px; opacity:.75; margin-bottom:6px}
+.capsule .capsule-value{font-size:18px; font-weight:700}
+
+/* 可點的膠囊 */
+.capsule.link{display:flex; align-items:center; justify-content:center; font-weight:700}
+.capsule.link:hover{border-color:rgba(255,255,255,.35)}
+
+/* ===== 房間卡 ===== */
+.room-card{
+  display:block; border-radius:18px; padding:18px;
+  background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+  border:1px solid rgba(255,255,255,.16);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 12px 34px rgba(0,0,0,.38);
+  transition:transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+.room-card:hover{transform:translateY(-2px); border-color:rgba(255,255,255,.32)}
+.room-head .room-sub{font-size:12px; opacity:.7}
+.room-head .room-title{font-size:22px; font-weight:800; margin-top:4px}
+.room-head .room-desc{opacity:.8; margin-top:4px}
+.room-foot{display:flex; justify-content:space-between; align-items:center; margin-top:16px}
+.room-tag{
+  font-size:12px; padding:6px 10px; border-radius:999px;
+  background:rgba(255,255,255,.09); border:1px solid rgba(255,255,255,.22)
+}
+.room-enter{
+  padding:8px 14px; border-radius:12px; border:1px solid rgba(255,255,255,.22);
+  background:rgba(255,255,255,.06); font-weight:700
 }
 
-/* === 卡片：強外框 + 玻璃 === */
-.card-outer {
-  position: relative;
-  border-radius: 18px;
-  background: rgba(17, 24, 39, 0.35);
-  border: 1.4px solid rgba(255,255,255,0.18);
-  box-shadow:
-    inset 0 0 0 1px rgba(255,255,255,0.06),
-    0 6px 22px rgba(0,0,0,0.35),
-    0 0 24px rgba(88,101,242,0.10);
+/* ===== Coming 卡 ===== */
+.coming-card{
+  border-radius:18px; padding:18px;
+  background:rgba(17,24,39,.45);
+  border:1px solid rgba(255,255,255,.16);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 12px 34px rgba(0,0,0,.38);
+  position:relative;
 }
-.card-outer.is-disabled {
-  opacity: .7;
-  filter: grayscale(.2);
-  pointer-events: none;
-}
-.card-inner {
-  position: relative;
-  padding: 18px 18px 16px 18px;
-  border-radius: 16px;
-  backdrop-filter: blur(6px);
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
-}
-.card-title {
-  font-weight: 700;
-  letter-spacing: .4px;
-  margin-bottom: 8px;
-}
-.card-value { margin-top: 4px; }
-.card-foot {
-  margin-top: 10px;
-  font-size: 12px;
-  opacity: .75;
+.coming-title{font-size:20px; font-weight:800; margin-bottom:6px}
+.coming-desc{opacity:.92}
+.coming-badge{
+  position:absolute; left:18px; bottom:16px;
+  font-size:12px; padding:6px 10px; border-radius:999px;
+  background:rgba(250,204,21,.18); border:1px solid rgba(250,204,21,.4)
 }
 
-/* 小徽章 */
-.badge {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 12px; padding: 2px 8px; border-radius: 999px;
-  background: rgba(255,255,255,0.12);
-  border: 1px solid rgba(255,255,255,0.22);
-  backdrop-filter: blur(4px);
-}
-.badge-warn {
-  background: rgba(250,204,21,0.20);
-  border-color: rgba(250,204,21,0.45);
-}
-
-/* 區塊標題 */
-.section-title {
-  font-weight: 800;
-  letter-spacing: .5px;
-  font-size: 18px;
-  opacity: .95;
-}
-
-/* 跑馬燈 */
-.glass-strong {
-  border-radius: 18px;
-  background: rgba(17, 24, 39, 0.45);
-  border: 1.6px solid rgba(255,255,255,0.20);
-  box-shadow:
-    inset 0 0 0 1px rgba(255,255,255,0.06),
-    0 8px 28px rgba(0,0,0,0.45),
-    0 0 28px rgba(147,51,234,0.10);
-}
-.marquee-wrap { position: relative; height: 44px; display:flex; align-items:center; overflow:hidden; }
-.marquee-track {
-  display:flex; gap: 80px; white-space: nowrap;
-  animation: marqueeMove 22s linear infinite;
-  will-change: transform;
-}
-.marquee-text { font-weight: 700; letter-spacing:.4px; opacity:.95; }
-@keyframes marqueeMove {
-  from { transform: translateX(0); }
-  to   { transform: translateX(-50%); }
-}
+/* 小標題 */
+.lobby-section-title{font-weight:800; opacity:.95; letter-spacing:.3px}
