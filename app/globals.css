@@ -2,272 +2,102 @@
 @tailwind components;
 @tailwind utilities;
 
-/* --- 背景與字體 --- */
+/* ===== 全域樣式 ===== */
 body {
-  @apply bg-black text-white font-sans;
+  @apply bg-casino-bg text-white font-sans;
 }
 
-/* 可用在整頁背景的漸層 */
-.bg-casino-bg {
-  background: radial-gradient(60% 80% at 50% 0%, rgba(139,92,246,.22), transparent 60%),
-              radial-gradient(60% 80% at 0% 100%, rgba(14,165,233,.18), transparent 60%),
-              radial-gradient(60% 70% at 100% 100%, rgba(244,114,182,.14), transparent 60%),
-              #0b0b10;
+/* ===== 卡片與按鈕 ===== */
+.card { @apply bg-casino-card rounded-lg shadow-lg p-4 animate-fade; }
+
+.btn {
+  @apply px-4 py-2 rounded-md font-bold text-white transition;
+  @apply bg-casino-accent hover:bg-purple-600 active:scale-95;
 }
 
-/* 卡片玻璃感 */
+.room-card { @apply card hover:scale-105 transform transition duration-200 cursor-pointer; }
+
+/* ===== 動畫／特效（原有 + 補強） ===== */
+@keyframes floaty { 0%{transform:translateY(0)}50%{transform:translateY(-6px)}100%{transform:translateY(0)} }
+@keyframes shine { 0%{transform:translateX(-120%)}60%,100%{transform:translateX(120%)} }
+@keyframes pulse-border { 0%,100%{ box-shadow:0 0 0 rgba(255,255,255,.2)} 50%{ box-shadow:0 0 24px rgba(255,255,255,.25)} }
+@keyframes shimmer { 0%{ background-position:-200% 0} 100%{ background-position:200% 0} }
+@keyframes flipIn { 0%{ transform:rotateY(0)} 100%{ transform:rotateY(180deg)} }
+
 .glass {
   background: rgba(255,255,255,0.06);
   border: 1px solid rgba(255,255,255,0.12);
   backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border-radius: 16px;
 }
 
-/* 亮面掃過 */
-.sheen { position: relative; overflow: hidden; }
-.sheen::after {
-  content: "";
-  position: absolute; inset: 0;
-  background: linear-gradient(110deg, transparent 0%, rgba(255,255,255,.18) 45%, transparent 60%);
-  transform: translateX(-120%);
-  animation: shine 2.8s ease-in-out infinite;
-}
-
-/* 流光邊框 */
-.glow-ring { position: relative; }
-.glow-ring::before {
-  content: "";
-  position: absolute; inset: -1px;
-  border-radius: 18px;
+.glow-ring { position:relative; }
+.glow-ring::before{
+  content:""; position:absolute; inset:-1px; border-radius:18px;
   background: linear-gradient(135deg, rgba(255,0,200,.35), rgba(0,255,220,.35), rgba(255,200,80,.35));
-  filter: blur(16px);
-  z-index: 0; pointer-events: none; opacity: .4;
+  filter:blur(16px); z-index:0; pointer-events:none; opacity:.4;
 }
 
-/* 通用按鈕 */
-.btn {
-  @apply px-4 py-2 rounded-md font-bold text-white transition;
-  @apply bg-violet-600 hover:bg-violet-500 active:scale-95;
+.sheen { position:relative; overflow:hidden; }
+.sheen::after{
+  content:""; position:absolute; inset:0;
+  background:linear-gradient(110deg, transparent 0%, rgba(255,255,255,.15) 45%, transparent 55%);
+  transform:translateX(-120%); animation:shine 2.8s ease-in-out infinite;
 }
 
-/* 微傾斜 */
-.tilt { transition: transform .2s; }
 .tilt:hover { transform: translateY(-2px) rotateX(2deg) rotateY(-2deg); }
 
-/* Flip 容器（3D） */
-.flip-3d { perspective: 1000px; }
-.flip-inner {
+/* Flip 容器（舊 FlipTile 仍可用） */
+.flip-3d { perspective:1000px; }
+.flip-inner { position:relative; width:100%; height:100%; transform-style:preserve-3d; transition:transform .7s cubic-bezier(.2,.7,.2,1); }
+.flip-front,.flip-back{ position:absolute; inset:0; -webkit-backface-visibility:hidden; backface-visibility:hidden; border-radius:16px; }
+.flip-back{ transform:rotateY(180deg); }
+
+/* 彩色點（路子） */
+.dot{ display:inline-block; width:10px; height:10px; border-radius:9999px; }
+.dot-player{ background:#67e8f9; } .dot-banker{ background:#fda4af; } .dot-tie{ background:#fde68a; }
+
+/* ====== 新增：Baccarat hand layout（不互擠、依序翻牌、勝方金光） ====== */
+.hand-wrap { min-height: 210px; }
+
+.card-stack {
   position: relative;
-  width: 100%; height: 100%;
+  height: 140px;       /* 固定高度，避免兩手互擠 */
+  margin-top: 8px;
+}
+
+.card-tile {
+  position: absolute;
+  top: 6px;
+  left: calc(var(--i) * 66px); /* 卡片水平間距 */
+  width: 86px;
+  height: 124px;
+  border-radius: 12px;
+  transform: rotate(var(--deg, 0deg)) rotateY(180deg); /* 預設翻開（REVEALING/SETTLED） */
   transform-style: preserve-3d;
-  transition: transform .7s cubic-bezier(.2,.7,.2,1);
-}
-.rotate-y-180 { transform: rotateY(180deg); }
-.flip-front, .flip-back {
-  position: absolute; inset: 0;
-  -webkit-backface-visibility: hidden; backface-visibility: hidden;
-  border-radius: 16px;
-}
-.flip-back { transform: rotateY(180deg); }
-
-/* 動畫 keyframes */
-@keyframes shine {
-  0% { transform: translateX(-120%); }
-  60%,100% { transform: translateX(120%); }
-}
-
-/* 3D flip 基礎 */
-.flip-3d { perspective: 1000px; }
-.flip-inner {
-  position: relative;
-  width: 100%; height: 100%;
-  transform-style: preserve-3d;
-  transition: transform .7s cubic-bezier(.2,.7,.2,1);
-}
-.flip-inner.flipped { transform: rotateY(180deg); }
-.flip-front, .flip-back {
-  position: absolute; inset: 0;
-  -webkit-backface-visibility: hidden; backface-visibility: hidden;
-  border-radius: 16px;
-}
-.flip-back { transform: rotateY(180deg); }
-
-/* === Winner Gold Glow === */
-@keyframes winner-gold-glow {
-  0%, 100% {
-    box-shadow:
-      0 0 0px rgba(255, 215, 0, 0.0),
-      0 0 16px rgba(255, 215, 0, 0.25),
-      inset 0 0 0 rgba(255, 215, 0, 0.0);
-    filter: drop-shadow(0 0 0 rgba(255,215,0,0));
-  }
-  50% {
-    box-shadow:
-      0 0 8px rgba(255, 215, 0, 0.35),
-      0 0 28px rgba(255, 215, 0, 0.55),
-      inset 0 0 6px rgba(255, 215, 0, 0.35);
-    filter: drop-shadow(0 0 10px rgba(255,215,0,0.45));
-  }
-}
-
-.winner-glow {
-  position: relative;
-  border-radius: 16px;
-  animation: winner-gold-glow 1.2s ease-in-out infinite;
-  /* 金色描邊 */
-  border: 1px solid rgba(255, 215, 0, 0.55);
-}
-
-.winner-glow::after {
-  content: "";
-  position: absolute; inset: -2px;
-  border-radius: 18px;
-  background: linear-gradient(135deg, rgba(255,215,0,.25), rgba(255,255,255,.08) 40%, rgba(255,215,0,.25));
-  pointer-events: none;
-  filter: blur(8px);
-  opacity: .6;
-}
-
-/* ==== Baccarat Flip & Winner Glow (追加) ==== */
-
-/* 3D 翻牌容器 */
-.flip-3d { perspective: 1000px; }
-.flip-inner {
-  position: relative; width: 100%; height: 100%;
-  transform-style: preserve-3d;
-  transition: transform .9s cubic-bezier(.2,.8,.2,1);
-}
-
-/* 正反面 */
-.flip-front, .flip-back {
-  position: absolute; inset: 0;
-  -webkit-backface-visibility: hidden; backface-visibility: hidden;
-  border-radius: 16px;
-  display: flex; align-items: center; justify-content: center;
-}
-.flip-front { 
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.12);
-  backdrop-filter: blur(14px);
-  font-weight: 800; font-size: 1.25rem;
-}
-.flip-back  { transform: rotateY(180deg); }
-
-/* 固定命名的動畫 class，避免 Tailwind 清掉 */
-.animate-flip { animation: flipHold 2.2s ease forwards; }
-
-/* 翻牌 + 停留（確保看得到）*/
-@keyframes flipHold {
-  0%   { transform: rotateY(0deg);   }
-  65%  { transform: rotateY(180deg); }
-  100% { transform: rotateY(180deg); }
-}
-
-/* 勝方金光外框（柔光+掃光） */
-.winner-glow {
-  position: relative;
-  box-shadow: 0 0 28px rgba(255,215,0,.35), 0 0 60px rgba(255,215,0,.25) inset;
-}
-.winner-glow::after {
-  content: ""; position: absolute; inset: -2px; border-radius: 18px;
-  background: conic-gradient(from 0deg,
-    rgba(255,215,0,.0) 0%,
-    rgba(255,215,0,.35) 20%,
-    rgba(255,255,255,.6) 40%,
-    rgba(255,215,0,.35) 60%,
-    rgba(255,215,0,.0) 100%);
-  filter: blur(10px); animation: goldSweep 1.6s linear infinite;
-  pointer-events: none;
-}
-@keyframes goldSweep {
-  0%   { transform: rotate(0deg);   opacity: .9; }
-  50%  { transform: rotate(180deg); opacity: .6; }
-  100% { transform: rotate(360deg); opacity: .9; }
-}
-
-/* 閒/莊背面底色（保留你原本配色語感） */
-.back-player {
-  background: linear-gradient(135deg, rgba(103,232,249,.18), rgba(255,255,255,.06));
-  border: 1px solid rgba(103,232,249,.55);
-}
-.back-banker {
-  background: linear-gradient(135deg, rgba(253,164,175,.18), rgba(255,255,255,.06));
-  border: 1px solid rgba(253,164,175,.55);
-}
-/* ==== Fancy Room Banner (新增) ==== */
-.room-banner {
-  position: relative;
-  border-radius: 20px;
-  padding: 18px;
+  transition: transform .6s ease;
+  animation: flipIn .7s ease forwards;
+  animation-delay: var(--delay, 0s);
+  box-shadow: 0 8px 18px rgba(0,0,0,.25);
   overflow: hidden;
-  background: linear-gradient(135deg, rgba(76,0,104,.35), rgba(0,98,128,.28));
-  border: 1px solid rgba(255,255,255,.12);
-  box-shadow: inset 0 0 40px rgba(255,255,255,.06);
 }
-.room-banner .rb-layer { position: absolute; inset: 0; pointer-events: none; }
-.room-banner .rb-grid {
-  background-image:
-    linear-gradient(rgba(255,255,255,.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px);
-  background-size: 28px 28px, 28px 28px;
-  mask-image: radial-gradient(circle at 30% 50%, rgba(0,0,0,.7), transparent 60%),
-              radial-gradient(circle at 80% 10%, rgba(0,0,0,.5), transparent 55%);
-}
-.room-banner .rb-radial {
-  background: radial-gradient(800px 200px at -5% 50%, rgba(0,255,220,.12), transparent 60%),
-              radial-gradient(600px 160px at 110% 10%, rgba(255,0,200,.12), transparent 60%);
-  filter: blur(2px);
-}
-.room-banner .rb-content { position: relative; z-index: 2; }
-.rb-chip {
-  font-size: 12px; padding: 4px 10px; border-radius: 999px;
-  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15);
-}
-.rb-chip-blue { background: rgba(0,153,255,.18); border-color: rgba(0,153,255,.35); }
-.rb-chip-pink { background: rgba(255,0,200,.18); border-color: rgba(255,0,200,.35); }
-.rb-chip-gold { background: rgba(255,215,0,.18); border-color: rgba(255,215,0,.35); }
-.rb-value { font-weight: 800; letter-spacing: .5px; margin-right: 8px; }
 
-.rb-chips { margin-top: 10px; display: flex; gap: 8px; }
-.chip {
-  display:inline-flex; align-items:center; justify-content:center;
-  width: 34px; height: 34px; border-radius: 999px;
-  font-size: 11px; font-weight: 800;
-  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18);
-  text-shadow: 0 1px 2px rgba(0,0,0,.3);
-}
-.chip-50   { background: radial-gradient(circle at 30% 30%, rgba(103,232,249,.25), rgba(255,255,255,.06)); border-color: rgba(103,232,249,.5); }
-.chip-100  { background: radial-gradient(circle at 30% 30%, rgba(253,230,138,.25), rgba(255,255,255,.06)); border-color: rgba(253,230,138,.5); }
-.chip-500  { background: radial-gradient(circle at 30% 30%, rgba(253,164,175,.25), rgba(255,255,255,.06)); border-color: rgba(253,164,175,.5); }
-.chip-1000 { background: radial-gradient(circle at 30% 30%, rgba(191,186,255,.28), rgba(255,255,255,.06)); border-color: rgba(191,186,255,.55); }
+.card-face { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-weight:800; letter-spacing:1px; -webkit-backface-visibility:hidden; backface-visibility:hidden; border-radius:12px; }
+.card-front { background: rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); color:#fff; }
+.card-back  { transform: rotateY(180deg); background: linear-gradient(135deg, rgba(255,255,255,.92), rgba(250,250,250,.86)); color:#111; border:1px solid rgba(255,255,255,.75); }
+.card-tile .rank{ font-size:28px; } .card-tile .pip{ font-size:14px; opacity:.6; margin-left:6px; }
 
-/* ==== Icon Road (新增：籌碼路子) ==== */
-.icon-chip {
-  width: 32px; height: 32px; border-radius: 999px;
-  display:flex; align-items:center; justify-content:center;
-  position: relative; overflow: hidden;
-  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.18);
-  box-shadow: inset 0 0 12px rgba(0,0,0,.2), 0 1px 6px rgba(0,0,0,.25);
+/* 勝方金光 */
+.win-glow{
+  position:absolute; inset:-3px; border-radius:18px;
+  box-shadow:0 0 28px rgba(255,215,0,.45), inset 0 0 24px rgba(255,215,0,.28);
+  animation: glowPulse 1.8s ease-in-out infinite;
 }
-.icon-face {
-  width: 100%; height: 100%; border-radius: 999px;
-  display:flex; align-items:center; justify-content:center;
-  font-size: 14px; font-weight: 900;
+@keyframes glowPulse{ 0%,100%{opacity:.65} 50%{opacity:.3} }
+
+/* 卡背依閒/莊帶色調 */
+.card-tile[data-suit="p"] .card-back{
+  background: linear-gradient(135deg, rgba(103,232,249,.25), rgba(255,255,255,.92));
 }
-.icon-player {
-  background: radial-gradient(circle at 35% 30%, rgba(103,232,249,.28), rgba(255,255,255,.04));
-  border: 1px solid rgba(103,232,249,.5);
+.card-tile[data-suit="b"] .card-back{
+  background: linear-gradient(135deg, rgba(253,164,175,.25), rgba(255,255,255,.92));
 }
-.icon-banker {
-  background: radial-gradient(circle at 35% 30%, rgba(253,164,175,.28), rgba(255,255,255,.04));
-  border: 1px solid rgba(253,164,175,.5);
-}
-.icon-tie {
-  background: radial-gradient(circle at 35% 30%, rgba(253,230,138,.28), rgba(255,255,255,.04));
-  border: 1px solid rgba(253,230,138,.5);
-}
-.legend-swatch { width: 10px; height: 10px; border-radius: 999px; display:inline-block; }
-.legend-swatch.lp { background:#67e8f9; }
-.legend-swatch.lb { background:#fda4af; }
-.legend-swatch.lt { background:#fde68a; }
