@@ -2,6 +2,7 @@
   "name": "topz-casino",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
@@ -11,7 +12,7 @@
     "db:studio": "prisma studio",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
-    "db:reset-all": "node scripts/db-reset-all.js",
+    "db:reset": "prisma migrate reset -f",
     "db:seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
@@ -25,7 +26,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@types/node": "^20.14.12",
+    "@types/node": "^20.14.9",
     "@types/react": "^18.3.3",
     "autoprefixer": "10.4.20",
     "postcss": "8.4.47",

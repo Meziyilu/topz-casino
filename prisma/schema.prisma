@@ -8,57 +8,24 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id          String   @id @default(cuid())
-  email       String   @unique
-  password    String
-  balance     Int      @default(0)
-  bankBalance Int      @default(0)
-  isAdmin     Boolean  @default(false)
-  createdAt   DateTime @default(now())
-
-  bets    Bet[]
-  ledgers Ledger[]
-}
-
-model Ledger {
-  id        String     @id @default(cuid())
-  userId    String
-  user      User       @relation(fields: [userId], references: [id])
-  type      LedgerType
-  amount    Int
-  note      String?
-  createdAt DateTime   @default(now())
-}
-
 enum LedgerType {
   DEPOSIT
   WITHDRAW
+  BET_PLACED
+  PAYOUT
   TRANSFER
-  WIN
-  LOSE
-  ADMIN_ADD
-  ADMIN_DEDUCT
+  ADMIN_ADJUST
 }
 
-model Room {
-  code            String   @id
-  name            String
-  durationSeconds Int
-  rounds          Round[]
+enum BalanceTarget {
+  WALLET
+  BANK
 }
 
-model Round {
-  id          String     @id @default(cuid())
-  roomCode    String
-  room        Room       @relation(fields: [roomCode], references: [code])
-  seq         Int
-  phase       RoundPhase
-  outcome     RoundOutcome?
-  playerTotal Int?
-  bankerTotal Int?
-  createdAt   DateTime   @default(now())
-  bets        Bet[]
+enum RoomCode {
+  R30
+  R60
+  R90
 }
 
 enum RoundPhase {
@@ -73,19 +40,98 @@ enum RoundOutcome {
   TIE
 }
 
-model Bet {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  roundId   String
-  round     Round    @relation(fields: [roundId], references: [id])
-  side      BetSide
-  amount    Int
-  createdAt DateTime @default(now())
-}
-
 enum BetSide {
   PLAYER
   BANKER
   TIE
+  PLAYER_PAIR
+  BANKER_PAIR
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  password     String
+  name         String?
+  isAdmin      Boolean  @default(false)
+  balance      Int      @default(0)
+  bankBalance  Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  bets    Bet[]
+  ledgers Ledger[]
+
+  @@index([createdAt])
+}
+
+model Ledger {
+  id           String       @id @default(cuid())
+  userId       String
+  type         LedgerType
+  target       BalanceTarget
+  delta        Int
+  memo         String?
+  balanceAfter Int
+  bankAfter    Int
+  createdAt    DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+}
+
+model Room {
+  id              String    @id @default(cuid())
+  code            RoomCode  @unique
+  name            String
+  durationSeconds Int
+  createdAt       DateTime  @default(now())
+
+  rounds Round[]
+}
+
+model Round {
+  id           String       @id @default(cuid())
+  roomId       String
+  day          DateTime     // 台北當日 00:00 (以 UTC 儲存)
+  roundSeq     Int
+  phase        RoundPhase   @default(BETTING)
+  createdAt    DateTime     @default(now())
+  startedAt    DateTime
+  settledAt    DateTime?
+
+  // 結果／牌面
+  outcome      RoundOutcome?
+  playerTotal  Int?
+  bankerTotal  Int?
+  playerPair   Boolean?
+  bankerPair   Boolean?
+  anyPair      Boolean?
+  perfectPair  Boolean?
+  playerCards  Json?
+  bankerCards  Json?
+
+  room  Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  bets  Bet[]
+
+  @@unique([roomId, day, roundSeq])
+  @@index([roomId, day, roundSeq])
+  @@index([phase])
+  @@index([createdAt])
+}
+
+model Bet {
+  id        String   @id @default(cuid())
+  userId    String
+  roundId   String
+  side      BetSide
+  amount    Int
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@index([roundId, userId])
+  @@index([userId, createdAt])
 }
