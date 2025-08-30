@@ -2,289 +2,181 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ====== 主題變數 ====== */
+/* ===== 全域設定 ===== */
+html,
+body {
+  @apply min-h-screen text-white antialiased;
+  font-family: "Inter", "Noto Sans TC", system-ui, sans-serif;
+  overflow-x: hidden;
+}
+
+/* 卷軸樣式 */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 9999px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ===== 主題背景（深/淺切換） ===== */
 :root {
-  --bg: #0b0f1a;               /* 深色預設背景 */
-  --panel: rgba(255,255,255,.06);
-  --panel-border: rgba(255,255,255,.12);
-  --text: #eaeef6;
-  --muted: rgba(234,238,246,.75);
-  --accent-1: #67e8f9;         /* cyan */
-  --accent-2: #fda4af;         /* rose */
-  --accent-3: #fde68a;         /* amber */
-  --ring: rgba(255,255,255,.25);
-  --card: rgba(255,255,255,.08);
-  --card-border: rgba(255,255,255,.16);
+  --cosmic-bg: radial-gradient(ellipse at center, #0a0a1a 0%, #000010 100%);
+  --cosmic-stars: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100%' height='100%'><circle cx='1' cy='1' r='1' fill='white' opacity='0.8'/></svg>");
+  --glass-bg: rgba(255, 255, 255, 0.08);
+  --glass-border: rgba(255, 255, 255, 0.15);
+  --text-color: #fff;
 }
 
-html[data-theme="light"] {
-  --bg: #f6f9ff;               /* 淺色主背景 */
-  --panel: rgba(10, 18, 41, .03);
-  --panel-border: rgba(10, 18, 41, .10);
-  --text: #0b0f1a;
-  --muted: rgba(11,15,26,.75);
-  --accent-1: #0ea5b7;         /* cyan 深一點 */
-  --accent-2: #e11d48;         /* rose 深一點 */
-  --accent-3: #b45309;         /* amber 深一點 */
-  --ring: rgba(10, 18, 41, .18);
-  --card: rgba(10, 18, 41, .04);
-  --card-border: rgba(10, 18, 41, .12);
+html.light {
+  --cosmic-bg: radial-gradient(ellipse at center, #f0f4ff 0%, #e3e8f7 100%);
+  --cosmic-stars: none;
+  --glass-bg: rgba(255, 255, 255, 0.6);
+  --glass-border: rgba(0, 0, 0, 0.1);
+  --text-color: #111;
+  color: var(--text-color);
 }
 
-/* 將全站文字顏色取自變數 */
-html, body {
-  color: var(--text);
-}
-
-/* ====== 宇宙感背景：深/淺兩版自動套用 ====== */
-.bg-casino-bg {
+body {
+  color: var(--text-color);
+  background: var(--cosmic-bg);
+  background-attachment: fixed;
   position: relative;
-  background: var(--bg);
-  /* 星雲漸層 */
-  background-image: var(--cosmic-layers), var(--cosmic-stars), var(--cosmic-stars-2);
+  z-index: 0;
 }
 
-/* 用 CSS 變數裝多層星雲／星點，兩主題不同調性 */
-html[data-theme="dark"] .bg-casino-bg {
-  --cosmic-layers: radial-gradient(1200px 600px at 10% -10%, rgba(96,165,250,.18), transparent 60%),
-                   radial-gradient(1000px 800px at 110% 10%, rgba(167,139,250,.18), transparent 60%),
-                   radial-gradient(800px 700px at 50% 110%, rgba(253,164,175,.16), transparent 60%);
-  --cosmic-stars: radial-gradient(1px 1px at 15% 20%, rgba(255,255,255,.8), transparent 40%),
-                  radial-gradient(1px 1px at 40% 80%, rgba(255,255,255,.75), transparent 40%),
-                  radial-gradient(1px 1px at 80% 30%, rgba(255,255,255,.7), transparent 40%);
-  --cosmic-stars-2: radial-gradient(2px 2px at 25% 60%, rgba(255,255,255,.25), transparent 40%),
-                    radial-gradient(2px 2px at 65% 35%, rgba(255,255,255,.22), transparent 40%),
-                    radial-gradient(2px 2px at 90% 75%, rgba(255,255,255,.18), transparent 40%);
-}
-
-html[data-theme="light"] .bg-casino-bg {
-  --cosmic-layers: radial-gradient(900px 500px at 0% -10%, rgba(96,165,250,.15), transparent 60%),
-                   radial-gradient(900px 600px at 105% 10%, rgba(167,139,250,.15), transparent 60%),
-                   radial-gradient(700px 600px at 50% 110%, rgba(253,164,175,.12), transparent 60%);
-  --cosmic-stars: radial-gradient(1px 1px at 15% 20%, rgba(0,0,0,.18), transparent 40%),
-                  radial-gradient(1px 1px at 40% 80%, rgba(0,0,0,.16), transparent 40%),
-                  radial-gradient(1px 1px at 80% 30%, rgba(0,0,0,.14), transparent 40%);
-  --cosmic-stars-2: radial-gradient(2px 2px at 25% 60%, rgba(0,0,0,.08), transparent 40%),
-                    radial-gradient(2px 2px at 65% 35%, rgba(0,0,0,.06), transparent 40%),
-                    radial-gradient(2px 2px at 90% 75%, rgba(0,0,0,.04), transparent 40%);
-}
-
-/* 可添加微動態星雲層（不影響互動） */
-.bg-casino-bg::before,
-.bg-casino-bg::after {
+body::before {
   content: "";
-  position: absolute;
-  inset: -10% -10% -10% -10%;
+  position: fixed;
+  inset: 0;
+  background-image: var(--cosmic-stars);
+  background-repeat: repeat;
+  background-size: 2px 2px;
+  opacity: 0.2;
+  animation: twinkle 6s infinite alternate;
   pointer-events: none;
-  background: radial-gradient(600px 600px at 20% 30%, rgba(103,232,249,.08), transparent 60%),
-              radial-gradient(800px 800px at 80% 70%, rgba(253,164,175,.08), transparent 60%);
-  animation: drift 18s ease-in-out infinite;
-  filter: blur(1px);
-  opacity: .6;
-}
-.bg-casino-bg::after {
-  animation-duration: 22s;
-  animation-delay: -4s;
-  opacity: .45;
+  z-index: -1;
 }
 
-/* ====== 卡片/玻璃/邊框 ====== */
+@keyframes twinkle {
+  from { opacity: 0.15; }
+  to   { opacity: 0.35; }
+}
+
+/* ===== 卡片 / 特效 ===== */
 .glass {
-  background: var(--panel);
-  border: 1px solid var(--panel-border);
-  backdrop-filter: blur(8px) saturate(120%);
-  -webkit-backdrop-filter: blur(8px) saturate(120%);
-  border-radius: 14px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.25);
 }
 
 .glow-ring {
-  box-shadow: 0 0 0 1px var(--ring), 0 8px 30px rgba(0,0,0,.15);
+  box-shadow:
+    0 0 15px rgba(0, 200, 255, 0.15),
+    inset 0 0 25px rgba(0, 200, 255, 0.08);
 }
 
-.btn {
-  @apply px-4 py-2 rounded-lg border transition;
-  background: var(--card);
-  border-color: var(--card-border);
-}
-.btn:hover { border-color: rgba(255,255,255,.35); }
-
-/* 漸層亮片掃過 */
 .sheen {
   position: relative;
   overflow: hidden;
 }
 .sheen::after {
   content: "";
-  position: absolute; inset: 0;
-  background: linear-gradient(120deg, transparent, rgba(255,255,255,.25), transparent);
-  transform: translateX(-120%) skewX(-10deg);
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    120deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.35) 50%,
+    transparent 70%
+  );
+  transform: rotate(25deg);
+  animation: sheen-move 6s infinite;
 }
-.sheen:hover::after { animation: sheen 1s ease; }
+@keyframes sheen-move {
+  0%   { transform: translateX(-100%) rotate(25deg); }
+  100% { transform: translateX(100%)  rotate(25deg); }
+}
 
-/* 3D 翻牌容器（仍保留你原本使用） */
+/* ===== 按鈕 ===== */
+button, .btn {
+  @apply transition-all px-4 py-2 rounded-lg font-bold;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+button:hover, .btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 0 15px rgba(0, 200, 255, 0.25);
+}
+
+/* ===== 進場動畫 ===== */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fadeUp { animation: fadeUp 0.6s ease forwards; }
+
+/* ===== 翻牌動畫（百家樂卡片用） ===== */
 .flip-3d { perspective: 1000px; }
 .flip-inner {
-  position: relative; transform-style: preserve-3d; width: 100%; height: 100%;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
 }
-.flip-front, .flip-back {
-  position: absolute; inset: 0; backface-visibility: hidden;
-  border-radius: 16px;
+.flip-front,
+.flip-back {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-radius: 0.75rem;
 }
-.flip-front { background: var(--card); border: 1px solid var(--card-border); }
-.flip-back  { transform: rotateY(180deg); }
+.flip-front { display: flex; align-items: center; justify-content: center; }
+.flip-back  { transform: rotateY(180deg); display: flex; align-items: center; justify-content: center; }
 
-/* 標記勝方的金光 */
-.win-glow {
-  box-shadow: 0 0 24px rgba(255,215,0,.35), inset 0 0 22px rgba(255,215,0,.25);
-}
-
-/* 細節字色 */
-.muted { color: var(--muted); }
-
-/* === Cosmic Lobby add-ons === */
-
-/* 背景（深/淺） */
-.bg-space-dark { background: radial-gradient(1200px 800px at 20% 10%, rgba(73,0,120,.35), transparent 60%), radial-gradient(900px 700px at 80% 30%, rgba(0,120,180,.25), transparent 60%), #0a0b14; }
-.bg-space-light { background: radial-gradient(1200px 800px at 20% 10%, rgba(255,180,255,.35), transparent 60%), radial-gradient(900px 700px at 80% 30%, rgba(120,200,255,.25), transparent 60%), #f7f9ff; }
-
-/* 星點 */
-.bg-stars {
-  background-image:
-    radial-gradient(2px 2px at 20% 30%, rgba(255,255,255,.8) 50%, transparent 51%),
-    radial-gradient(2px 2px at 40% 70%, rgba(255,255,255,.7) 50%, transparent 51%),
-    radial-gradient(1.5px 1.5px at 70% 40%, rgba(255,255,255,.6) 50%, transparent 51%),
-    radial-gradient(1.5px 1.5px at 90% 20%, rgba(255,255,255,.6) 50%, transparent 51%),
-    radial-gradient(1.5px 1.5px at 10% 80%, rgba(255,255,255,.6) 50%, transparent 51%);
-  background-size: 100% 100%;
-  filter: drop-shadow(0 0 8px rgba(255,255,255,.25));
+@keyframes flipIn {
+  0%   { transform: rotateY(0deg); }
+  100% { transform: rotateY(180deg); }
 }
 
-/* 星雲層（旋轉） */
-.nebula {
+/* ===== 大廳星雲動態背景（可給 .nebula-wrap） ===== */
+.nebula-wrap {
+  position: relative;
+  overflow: hidden;
+}
+.nebula-wrap::before,
+.nebula-wrap::after {
+  content: "";
+  position: absolute;
+  filter: blur(40px);
   border-radius: 50%;
-  filter: blur(50px) saturate(120%);
-  animation: slowspin 90s linear infinite;
-  mix-blend-mode: screen;
-  opacity: .35;
+  opacity: 0.35;
+  pointer-events: none;
+  z-index: -1;
 }
-.nebula-cyan { background: radial-gradient(circle, rgba(0, 240, 255, .35), transparent 60%); }
-.nebula-fuchsia { background: radial-gradient(circle, rgba(255, 0, 200, .30), transparent 60%); }
-.nebula-amber { background: radial-gradient(circle, rgba(255, 200, 0, .25), transparent 60%); }
-@keyframes slowspin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-
-/* 粒子緩動 */
-.particle-layer {
-  background-image:
-    radial-gradient(3px 3px at 15% 30%, rgba(255,255,255,.12) 40%, transparent 41%),
-    radial-gradient(3px 3px at 65% 60%, rgba(255,255,255,.12) 40%, transparent 41%),
-    radial-gradient(3px 3px at 85% 20%, rgba(255,255,255,.12) 40%, transparent 41%);
-  animation: drift 40s ease-in-out infinite;
+.nebula-wrap::before {
+  width: 520px; height: 520px;
+  left: -120px; top: -120px;
+  background: radial-gradient(ellipse at center, rgba(0, 199, 255, .25), transparent 60%);
+  animation: driftA 18s linear infinite;
 }
-@keyframes drift {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-20px); }
+.nebula-wrap::after {
+  width: 680px; height: 680px;
+  right: -160px; bottom: -160px;
+  background: radial-gradient(ellipse at center, rgba(162, 91, 255, .25), transparent 60%);
+  animation: driftB 22s linear infinite;
 }
-
-/* 玻璃卡樣式（宇宙感） */
-.glass2 {
-  background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.15),
-    0 8px 24px rgba(0,0,0,.25);
+@keyframes driftA {
+  0% { transform: translate(0, 0) scale(1); }
+  50%{ transform: translate(20px, 10px) scale(1.05); }
+  100%{ transform: translate(0, 0) scale(1); }
 }
-
-/* 跑馬燈 */
-.marquee {
-  white-space: nowrap;
-  overflow: hidden;
-  position: relative;
-  height: 44px;
-  display: flex;
-  align-items: center;
+@keyframes driftB {
+  0% { transform: translate(0, 0) scale(1); }
+  50%{ transform: translate(-20px, -10px) scale(1.06); }
+  100%{ transform: translate(0, 0) scale(1); }
 }
-.marquee > * {
-  display: inline-block;
-  padding-left: 100%;
-  animation: marquee 22s linear infinite;
-}
-@keyframes marquee {
-  0% { transform: translateX(0%); }
-  100% { transform: translateX(-100%); }
-}
-
-/* 工具卡（銀行/管理/登出） */
-.tool-card {
-  position: relative;
-  border-radius: 1rem;
-  border: 1px solid rgba(255,255,255,.10);
-  overflow: hidden;
-  backdrop-filter: blur(8px);
-  background: rgba(255,255,255,.05);
-  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
-}
-.tool-card:hover { transform: translateY(-2px); border-color: rgba(255,255,255,.25); box-shadow: 0 6px 24px rgba(0,0,0,.25); }
-.tool-card.disabled { opacity: .6; pointer-events: none; }
-.tool-card-bg {
-  position: absolute; inset: 0;
-  background-image: linear-gradient(135deg, var(--gc1), var(--gc2));
-  filter: blur(12px); opacity: .35;
-}
-.tool-card-inner { position: relative; z-index: 1; padding: 18px; display: grid; gap: 2px; }
-
-/* 房間卡片 */
-.room-card {
-  position: relative; overflow: hidden;
-  border-radius: 1.25rem;
-  border: 1px solid rgba(255,255,255,.12);
-  background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03));
-  backdrop-filter: blur(8px);
-  transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
-}
-.room-card:hover { transform: translateY(-3px); border-color: rgba(255,255,255,.28); box-shadow: 0 10px 28px rgba(0,0,0,.25); }
-.room-card-bg {
-  position: absolute; inset: -20%;
-  background: radial-gradient(600px 300px at 30% 20%, rgba(0, 255, 255, .18), transparent 60%),
-              radial-gradient(500px 260px at 70% 60%, rgba(255, 0, 200, .16), transparent 60%);
-  filter: blur(18px); opacity: .7;
-}
-/* 極光絲帶 */
-.room-card-aurora { position: absolute; inset: 0; mix-blend-mode: screen; opacity: .35; filter: blur(14px); }
-.aurora-1 { background: radial-gradient(400px 90px at -10% 50%, rgba(0, 255, 255, .35), transparent 60%); animation: auroraSlide 12s ease-in-out infinite; }
-.aurora-2 { background: radial-gradient(420px 100px at 120% 40%, rgba(255, 0, 160, .30), transparent 60%); animation: auroraSlide 14s ease-in-out infinite reverse; }
-.aurora-3 { background: radial-gradient(360px 80px at 50% 120%, rgba(255, 200, 0, .25), transparent 60%); animation: auroraSlide 16s ease-in-out infinite; }
-@keyframes auroraSlide {
-  0%, 100% { transform: translateX(0) translateY(0); }
-  50% { transform: translateX(-6%) translateY(4%); }
-}
-
-/* 小徽章 */
-.phase-chip {
-  font-size: 12px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: rgba(255,255,255,.08);
-  border: 1px solid rgba(255,255,255,.18);
-}
-.enter-chip {
-  font-size: 12px;
-  padding: 6px 10px;
-  border-radius: 10px;
-  background: rgba(0,0,0,.25);
-  border: 1px solid rgba(255,255,255,.12);
-}
-
-/* 鬼玻璃按鈕 */
-.btn-ghost {
-  padding: 8px 12px;
-  border-radius: 12px;
-  background: rgba(255,255,255,.08);
-  border: 1px solid rgba(255,255,255,.15);
-  transition: transform .15s ease, background .15s ease, border-color .15s ease;
-}
-.btn-ghost:hover { transform: translateY(-1px); background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.25); }
-
-/* 霓虹頭像微光 */
-.avatar-glow { filter: drop-shadow(0 0 16px rgba(0,255,255,.25)) drop-shadow(0 0 10px rgba(255,0,200,.18)); }
-
-/* 供 .tool-card 的 BG 色控制（以行內 style 或預設） */
-.tool-card .tool-card-bg { --gc1: rgba(255,255,255,.1); --gc2: rgba(255,255,255,.05); }
