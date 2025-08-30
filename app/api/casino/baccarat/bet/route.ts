@@ -4,7 +4,7 @@ export const revalidate = 0;
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
+import { $Enums } from "@prisma/client";
 import { verifyJWT } from "@/lib/jwt";
 
 function noStoreJson(payload: any, status = 200) {
@@ -26,7 +26,7 @@ function readTokenFromHeaders(req: Request): string | null {
   return m ? decodeURIComponent(m[1]) : null;
 }
 
-// 台北日 00:00（用 UTC 儲存）
+// 台北日 00:00 (UTC 儲存)
 function taipeiDayStart(date = new Date()) {
   const utc = date.getTime();
   const tpe = utc + 8 * 3600_000;
@@ -57,29 +57,29 @@ export async function POST(req: Request) {
     const amount = Number(body.amount || 0);
 
     if (!roomCode) return noStoreJson({ error: "缺少 roomCode" }, 400);
-    if (!Number.isFinite(amount) || amount <= 0)
+    if (!Number.isFinite(amount) || amount <= 0) {
       return noStoreJson({ error: "金額不合法" }, 400);
+    }
 
-    // 只允許三個主注（你原本就限制）
-    if (!["PLAYER", "BANKER", "TIE"].includes(sideStr)) {
+    // 主注三種
+    const allow: Array<$Enums.BetSide> = ["PLAYER", "BANKER", "TIE"];
+    if (!allow.includes(sideStr as $Enums.BetSide)) {
       return noStoreJson({ error: "side 不合法" }, 400);
     }
+    const side = sideStr as $Enums.BetSide;
 
     // 3) 找房間
     const room = await prisma.room.findFirst({
-      where: { code: roomCode as any },
+      where: { code: roomCode as unknown as $Enums.RoomCode },
       select: { id: true, durationSeconds: true },
     });
     if (!room) return noStoreJson({ error: "房間不存在" }, 404);
 
-    // 4) 找當日最新一局（用區間避免等值誤差）
+    // 4) 當日最新一局（用區間，避免毫秒/時區等值誤差）
     const dayStartUtc = taipeiDayStart(new Date());
     const dayEndUtc = addDays(dayStartUtc, 1);
     const round = await prisma.round.findFirst({
-      where: {
-        roomId: room.id,
-        day: { gte: dayStartUtc, lt: dayEndUtc },
-      },
+      where: { roomId: room.id, day: { gte: dayStartUtc, lt: dayEndUtc } },
       orderBy: { roundSeq: "desc" },
       select: { id: true, phase: true },
     });
@@ -91,14 +91,14 @@ export async function POST(req: Request) {
 
     // 6) 交易（下注 + 扣款 + ledger）
     const created = await prisma.$transaction(async (tx) => {
-      // ✅ 目前 DB 沒有 Bet.roomId，使用 UncheckedCreateInput 僅寫標量外鍵
       const bet = await tx.bet.create({
         data: {
-          userId: me.id,
-          roundId: round.id,
-          side: sideStr as any, // 若你在 schema 有其他 side，這裡可調整
           amount,
-        } as Prisma.BetUncheckedCreateInput,
+          side,
+          user:  { connect: { id: me.id } },
+          round: { connect: { id: round.id } },
+          room:  { connect: { id: room.id } }, // ✅ 必填關聯
+        },
         select: { id: true },
       });
 
@@ -111,10 +111,10 @@ export async function POST(req: Request) {
       await tx.ledger.create({
         data: {
           userId: me.id,
-          type: "BET_PLACED" as any,
-          target: "WALLET" as any,
+          type: "BET_PLACED",
+          target: "WALLET",
           delta: -amount,
-          memo: `下注 ${sideStr} -${amount}`,
+          memo: `下注 ${side} -${amount}`,
           balanceAfter: after.balance,
           bankAfter: after.bankBalance,
         },
