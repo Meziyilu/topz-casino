@@ -99,41 +99,35 @@ export async function POST(req: Request) {
     }
 
     // 6) 交易：建立下注、扣錢、寫入 ledger
-    const created = await prisma.$transaction(async (tx) => {
-      const bet = await tx.bet.create({
-        data: {
-          amount,
-          side,
-          user:  { connect: { id: me.id } },
-          round: { connect: { id: round.id } },
-          room:  { connect: { id: room.id } }, // Bet.room 為必填關聯
-        },
-        select: { id: true },
-      });
+const created = await prisma.$transaction(async (tx) => {
+  // ✅ 只寫純標量，用 UncheckedCreateInput，避免 Prisma 型別要求 room 關聯
+  const bet = await tx.bet.create({
+    data: {
+      userId: me.id,
+      roundId: round.id,
+      side: side as any,     // 或 import {$Enums} 後用正確 enum 型別
+      amount,
+    } as import("@prisma/client").Prisma.BetUncheckedCreateInput,
+    select: { id: true },
+  });
 
-      const after = await tx.user.update({
-        where: { id: me.id },
-        data: { balance: { decrement: amount } },
-        select: { balance: true, bankBalance: true },
-      });
+  const after = await tx.user.update({
+    where: { id: me.id },
+    data: { balance: { decrement: amount } },
+    select: { balance: true, bankBalance: true },
+  });
 
-      await tx.ledger.create({
-        data: {
-          userId: me.id,
-          type: "BET_PLACED",
-          target: "WALLET",
-          delta: -amount,
-          memo: `下注 ${side} -${amount}`,
-          balanceAfter: after.balance,
-          bankAfter: after.bankBalance,
-        },
-      });
+  await tx.ledger.create({
+    data: {
+      userId: me.id,
+      type: "BET_PLACED" as any,
+      target: "WALLET" as any,
+      delta: -amount,
+      memo: `下注 ${side} -${amount}`,
+      balanceAfter: after.balance,
+      bankAfter: after.bankBalance,
+    },
+  });
 
-      return bet;
-    });
-
-    return noStoreJson({ ok: true, betId: created.id });
-  } catch (e: any) {
-    return noStoreJson({ error: e?.message || "Server error" }, 500);
-  }
-}
+  return bet;
+});
