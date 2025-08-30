@@ -83,13 +83,15 @@ export async function POST(req: Request) {
 
     // 5) 下單 + 餘額扣款 + 建 ledger（交易內）
     const created = await prisma.$transaction(async (tx) => {
-      // ✅ 僅寫 roundId；不寫 roomId，可同時相容「有/沒有 Bet.roomId 的 schema」
+      // ✅ 關聯 connect（Prisma 6.15.0 BetCreateInput 要這種寫法）
       const bet = await tx.bet.create({
         data: {
-          userId: me.id,
-          roundId: round.id,
-          side: asAny(side),
           amount,
+          side: asAny(side),
+          user:  { connect: { id: me.id } },
+          round: { connect: { id: round.id } },
+          // 若你的 Bet schema 有 room 關聯且為必填，解開下面這行：
+          // room: { connect: { id: room.id } },
         },
         select: { id: true },
       });
