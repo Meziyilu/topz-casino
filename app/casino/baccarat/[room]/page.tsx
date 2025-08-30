@@ -15,7 +15,7 @@ type StateResp = {
   phase: Phase;
   secLeft: number;
   result: null | { outcome: Outcome; p: number | null; b: number | null };
-  cards?: { player: any[]; banker: any[] };
+  cards?: { player: string[]; banker: string[] }; // 新增：牌面（REVEALING/SETTLED 才會有）
   myBets: Record<string, number>;
   recent: { roundSeq: number; outcome: Outcome; p: number; b: number }[];
 };
@@ -48,12 +48,12 @@ export default function RoomPage() {
   const [placing, setPlacing] = useState<null | "PLAYER" | "BANKER" | "TIE">(null);
   const [err, setErr] = useState<string>("");
 
-  // 下注金額（籌碼 + 自訂）
+  // ✅ 籌碼與自訂金額（保留原本下注流程，只是視覺增強）
   const chipOptions = [50, 100, 500, 1000];
   const [amount, setAmount] = useState<number>(100);
   const isAmountValid = useMemo(() => Number.isFinite(amount) && amount > 0, [amount]);
 
-  // 輪詢 state
+  // 輪詢 state（保留）
   useEffect(() => {
     let timer: any;
     let mounted = true;
@@ -83,13 +83,12 @@ export default function RoomPage() {
     };
   }, [room]);
 
-  // 倒數本地同步
+  // 倒數本地同步（保留）
   const [localSec, setLocalSec] = useState<number>(0);
   useEffect(() => {
     if (!data) return;
     setLocalSec(data.secLeft);
   }, [data?.secLeft]);
-
   useEffect(() => {
     if (localSec <= 0) return;
     const t = setInterval(() => setLocalSec((s) => Math.max(0, s - 1)), 1000);
@@ -124,43 +123,30 @@ export default function RoomPage() {
     }
   }
 
+  const outcomeMark = useMemo(() => (data?.result ? data.result.outcome : null), [data?.result]);
+
   return (
     <div className="min-h-screen bg-casino-bg text-white">
-      {/* 頂部列 */}
+      {/* 頂部列（保留） */}
       <div className="max-w-6xl mx-auto px-4 py-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button className="btn glass tilt" onClick={() => router.push("/lobby")} title="回大廳">
             ← 回大廳
           </button>
-          <div className="glass px-4 py-2 rounded-xl">
-            <div className="text-sm opacity-80">房間</div>
-            <div className="text-lg font-semibold">{data?.room.name || room}</div>
-          </div>
-          <div className="glass px-4 py-2 rounded-xl">
-            <div className="text-sm opacity-80">局序</div>
-            <div className="text-lg font-semibold">{data ? pad4(data.roundSeq) : "--"}</div>
-          </div>
-          <div className="glass px-4 py-2 rounded-xl">
-            <div className="text-sm opacity-80">狀態</div>
-            <div className="text-lg font-semibold">{data ? zhPhase[data.phase] : "載入中"}</div>
-          </div>
-          <div className="glass px-4 py-2 rounded-xl">
-            <div className="text-sm opacity-80">倒數</div>
-            <div className="text-lg font-semibold">
-              {typeof localSec === "number" ? `${localSec}s` : "--"}
-            </div>
-          </div>
+          <InfoPill title="房間" value={data?.room.name || String(room)} />
+          <InfoPill title="局序" value={data ? pad4(data.roundSeq) : "--"} />
+          <InfoPill title="狀態" value={data ? zhPhase[data.phase] : "載入中"} />
+          <InfoPill title="倒數" value={typeof localSec === "number" ? `${localSec}s` : "--"} />
         </div>
-
         <div className="text-right">
           {err && <div className="text-red-400 text-sm mb-2">{err}</div>}
           <div className="opacity-70 text-xs">（時間以伺服器為準）</div>
         </div>
       </div>
 
-      {/* 內容區 */}
+      {/* 內容區（左下注 / 右路子） */}
       <div className="max-w-6xl mx-auto px-4 grid md:grid-cols-3 gap-6 pb-16">
-        {/* 左：下注區 */}
+        {/* 左：下注區（保留＋加強） */}
         <div className="md:col-span-2">
           <div className="glass glow-ring p-6 rounded-2xl sheen">
             <div className="flex items-center justify-between mb-4">
@@ -178,9 +164,9 @@ export default function RoomPage() {
               </div>
             </div>
 
-            {/* 籌碼列 */}
+            {/* 籌碼列（新增） */}
             <div className="flex flex-wrap gap-2 mb-6">
-              {[50, 100, 500, 1000].map((c) => (
+              {chipOptions.map((c) => (
                 <button
                   key={c}
                   onClick={() => setAmount(c)}
@@ -218,80 +204,60 @@ export default function RoomPage() {
               </button>
             </div>
 
-            {/* 三大按鈕：壓 閒／和／莊 */}
+            {/* 壓 閒／和／莊（保留樣式、文案） */}
             <div className="grid grid-cols-3 gap-4">
-              <button
+              <BetButton
+                title='壓「閒」'
+                ratio="1 : 1"
                 disabled={placing === "PLAYER" || data?.phase !== "BETTING" || !isAmountValid}
+                accent="cyan"
+                my={data?.myBets?.PLAYER}
                 onClick={() => place("PLAYER")}
-                className="relative overflow-hidden rounded-2xl p-5 transition active:scale-95 border hover:border-cyan-300/50"
-                style={{
-                  background: "linear-gradient(135deg, rgba(103,232,249,.18), rgba(255,255,255,.06))",
-                  borderColor: "rgba(103,232,249,.4)",
-                }}
-              >
-                <div className="text-2xl font-extrabold">壓「閒」</div>
-                <div className="opacity-80 text-sm mt-1">1 : 1</div>
-                {!!data?.myBets?.PLAYER && (
-                  <div className="text-xs opacity-80 mt-2">我本局：{data.myBets.PLAYER}</div>
-                )}
-                <div className="sheen absolute inset-0 pointer-events-none" />
-              </button>
-
-              <button
+              />
+              <BetButton
+                title='壓「和」'
+                ratio="1 : 8"
                 disabled={placing === "TIE" || data?.phase !== "BETTING" || !isAmountValid}
+                accent="yellow"
+                my={data?.myBets?.TIE}
                 onClick={() => place("TIE")}
-                className="relative overflow-hidden rounded-2xl p-5 transition active:scale-95 border hover:border-yellow-200/50"
-                style={{
-                  background: "linear-gradient(135deg, rgba(253,230,138,.18), rgba(255,255,255,.06))",
-                  borderColor: "rgba(253,230,138,.4)",
-                }}
-              >
-                <div className="text-2xl font-extrabold">壓「和」</div>
-                <div className="opacity-80 text-sm mt-1">1 : 8</div>
-                {!!data?.myBets?.TIE && (
-                  <div className="text-xs opacity-80 mt-2">我本局：{data.myBets.TIE}</div>
-                )}
-                <div className="sheen absolute inset-0 pointer-events-none" />
-              </button>
-
-              <button
+              />
+              <BetButton
+                title='壓「莊」'
+                ratio="1 : 0.95"
                 disabled={placing === "BANKER" || data?.phase !== "BETTING" || !isAmountValid}
+                accent="rose"
+                my={data?.myBets?.BANKER}
                 onClick={() => place("BANKER")}
-                className="relative overflow-hidden rounded-2xl p-5 transition active:scale-95 border hover:border-rose-300/50"
-                style={{
-                  background: "linear-gradient(135deg, rgba(253,164,175,.18), rgba(255,255,255,.06))",
-                  borderColor: "rgba(253,164,175,.4)",
-                }}
-              >
-                <div className="text-2xl font-extrabold">壓「莊」</div>
-                <div className="opacity-80 text-sm mt-1">1 : 0.95</div>
-                {!!data?.myBets?.BANKER && (
-                  <div className="text-xs opacity-80 mt-2">我本局：{data.myBets.BANKER}</div>
-                )}
-                <div className="sheen absolute inset-0 pointer-events-none" />
-              </button>
+              />
             </div>
 
-            {/* 翻牌/結果（牌面 + 點數 + 勝方金光） */}
+            {/* 翻牌/結果（新增 CardList；保留原介紹） */}
             {data?.phase !== "BETTING" && data?.result && (
               <div className="mt-8">
                 <div className="text-sm opacity-80 mb-3">本局結果</div>
-                <div className="grid grid-cols-2 gap-8 items-start w-full max-w-3xl">
-                  <Hand
-                    label="閒"
-                    cards={(data.cards?.player ?? []) as any[]}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
+                  <CardList
+                    label="閒方"
+                    cards={data.cards?.player || []}
                     total={data.result.p ?? 0}
+                    outcome={data.result.outcome}
                     isWinner={data.result.outcome === "PLAYER"}
+                    side="PLAYER"
                   />
-                  <Hand
-                    label="莊"
-                    cards={(data.cards?.banker ?? []) as any[]}
+                  <CardList
+                    label="莊方"
+                    cards={data.cards?.banker || []}
                     total={data.result.b ?? 0}
+                    outcome={data.result.outcome}
                     isWinner={data.result.outcome === "BANKER"}
+                    side="BANKER"
                   />
                 </div>
+
                 <div className="mt-4 text-lg">
-                  結果：<span className="font-bold">{fmtOutcome(data.result.outcome)}</span>
+                  結果：<span className="font-bold">{fmtOutcome(outcomeMark)}</span>
                 </div>
               </div>
             )}
@@ -302,11 +268,12 @@ export default function RoomPage() {
           </div>
         </div>
 
-        {/* 右：路子 / 歷史 */}
-        <div>
+        {/* 右：路子 / 歷史（原樣保留） */}
+        <div className="">
           <div className="glass glow-ring p-6 rounded-2xl">
             <div className="text-xl font-bold mb-4">路子（近 20 局）</div>
 
+            {/* 大路色塊 */}
             <div className="grid grid-cols-10 gap-2">
               {(data?.recent || []).map((r) => (
                 <div
@@ -336,6 +303,7 @@ export default function RoomPage() {
               )}
             </div>
 
+            {/* 表格 */}
             <div className="mt-4 max-h-64 overflow-auto text-sm">
               <table className="w-full text-left opacity-90">
                 <thead className="opacity-70">
@@ -366,6 +334,35 @@ export default function RoomPage() {
               </table>
             </div>
 
+            {/* 表情路子（新增、不影響原有） */}
+            <div className="mt-6">
+              <div className="mb-2 opacity-80">表情路子</div>
+              <div className="grid grid-cols-8 gap-2">
+                {(data?.recent || []).slice(0, 24).map((r) => (
+                  <div
+                    key={`e-${r.roundSeq}`}
+                    className="w-6 h-6 rounded-md flex items-center justify-center text-[10px]"
+                    style={{
+                      background:
+                        r.outcome === "PLAYER"
+                          ? "rgba(103,232,249,.15)"
+                          : r.outcome === "BANKER"
+                          ? "rgba(253,164,175,.15)"
+                          : "rgba(253,230,138,.15)",
+                      border:
+                        r.outcome === "PLAYER"
+                          ? "1px solid rgba(103,232,249,.5)"
+                          : r.outcome === "BANKER"
+                          ? "1px solid rgba(253,164,175,.5)"
+                          : "1px solid rgba(253,230,138,.5)",
+                    }}
+                    title={`#${pad4(r.roundSeq)}：${fmtOutcome(r.outcome)}`}
+                  >
+                    {r.outcome ? (r.outcome === "TIE" ? "和" : r.outcome === "PLAYER" ? "閒" : "莊") : "—"}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -373,59 +370,125 @@ export default function RoomPage() {
   );
 }
 
-/** 單手牌（含卡片堆疊、點數、勝方金光） */
-function Hand({
+/** 頂部資訊小膠囊 */
+function InfoPill({ title, value }: { title: string; value: string }) {
+  return (
+    <div className="glass px-4 py-2 rounded-xl">
+      <div className="text-sm opacity-80">{title}</div>
+      <div className="text-lg font-semibold">{value}</div>
+    </div>
+  );
+}
+
+/** 下注按鈕（維持既有三顆，只是包成元件） */
+function BetButton({
+  title,
+  ratio,
+  disabled,
+  accent,
+  my,
+  onClick,
+}: {
+  title: string;
+  ratio: string;
+  disabled?: boolean;
+  accent: "cyan" | "yellow" | "rose";
+  my?: number;
+  onClick: () => void;
+}) {
+  const bg =
+    accent === "cyan"
+      ? "linear-gradient(135deg, rgba(103,232,249,.18), rgba(255,255,255,.06))"
+      : accent === "yellow"
+      ? "linear-gradient(135deg, rgba(253,230,138,.18), rgba(255,255,255,.06))"
+      : "linear-gradient(135deg, rgba(253,164,175,.18), rgba(255,255,255,.06))";
+  const border =
+    accent === "cyan"
+      ? "rgba(103,232,249,.4)"
+      : accent === "yellow"
+      ? "rgba(253,230,138,.4)"
+      : "rgba(253,164,175,.4)";
+  return (
+    <button
+      disabled={disabled}
+      onClick={onClick}
+      className="relative overflow-hidden rounded-2xl p-5 transition active:scale-95 border"
+      style={{ background: bg, borderColor: border }}
+    >
+      <div className="text-2xl font-extrabold">{title}</div>
+      <div className="opacity-80 text-sm mt-1">{ratio}</div>
+      {!!my && <div className="text-xs opacity-80 mt-2">我本局：{my}</div>}
+      <div className="sheen absolute inset-0 pointer-events-none" />
+    </button>
+  );
+}
+
+/** 牌面清單（逐張延遲翻牌 + 贏家金光） */
+function CardList({
   label,
   cards,
   total,
+  outcome,
   isWinner,
+  side,
 }: {
-  label: "閒" | "莊";
-  cards: { rank?: string | number }[];
+  label: string;
+  cards: string[];
   total: number;
+  outcome: Outcome;
   isWinner: boolean;
+  side: "PLAYER" | "BANKER";
 }) {
-  const shown = (cards || []).slice(0, 3);
-
   return (
     <div
-      className={`hand-wrap glass rounded-2xl p-4 relative ${
-        isWinner ? "ring-2 ring-yellow-300/60" : "ring-1 ring-white/10"
+      className={`p-4 rounded-2xl glass relative ${
+        isWinner ? "border-2 border-yellow-400 shadow-[0_0_24px_rgba(255,215,0,.35)]" : "border border-white/10"
       }`}
+      style={{
+        background:
+          side === "PLAYER"
+            ? "linear-gradient(135deg, rgba(103,232,249,.10), rgba(255,255,255,.04))"
+            : "linear-gradient(135deg, rgba(253,164,175,.10), rgba(255,255,255,.04))",
+      }}
     >
       <div className="flex items-center justify-between mb-3">
-        <div className="text-base font-semibold">
-          {label}方 {isWinner && <span className="text-yellow-300 ml-1">★ 勝</span>}
-        </div>
-        <div className="text-sm opacity-80">
-          合計 <span className="font-bold">{total}</span> 點
-        </div>
+        <span className="font-bold">
+          {label}
+          {isWinner && " ★勝"}
+        </span>
+        <span className="opacity-80 text-sm">合計 {total} 點</span>
       </div>
 
-      <div className="card-stack">
-        {shown.map((c, i) => (
-          <div
-            key={i}
-            className="card-tile"
-            style={
-              {
-                "--i": i,
-                "--deg": i === 0 ? -6 : i === 1 ? 0 : 6,
-                "--delay": `${0.15 * i}s`,
-              } as React.CSSProperties
-            }
-            data-suit={label === "閒" ? "p" : "b"}
-          >
-            <div className="card-face card-front">?</div>
-            <div className="card-face card-back">
-              <span className="rank">{String(c?.rank ?? "•")}</span>
-              <span className="pip">♠</span>
+      <div className="flex gap-3 justify-center items-center min-h-[88px]">
+        {cards && cards.length > 0 ? (
+          cards.map((c, i) => (
+            <div
+              key={`${label}-${i}-${c}`}
+              className="w-14 h-20 rounded-xl bg-white/10 border border-white/20 
+                         flex items-center justify-center text-lg font-bold
+                         animate-[flipIn_.6s_ease_forwards]"
+              style={{ animationDelay: `${i * 0.28}s` }}
+              title={c}
+            >
+              {c}
             </div>
-          </div>
-        ))}
+          ))
+        ) : (
+          <>
+            <GhostCard />
+            <GhostCard />
+            <GhostCard />
+          </>
+        )}
       </div>
+    </div>
+  );
+}
 
-      {isWinner && <div className="win-glow pointer-events-none" />}
+function GhostCard() {
+  return (
+    <div className="w-14 h-20 rounded-xl bg-white/5 border border-white/15 flex items-center justify-center opacity-70">
+      ?
     </div>
   );
 }
