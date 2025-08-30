@@ -18,7 +18,6 @@ function noStoreJson(payload: any, status = 200) {
   });
 }
 
-// 取得台北當日 00:00（以 UTC 儲存）
 function taipeiDayStart(date = new Date()) {
   const utc = date.getTime();
   const tpe = utc + 8 * 3600_000;
@@ -28,11 +27,10 @@ function taipeiDayStart(date = new Date()) {
 
 type Side = "PLAYER" | "BANKER" | "TIE";
 
-/** 需與 /state 同步：下注時間 = room.durationSeconds（秒） */
-const BET_WINDOW_SECONDS = (durationSeconds: number) => durationSeconds;
-
 export async function POST(req: Request) {
   try {
+    const url = new URL(req.url);
+
     // 1) 驗身分
     const me = await getUserFromRequest(req);
     if (!me) return noStoreJson({ error: "請先登入" }, 401);
@@ -62,7 +60,7 @@ export async function POST(req: Request) {
 
     const dayStartUtc = taipeiDayStart(new Date());
 
-    // 4) 取得「當日最新一局」，若沒有就自動建立一局（BETTING）
+    // 4) 今日最新一局（沒有就自動開第一局）
     let round = await prisma.round.findFirst({
       where: { roomId: room.id, day: dayStartUtc },
       orderBy: [{ roundSeq: "desc" }],
@@ -76,10 +74,9 @@ export async function POST(req: Request) {
     });
 
     if (!round) {
-      // 沒有任何今日局 → 自動開第一局（保持與 /state 一致）
       const now = new Date();
       round = await prisma.$transaction(async (tx) => {
-        const next = await tx.round.create({
+        return tx.round.create({
           data: {
             roomId: room.id,
             day: dayStartUtc,
@@ -96,30 +93,40 @@ export async function POST(req: Request) {
             createdAt: true,
           },
         });
-        return next;
       });
     }
 
-    // 5) 檢查仍在下注倒數內（避免進入 REVEALING/SETTLED）
+    // 5) 是否仍在下注時間
     const startMs = new Date(round.startedAt ?? round.createdAt).getTime();
     const elapsed = Math.floor((Date.now() - startMs) / 1000);
-    const betWindow = BET_WINDOW_SECONDS(room.durationSeconds);
+    const betWindow = room.durationSeconds; // 與 /state 同參數
     const stillBetting = round.phase === "BETTING" && elapsed < betWindow;
 
     if (!stillBetting) {
-      return noStoreJson({ error: "目前非下注時間" }, 400);
+      return noStoreJson(
+        {
+          error: "目前非下注時間",
+          debug: {
+            phase: round.phase,
+            elapsed,
+            betWindow,
+            roundId: round.id,
+            roundSeq: round.roundSeq,
+          },
+        },
+        400
+      );
     }
 
-    // 6) 交易：檢查餘額 → 扣款 → 新增 Bet(roundId) → Ledger
+    // 6) 交易：餘額→扣款→建立 Bet(roundId)→Ledger
     const result = await prisma.$transaction(async (tx) => {
-      // 最新餘額
       const user = await tx.user.findUnique({
         where: { id: me.id },
         select: { balance: true, bankBalance: true },
       });
       if (!user) throw new Error("使用者不存在");
       if (user.balance < amount) {
-        return { ok: false, error: "餘額不足" } as const;
+        return { ok: false as const, error: "餘額不足" };
       }
 
       const after = await tx.user.update({
@@ -131,7 +138,7 @@ export async function POST(req: Request) {
       const bet = await tx.bet.create({
         data: {
           userId: me.id,
-          roundId: round!.id, // ✅ 只寫 roundId，不寫 roomId（你的 Bet 沒這欄）
+          roundId: round!.id, // ✅ 你的 Bet 只有 roundId，不要寫 roomId
           side: side as any,
           amount,
         },
