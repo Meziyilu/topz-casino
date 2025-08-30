@@ -4,39 +4,22 @@ export const revalidate = 0;
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { verifyJWT } from "@/lib/jwt";
-import type { BetSide, LedgerType, BalanceTarget, RoomCode } from "@prisma/client";
+import { getUserFromRequest } from "@/lib/auth";
 
-// 小工具
-const asAny = <T = any>(v: unknown) => v as T;
+// 小工具：禁止快取回應
 function noStoreJson(payload: any, status = 200) {
   return NextResponse.json(payload, {
     status,
     headers: {
-      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+      "Cache-Control":
+        "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
       Pragma: "no-cache",
       Expires: "0",
     },
   });
 }
-function readTokenFromHeaders(req: Request): string | null {
-  const raw = req.headers.get("cookie");
-  if (!raw) return null;
-  const m = raw.match(/(?:^|;\s*)token=([^;]+)/);
-  return m ? decodeURIComponent(m[1]) : null;
-}
-async function getUser(req: Request) {
-  const token = readTokenFromHeaders(req);
-  if (!token) return null;
-  const payload = await verifyJWT(token).catch(() => null);
-  if (!payload?.sub) return null;
-  return prisma.user.findUnique({
-    where: { id: String(payload.sub) },
-    select: { id: true, balance: true },
-  });
-}
 
-// 台北日界線 00:00（以 UTC 儲存）
+// 取得台北當日 00:00（以 UTC 儲存）
 function taipeiDayStart(date = new Date()) {
   const utc = date.getTime();
   const tpe = utc + 8 * 3600_000;
@@ -44,88 +27,111 @@ function taipeiDayStart(date = new Date()) {
   return new Date(tpeStart - 8 * 3600_000);
 }
 
+type Side = "PLAYER" | "BANKER" | "TIE";
+
 export async function POST(req: Request) {
   try {
-    const me = await getUser(req);
-    if (!me) return noStoreJson({ error: "未登入" }, 401);
+    const me = await getUserFromRequest(req);
+    if (!me) return noStoreJson({ error: "請先登入" }, 401);
 
-    const body = (await req.json().catch(() => ({}))) as {
-      roomCode?: RoomCode | string;
-      side?: BetSide | string;
-      amount?: number;
-    };
+    const body = await req.json().catch(() => ({}));
+    const roomCode = String(body?.roomCode || "").toUpperCase();
+    const side: Side = body?.side;
+    const amount = Number(body?.amount);
 
-    const roomCode = String(body.roomCode || "").toUpperCase() as RoomCode;
-    const side = String(body.side || "").toUpperCase() as BetSide;
-    const amount = Number(body.amount || 0);
-
-    if (!["R30", "R60", "R90"].includes(roomCode))
+    if (!roomCode || !["R30", "R60", "R90"].includes(roomCode)) {
       return noStoreJson({ error: "房間代碼錯誤" }, 400);
-    if (!["PLAYER", "BANKER", "TIE", "PLAYER_PAIR", "BANKER_PAIR"].includes(side))
-      return noStoreJson({ error: "下注面錯誤" }, 400);
-    if (!Number.isFinite(amount) || amount <= 0)
-      return noStoreJson({ error: "下注金額需為正數" }, 400);
+    }
+    if (!["PLAYER", "BANKER", "TIE"].includes(String(side))) {
+      return noStoreJson({ error: "下注方位錯誤" }, 400);
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return noStoreJson({ error: "下注金額需為正整數" }, 400);
+    }
 
-    // 取得當日最新一局（該房）
-    const dayStartUtc = taipeiDayStart(new Date());
-    const round = await prisma.round.findFirst({
-      where: { room: { code: asAny(roomCode) }, day: dayStartUtc },
-      orderBy: { roundSeq: "desc" },
-      select: { id: true, phase: true },
+    // 房間
+    const room = await prisma.room.findFirst({
+      where: { code: roomCode as any },
+      select: { id: true, durationSeconds: true },
     });
-    if (!round) return noStoreJson({ error: "目前無有效局" }, 400);
-    if (round.phase !== asAny("BETTING"))
-      return noStoreJson({ error: "非下注階段" }, 400);
+    if (!room) return noStoreJson({ error: "房間不存在" }, 404);
 
-    // 餘額檢查
-    if ((me.balance ?? 0) < amount)
-      return noStoreJson({ error: "餘額不足" }, 400);
+    const dayStartUtc = taipeiDayStart(new Date());
 
-    // 交易：扣款 + 建立下注 + 寫入 Ledger
-    await prisma.$transaction(async (tx) => {
-      const after = await tx.user.update({
+    // 取當日「最新一局」
+    const round = await prisma.round.findFirst({
+      where: { roomId: room.id, day: dayStartUtc },
+      orderBy: [{ roundSeq: "desc" }],
+      select: {
+        id: true,
+        phase: true,
+        startedAt: true,
+        createdAt: true,
+      },
+    });
+    if (!round) return noStoreJson({ error: "目前無可下注的局" }, 400);
+    if (round.phase !== "BETTING") {
+      return noStoreJson({ error: "目前非下注時間" }, 400);
+    }
+
+    // 交易：扣款 + 建立 Bet + 寫 Ledger
+    const result = await prisma.$transaction(async (tx) => {
+      // 讀取最新餘額
+      const user = await tx.user.findUnique({
+        where: { id: me.id },
+        select: { balance: true, bankBalance: true },
+      });
+      if (!user) throw new Error("使用者不存在");
+      if (user.balance < amount) {
+        return { ok: false, error: "餘額不足" } as const;
+      }
+
+      // 扣錢
+      const afterWallet = await tx.user.update({
         where: { id: me.id },
         data: { balance: { decrement: amount } },
         select: { balance: true, bankBalance: true },
       });
 
-      await tx.bet.create({
+      // 建立下注（⚠️ 只寫 roundId，**不要** roomId）
+      const bet = await tx.bet.create({
         data: {
           userId: me.id,
           roundId: round.id,
-          side: asAny(side),
+          side: side as any,
           amount,
         },
+        select: { id: true, side: true, amount: true, createdAt: true },
       });
 
+      // 記帳
       await tx.ledger.create({
         data: {
           userId: me.id,
-          type: asAny<LedgerType>("BET_PLACED"),
-          target: asAny<BalanceTarget>("WALLET"),
-          delta: -amount, // 扣款記為負數
-          memo: `下注 ${side} 金額 ${amount}`,
-          balanceAfter: after.balance,
-          bankAfter: after.bankBalance,
+          type: "BET_PLACED" as any,
+          target: "WALLET" as any,
+          delta: -amount,
+          memo: `下注 ${side} ${amount}`,
+          balanceAfter: afterWallet.balance,
+          bankAfter: afterWallet.bankBalance,
         },
       });
+
+      return {
+        ok: true as const,
+        betId: bet.id,
+        balance: afterWallet.balance,
+      };
     });
 
-    // 回傳：該局我的總下注（聚合）
-    const my = await prisma.bet.groupBy({
-      by: ["side"],
-      where: { userId: me.id, roundId: round.id },
-      _sum: { amount: true },
+    if (!result.ok) return noStoreJson({ error: result.error }, 400);
+
+    return noStoreJson({
+      ok: true,
+      betId: result.betId,
+      balance: result.balance,
     });
-
-    const myBets: Record<string, number> = {};
-    for (const r of my) {
-      myBets[r.side as any] = (r as any)._sum.amount ?? 0;
-    }
-
-    return noStoreJson({ ok: true, myBets });
   } catch (e: any) {
-    console.error("BET ERROR:", e);
     return noStoreJson({ error: e?.message || "Server error" }, 500);
   }
 }
