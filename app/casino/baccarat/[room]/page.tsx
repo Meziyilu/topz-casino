@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Leaderboard from "@/components/Leaderboard"; // ⭐ 新增：排行榜
 
 type Outcome = "PLAYER" | "BANKER" | "TIE" | null;
 type Phase = "BETTING" | "REVEALING" | "SETTLED";
@@ -77,6 +78,16 @@ function formatTime(d = new Date()) {
 export default function RoomPage() {
   const { room } = useParams<{ room: string }>();
   const router = useRouter();
+
+  // ⭐ 驗證房間代碼，提供給排行榜 fixedRoom
+  const roomCodeUpper = useMemo(() => String(room || "").toUpperCase(), [room]);
+  const fixedRoom = useMemo(
+    () =>
+      roomCodeUpper === "R30" || roomCodeUpper === "R60" || roomCodeUpper === "R90"
+        ? (roomCodeUpper as "R30" | "R60" | "R90")
+        : undefined,
+    [roomCodeUpper]
+  );
 
   const [data, setData] = useState<StateResp | null>(null);
   const [loading, setLoading] = useState(true);
@@ -323,7 +334,7 @@ export default function RoomPage() {
           </div>
         </div>
 
-        {/* 右：路子/表格/表情路子 */}
+        {/* 右：路子/表格/表情路子 + ⭐ 該房排行榜 */}
         <div>
           {/* 色塊路子 */}
           <div className="glass glow-ring p-6 rounded-2xl mb-6">
@@ -391,7 +402,7 @@ export default function RoomPage() {
           </div>
 
           {/* 表情路子（簡化 6x6） */}
-          <div className="glass glow-ring p-6 rounded-2xl">
+          <div className="glass glow-ring p-6 rounded-2xl mb-6">
             <div className="text-xl font-bold mb-4">表情路子</div>
             <div className="grid grid-cols-6 gap-3">
               {(data?.recent || []).slice(0, 36).map((r) => (
@@ -423,6 +434,11 @@ export default function RoomPage() {
                 ))}
             </div>
           </div>
+
+          {/* ⭐ 房內排行榜（固定房，不顯示房間選單） */}
+          {fixedRoom && (
+            <Leaderboard fixedRoom={fixedRoom} showRoomSelector={false} />
+          )}
         </div>
       </div>
     </div>

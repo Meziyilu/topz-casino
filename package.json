@@ -13,7 +13,8 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:reset": "prisma migrate reset -f",
-    "db:seed": "ts-node prisma/seed.ts"
+    "db:seed": "ts-node prisma/seed.ts",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@prisma/client": "6.15.0",
@@ -34,5 +35,8 @@
     "tailwindcss": "3.4.17",
     "ts-node": "^10.9.2",
     "typescript": "5.4.5"
+  },
+  "engines": {
+    "node": ">=20 <21"
   }
 }
