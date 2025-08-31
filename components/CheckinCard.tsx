@@ -4,31 +4,31 @@
 import { useEffect, useState } from "react";
 
 type StatusResp = {
-  user: { id: string; name?: string | null; email: string; balance: number };
-  today: string;
-  claimedToday: boolean;
-  nextStreak: number;
-  todayReward: number;
-  recent: { day: string; reward: number; streak: number; createdAt: string }[];
+  ok: boolean;
+  today: { claimed: boolean; reward: number; day: string };
+  streak: number;
+  balance: number;
 };
 
 export default function CheckinCard({
-  onBalanceUpdate,
+  onClaimed,
 }: {
-  onBalanceUpdate?: (balance: number) => void;
+  onClaimed?: (nextBalance: number) => void;
 }) {
-  const [status, setStatus] = useState<StatusResp | null>(null);
   const [loading, setLoading] = useState(true);
-  const [claiming, setClaiming] = useState(false);
   const [err, setErr] = useState("");
+  const [stat, setStat] = useState<StatusResp | null>(null);
+  const [claiming, setClaiming] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   async function load() {
+    setLoading(true);
+    setErr("");
     try {
-      const r = await fetch("/api/checkin/status", { credentials: "include", cache: "no-store" });
+      const r = await fetch("/api/checkin/status", { cache: "no-store", credentials: "include" });
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error || "載入失敗");
-      setStatus(j);
-      setErr("");
+      setStat(j as StatusResp);
     } catch (e: any) {
       setErr(e?.message || "連線失敗");
     } finally {
@@ -41,24 +41,26 @@ export default function CheckinCard({
   }, []);
 
   async function claim() {
+    if (!stat || stat.today.claimed) return;
     setClaiming(true);
+    setErr("");
     try {
       const r = await fetch("/api/checkin/claim", {
         method: "POST",
         credentials: "include",
-        cache: "no-store",
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error || "簽到失敗");
-      // 重新載入狀態
+
+      // 更新卡片狀態
       await load();
 
-      // 拉一次 /api/auth/me 更新錢包（如果你有此 API）
-      try {
-        const meRes = await fetch("/api/auth/me", { credentials: "include", cache: "no-store" });
-        const meJson = await meRes.json();
-        if (meRes.ok && onBalanceUpdate) onBalanceUpdate(meJson?.user?.balance ?? undefined);
-      } catch {}
+      // 小提示
+      setToast(`簽到成功！+${j.reward} 金幣`);
+      setTimeout(() => setToast(null), 2500);
+
+      // 通知外部（大廳刷新錢包）
+      if (onClaimed && typeof j.balance === "number") onClaimed(j.balance);
     } catch (e: any) {
       setErr(e?.message || "簽到失敗");
     } finally {
@@ -67,58 +69,41 @@ export default function CheckinCard({
   }
 
   return (
-    <div className="glass rounded-2xl p-5 border border-white/10">
+    <div className="glass rounded-2xl p-5 border border-white/15 shadow-lg">
       <div className="flex items-center justify-between mb-3">
-        <div className="text-xl font-bold">每日簽到</div>
-        <div className="opacity-70 text-sm">{status ? new Date(status.today).toLocaleDateString("zh-TW") : ""}</div>
+        <h2 className="text-lg font-bold">🎁 每日簽到</h2>
+        {stat && <div className="text-xs opacity-70">連續：{stat.streak} 天</div>}
       </div>
 
-      {err && <div className="text-red-400 text-sm mb-2">{err}</div>}
+      {loading ? (
+        <div className="opacity-70 text-sm">載入中…</div>
+      ) : err ? (
+        <div className="text-rose-300 text-sm">{err}</div>
+      ) : stat ? (
+        <>
+          <div className="text-sm opacity-80">
+            今日：{new Date(stat.today.day).toLocaleDateString()}　
+            {stat.today.claimed ? (
+              <span className="text-emerald-300">已簽到 ✅</span>
+            ) : (
+              <span>可領獎勵 <b>{stat.today.reward}</b> 金幣</span>
+            )}
+          </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="glass rounded-xl p-4 border border-white/10">
-          <div className="text-sm opacity-70">今日獎勵</div>
-          <div className="text-2xl font-extrabold mt-1">{status?.todayReward ?? "--"} 金幣</div>
-        </div>
-        <div className="glass rounded-xl p-4 border border-white/10">
-          <div className="text-sm opacity-70">連續天數</div>
-          <div className="text-2xl font-extrabold mt-1">{status?.nextStreak ?? "--"} 天</div>
-        </div>
-      </div>
+          <button
+            disabled={claiming || stat.today.claimed}
+            onClick={claim}
+            className="mt-4 w-full rounded-xl px-4 py-3 border border-white/20 hover:border-emerald-300/60 transition 
+                       bg-gradient-to-br from-emerald-400/15 to-emerald-200/5"
+          >
+            {stat.today.claimed ? "今天已簽到" : claiming ? "領取中…" : "立即簽到"}
+          </button>
 
-      <button
-        disabled={loading || claiming || !!status?.claimedToday}
-        onClick={claim}
-        className={`mt-4 w-full py-3 rounded-xl font-bold transition ${
-          status?.claimedToday
-            ? "bg-white/10 text-white/60 cursor-not-allowed"
-            : "bg-gradient-to-br from-cyan-400/20 to-fuchsia-400/20 border border-white/20 hover:border-white/40"
-        }`}
-      >
-        {status?.claimedToday ? "今天已簽到 ✔" : claiming ? "簽到中…" : "領取今日獎勵"}
-      </button>
-
-      <div className="mt-4">
-        <div className="text-sm opacity-70 mb-2">近 7 天</div>
-        <div className="grid grid-cols-7 gap-2">
-          {Array.from({ length: 7 }).map((_, idx) => {
-            const item = status?.recent?.[idx];
-            const isDone = !!item;
-            return (
-              <div
-                key={idx}
-                className={`rounded-lg p-2 text-center border ${
-                  isDone ? "border-emerald-400/50 bg-emerald-400/10" : "border-white/10 bg-white/5"
-                }`}
-                title={isDone ? `第 ${item.streak} 天 +${item.reward}` : "未簽到"}
-              >
-                <div className="text-xs">{isDone ? `第${item.streak}天` : "—"}</div>
-                <div className="text-[11px] opacity-80">{isDone ? `+${item.reward}` : ""}</div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+          {toast && <div className="mt-3 text-emerald-300 text-sm">{toast}</div>}
+        </>
+      ) : (
+        <div className="opacity-70 text-sm">目前暫無資料</div>
+      )}
     </div>
   );
 }

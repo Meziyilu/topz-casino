@@ -11,7 +11,11 @@ const asAny = <T = any>(v: unknown) => v as T;
 function noStoreJson(payload: any, status = 200) {
   return NextResponse.json(payload, {
     status,
-    headers: { "Cache-Control": "no-store" },
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+      Pragma: "no-cache",
+      Expires: "0",
+    },
   });
 }
 
@@ -29,7 +33,7 @@ async function getUser(req: Request) {
   if (!payload?.sub) return null;
   return prisma.user.findUnique({
     where: { id: String(payload.sub) },
-    select: { id: true, email: true, balance: true },
+    select: { id: true, balance: true, bankBalance: true },
   });
 }
 
@@ -40,48 +44,71 @@ function taipeiDayStart(date = new Date()) {
   return new Date(tpeStart - 8 * 3600_000);
 }
 
+function rewardForStreak(streak: number) {
+  const mod = ((streak + 1) % 7) || 7;
+  if (mod === 7) return 300;
+  return 100;
+}
+
+async function calcStreak(userId: string, todayTpe: Date) {
+  const rows = await prisma.dailyCheckin.findMany({
+    where: { userId },
+    orderBy: { day: "desc" },
+    take: 14,
+    select: { day: true },
+  });
+  const hasDay = new Set(rows.map(r => new Date(r.day).getTime()));
+  let streak = 0;
+  let cursor = todayTpe.getTime();
+  while (hasDay.has(cursor)) {
+    streak += 1;
+    cursor -= 86_400_000;
+  }
+  return streak;
+}
+
 export async function POST(req: Request) {
   try {
     const me = await getUser(req);
     if (!me) return noStoreJson({ error: "未登入" }, 401);
 
-    const dayStart = taipeiDayStart(new Date());
+    const today = taipeiDayStart(new Date());
 
-    // 確認今天是否已領
-    const today = await prisma.dailyCheckin.findUnique({
-      where: { userId_day: { userId: me.id, day: dayStart } },
+    // 今天已簽到就直接回傳
+    const exists = await prisma.dailyCheckin.findUnique({
+      where: { userId_day: { userId: me.id, day: today } },
+      select: { reward: true, streak: true },
     });
-    if (today) return noStoreJson({ error: "今天已經簽到過了" }, 400);
-
-    // 找上一筆
-    const prev = await prisma.dailyCheckin.findFirst({
-      where: { userId: me.id },
-      orderBy: { day: "desc" },
-      select: { day: true, streak: true },
-    });
-
-    // 計算 streak
-    const oneDayMs = 86_400_000;
-    let streak = 1;
-    if (prev) {
-      const diff = Math.round((dayStart.getTime() - new Date(prev.day).getTime()) / oneDayMs);
-      streak = diff === 1 ? (prev.streak ?? 0) + 1 : 1;
+    if (exists) {
+      return noStoreJson({
+        ok: true,
+        already: true,
+        reward: exists.reward,
+        streak: exists.streak,
+        balance: me.balance,
+      });
     }
 
-    // 計算獎勵：基礎 100 + 連續 10，每日上限 300
-    const base = 100;
-    const extra = Math.max(0, (streak - 1) * 10);
-    const reward = Math.min(base + extra, 300);
+    // 計算 streak 與今日應發獎勵
+    const streakBefore = await calcStreak(me.id, today);
+    const todayReward = rewardForStreak(streakBefore);
+    const newStreak = streakBefore + 1;
 
-    // 寫入交易
+    // 交易：寫 DailyCheckin、加錢、寫 Ledger
     const result = await prisma.$transaction(async (tx) => {
-      const checkin = await tx.dailyCheckin.create({
-        data: { userId: me.id, day: dayStart, reward, streak },
+      const created = await tx.dailyCheckin.create({
+        data: {
+          userId: me.id,
+          day: today,
+          reward: todayReward,
+          streak: newStreak,
+        },
+        select: { id: true, reward: true, streak: true },
       });
 
       const after = await tx.user.update({
         where: { id: me.id },
-        data: { balance: { increment: reward } },
+        data: { balance: { increment: todayReward } },
         select: { balance: true, bankBalance: true },
       });
 
@@ -90,17 +117,23 @@ export async function POST(req: Request) {
           userId: me.id,
           type: asAny("PAYOUT"),
           target: asAny("WALLET"),
-          delta: reward,
-          memo: `每日簽到 +${reward}`,
+          delta: todayReward,
+          memo: `每日簽到 +${todayReward}`,
           balanceAfter: after.balance,
           bankAfter: after.bankBalance,
         },
       });
 
-      return { checkin, balance: after.balance };
+      return { created, balance: after.balance };
     });
 
-    return noStoreJson({ ok: true, reward, streak, balance: result.balance });
+    return noStoreJson({
+      ok: true,
+      already: false,
+      reward: result.created.reward,
+      streak: result.created.streak,
+      balance: result.balance,
+    });
   } catch (e: any) {
     return noStoreJson({ error: e?.message || "Server error" }, 500);
   }
