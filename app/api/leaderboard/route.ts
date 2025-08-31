@@ -1,21 +1,25 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+// app/api/leaderboard/route.ts
+export const dynamic = "force-dynamic"; // 避免 build 時的 DYNAMIC_SERVER_USAGE
+export const revalidate = 0;
 
-type Period = 'today' | 'week';
+import { NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
+
+type Period = "today" | "week";
 
 const TAIPEI_OFFSET_HOURS = 8;
 
 // 賠率（總返還倍率；含本金）
 function cfg() {
-  const noComm = (process.env.TOPZ_BANKER_NO_COMMISSION || 'false').toLowerCase() === 'true';
+  const noComm = (process.env.TOPZ_BANKER_NO_COMMISSION || "false").toLowerCase() === "true";
   const tieOdds = Number(process.env.TOPZ_TIE_ODDS || 8);    // 8 or 9
   const pairOdds = Number(process.env.TOPZ_PAIR_ODDS || 11); // 通常 11
 
   return {
-    PLAYER_RETURN: 2,                        // 1:1
-    BANKER_RETURN: noComm ? 2 : 1.95,        // 無佣 2x；有佣 1.95x
-    TIE_RETURN: 1 + tieOdds,                 // 8:1 -> 9x
-    PAIR_RETURN: 1 + pairOdds,               // 11:1 -> 12x
+    PLAYER_RETURN: 2,                 // 1:1
+    BANKER_RETURN: noComm ? 2 : 1.95, // 無佣 2x；有佣 1.95x
+    TIE_RETURN: 1 + tieOdds,          // 8:1 -> 9x
+    PAIR_RETURN: 1 + pairOdds,        // 11:1 -> 12x
   };
 }
 
@@ -36,33 +40,29 @@ function startOfWeekTaipei(now = new Date()) {
 }
 function resolveWindow(period: Period): { start: Date; end: Date; label: string } {
   const now = new Date();
-  if (period === 'week') return { start: startOfWeekTaipei(now), end: now, label: '本週' };
-  return { start: startOfTodayTaipei(now), end: now, label: '本日' };
+  if (period === "week") return { start: startOfWeekTaipei(now), end: now, label: "本週" };
+  return { start: startOfTodayTaipei(now), end: now, label: "本日" };
 }
-
-function isRoomCode(x: string) {
-  return x === 'R30' || x === 'R60' || x === 'R90';
+function normalizeRoom(input: string) {
+  const s = (input || "").toUpperCase();
+  return s === "R30" || s === "R60" || s === "R90" ? s : "ALL";
 }
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const period = (searchParams.get('period') || 'today') as Period;
-    const roomParam = (searchParams.get('room') || 'all').toUpperCase();
-    let limit = parseInt(searchParams.get('limit') || '10', 10);
+    const period = (searchParams.get("period") || "today") as Period;
+    const roomParam = normalizeRoom(searchParams.get("room") || "all");
+    let limit = parseInt(searchParams.get("limit") || "10", 10);
     if (!Number.isFinite(limit) || limit <= 0) limit = 10;
     if (limit > 100) limit = 100;
 
     const { start, end, label } = resolveWindow(period);
     const { PLAYER_RETURN, BANKER_RETURN, TIE_RETURN, PAIR_RETURN } = cfg();
 
-    // 以 $queryRaw 做彙總（依你的 Prisma 表名/列名）
-    // - 期間：Round.settledAt 在 [start, end)
-    // - 房間：Room.code = roomParam（若非 ALL）
-    // - payout 計算為「總返還（含本金）」；banker 帶抽水，向下取整
-    // - push（和局時押閒/莊）總返還 = 1x
+    // 彙總查詢
     const rows = await prisma.$queryRaw<
-      Array<{ userId: string; wagered: bigint; payout: bigint; }>
+      Array<{ userId: string; wagered: bigint; payout: bigint }>
     >`
       SELECT
         b."userId" as "userId",
@@ -95,36 +95,41 @@ export async function GET(req: Request) {
       GROUP BY b."userId"
     `;
 
-    // 取用戶顯示名
+    // 使用者顯示名
     const userIds = rows.map(r => r.userId);
-    const users = userIds.length ? await prisma.user.findMany({
-      where: { id: { in: userIds } },
-      select: { id: true, name: true, email: true },
-    }) : [];
+    const users = userIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, name: true, email: true },
+        })
+      : [];
     const mapUser = new Map(users.map(u => [u.id, u]));
 
-    const items = rows.map(r => {
-      const wagered = Number(r.wagered || 0);
-      const payout = Number(r.payout || 0);
-      const profit = payout - wagered;
-      const u = mapUser.get(r.userId);
-      const displayName = u?.name || (u?.email ? u.email.split('@')[0] : r.userId.slice(0, 6));
-      return { userId: r.userId, name: displayName, wagered, payout, profit };
-    }).sort((a, b) => b.profit - a.profit).slice(0, limit);
+    const items = rows
+      .map(r => {
+        const wagered = Number(r.wagered || 0);
+        const payout = Number(r.payout || 0);
+        const profit = payout - wagered;
+        const u = mapUser.get(r.userId);
+        const displayName = u?.name || (u?.email ? u.email.split("@")[0] : r.userId.slice(0, 6));
+        return { userId: r.userId, name: displayName, wagered, payout, profit };
+      })
+      .sort((a, b) => b.profit - a.profit)
+      .slice(0, limit);
 
     return NextResponse.json({
-      period: { key: period, label, startISO: start.toISOString(), endISO: end.toISOString(), tz: 'Asia/Taipei' },
+      period: { key: period, label, startISO: start.toISOString(), endISO: end.toISOString(), tz: "Asia/Taipei" },
       room: roomParam,
       limit,
       items,
       rules: {
-        bankerNoCommission: (process.env.TOPZ_BANKER_NO_COMMISSION || 'false').toLowerCase() === 'true',
+        bankerNoCommission: (process.env.TOPZ_BANKER_NO_COMMISSION || "false").toLowerCase() === "true",
         tieOdds: Number(process.env.TOPZ_TIE_ODDS || 8),
         pairOdds: Number(process.env.TOPZ_PAIR_ODDS || 11),
-      }
+      },
     });
   } catch (err: any) {
-    console.error('Leaderboard error:', err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    console.error("Leaderboard error:", err);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
