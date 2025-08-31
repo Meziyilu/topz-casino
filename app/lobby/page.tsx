@@ -34,13 +34,14 @@ type Ann = {
   id: string;
   title: string;
   content: string;
-  isPinned: boolean;
+  enabled?: boolean;
   createdAt: string;
 };
-type MarqueeConfig = {
-  enabled: boolean;
+type MarqueeItem = {
+  id: string;
   text: string;
-  speed: number; // px/s
+  enabled: boolean;
+  priority: number;
   createdAt: string;
 };
 
@@ -91,40 +92,50 @@ export default function LobbyPage() {
     };
   }, []);
 
-  /** ===== 狀態：公告、跑馬燈（可選，若沒有 API 也不影響） ===== */
+  /** ===== 狀態：公告（公開 GET /api/announcements），跑馬燈（公開 GET /api/marquees） ===== */
   const [anns, setAnns] = useState<Ann[]>([]);
-  const [marq, setMarq] = useState<MarqueeConfig | null>(null);
+  const [marquees, setMarquees] = useState<MarqueeItem[]>([]);
+  const [loadErr, setLoadErr] = useState<string>("");
+
+  async function loadAnnouncements() {
+    try {
+      const r = await fetch("/api/announcements", { cache: "no-store" });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data?.error || r.statusText);
+      // 只顯示 enabled=true，並按建立時間新到舊
+      const list: Ann[] = (data || []).filter((a: Ann) => a.enabled !== false);
+      list.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+      setAnns(list);
+    } catch (e: any) {
+      setLoadErr(e?.message || "載入公告失敗");
+      setAnns([]);
+    }
+  }
+
+  async function loadMarquees() {
+    try {
+      const r = await fetch("/api/marquees", { cache: "no-store" });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data?.error || r.statusText);
+      // 只顯示 enabled=true，依 priority desc 再 createdAt desc
+      const list: MarqueeItem[] = (data || []).filter((m: MarqueeItem) => !!m.enabled);
+      list.sort((a, b) => (b.priority - a.priority) || (a.createdAt < b.createdAt ? 1 : -1));
+      setMarquees(list);
+    } catch (e: any) {
+      setLoadErr(e?.message || "載入跑馬燈失敗");
+      setMarquees([]);
+    }
+  }
+
   useEffect(() => {
     let alive = true;
     (async () => {
-      try {
-        const a = await fetch("/api/admin/announcement", { cache: "no-store" }).then((r) =>
-          r.ok ? r.json() : { items: [] }
-        );
-        if (alive && a?.items) setAnns(a.items as Ann[]);
-      } catch {}
-      try {
-        const m = await fetch("/api/admin/marquee", { cache: "no-store" }).then((r) =>
-          r.ok ? r.json() : null
-        );
-        if (alive && m) setMarq(m as MarqueeConfig);
-      } catch {}
+      await Promise.all([loadAnnouncements(), loadMarquees()]);
     })();
-    // 60 秒更新一次公告/跑馬燈
     const t = setInterval(async () => {
-      try {
-        const a = await fetch("/api/admin/announcement", { cache: "no-store" }).then((r) =>
-          r.ok ? r.json() : { items: [] }
-        );
-        if (alive && a?.items) setAnns(a.items as Ann[]);
-      } catch {}
-      try {
-        const m = await fetch("/api/admin/marquee", { cache: "no-store" }).then((r) =>
-          r.ok ? r.json() : null
-        );
-        if (alive && m) setMarq(m as MarqueeConfig);
-      } catch {}
-    }, 60000);
+      if (!alive) return;
+      await Promise.all([loadAnnouncements(), loadMarquees()]);
+    }, 60000); // 每 60 秒更新
     return () => {
       alive = false;
       clearInterval(t);
@@ -132,8 +143,11 @@ export default function LobbyPage() {
   }, []);
 
   /** ===== 頂部：跑馬燈 ===== */
-  const showMarquee = !!(marq?.enabled && marq.text?.trim());
-  const marqueeSpeed = Math.max(40, Math.min(300, marq?.speed ?? 90)); // px/s
+  const showMarquee = marquees.length > 0;
+  const marqueeText = showMarquee
+    ? marquees.map((m) => m.text).join(" ｜ ")
+    : "";
+  const marqueeSpeedSec = 20; // 固定 20 秒一輪（你要可調再接設定）
 
   /** ===== 房間卡片定義（可擴充） ===== */
   const rooms = [
@@ -259,21 +273,22 @@ export default function LobbyPage() {
         </div>
       </header>
 
-      {/* 跑馬燈 */}
+      {/* 跑馬燈（依 priority 組合所有 enabled 文案） */}
       {showMarquee && (
         <div className="relative z-10">
           <div
             className="marquee-container mx-auto mt-3"
             style={
               {
-                "--marquee-speed": `${marqueeSpeed}s`,
+                // 你的 CSS 動畫若吃秒數，這裡用 s；若吃速度（px/s），可自行調整
+                "--marquee-speed": `${marqueeSpeedSec}s`,
               } as React.CSSProperties
             }
           >
             <div className="marquee-track">
-              <span>{marq!.text}</span>
-              <span aria-hidden>{marq!.text}</span>
-              <span aria-hidden>{marq!.text}</span>
+              <span>{marqueeText}</span>
+              <span aria-hidden>{marqueeText}</span>
+              <span aria-hidden>{marqueeText}</span>
             </div>
           </div>
         </div>
@@ -287,7 +302,7 @@ export default function LobbyPage() {
             {/* ✅ 每日簽到卡片 */}
             <CheckinCard />
 
-            {/* 公告欄（保留原有） */}
+            {/* 公告欄（讀取 /api/announcements） */}
             <div className="glass rounded-2xl p-5 border border-white/15 shadow-lg">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-lg font-bold">📢 公告欄</h2>
@@ -300,16 +315,11 @@ export default function LobbyPage() {
                       key={a.id}
                       className={clsx(
                         "rounded-xl p-3 border",
-                        a.isPinned
-                          ? "border-amber-300/50 bg-amber-200/5"
-                          : "border-white/10 bg-white/5"
+                        "border-white/10 bg-white/5"
                       )}
                     >
                       <div className="flex items-center justify-between">
-                        <h3 className="font-semibold">
-                          {a.isPinned ? "📌 " : ""}
-                          {a.title}
-                        </h3>
+                        <h3 className="font-semibold">{a.title}</h3>
                         <time className="text-[10px] opacity-60">
                           {new Date(a.createdAt).toLocaleString()}
                         </time>
@@ -320,8 +330,9 @@ export default function LobbyPage() {
                     </article>
                   ))
                 ) : (
-                  <div className="opacity-70 text-sm">目前功能都還在擴充當中。請各位耐心等候。</div>
+                  <div className="opacity-70 text-sm">目前沒有公告。</div>
                 )}
+                {loadErr && <div className="text-xs text-rose-300">{loadErr}</div>}
               </div>
             </div>
           </section>
