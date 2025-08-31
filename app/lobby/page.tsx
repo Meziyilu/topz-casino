@@ -1,4 +1,3 @@
-// app/lobby/page.tsx
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -6,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Script from "next/script"; // 載入客服腳本
 import CheckinCard from "@/components/CheckinCard"; // ✅ 正確：在 /components/CheckinCard.tsx
+import Leaderboard from "@/components/Leaderboard"; // ⭐ 新增：排行榜
 
 /** 小工具 */
 function formatTime(d = new Date()) {
@@ -326,7 +326,7 @@ export default function LobbyPage() {
             </div>
           </section>
 
-          {/* 右側：房間卡（可擴充） */}
+          {/* 右側：房間卡 + 排行榜 */}
           <section className="lg:col-span-2">
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {rooms.map((r) => (
@@ -368,6 +368,11 @@ export default function LobbyPage() {
                   <div className="absolute bottom-0 left-0 right-0 h-0.5 glow-bar" />
                 </button>
               ))}
+            </div>
+
+            {/* ⭐ 新增：排行榜（大廳可切換房間） */}
+            <div className="mt-8">
+              <Leaderboard showRoomSelector={true} />
             </div>
           </section>
         </div>
