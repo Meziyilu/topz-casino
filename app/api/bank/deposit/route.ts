@@ -4,12 +4,12 @@ export const revalidate = 0;
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { verifyJWT } from "@/lib/jwt";
+import { verifyJWTFromRequest } from "@/lib/authz";
 import { getUserBalances, isValidAmount, readIdempotencyKey } from "@/lib/bank";
 
 export async function POST(req: Request) {
   try {
-    const token = await verifyJWT(req);
+    const token = await verifyJWTFromRequest(req);
     if (!token) return NextResponse.json({ ok: false, error: "UNAUTH" }, { status: 401 });
 
     const body = await req.json();
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     const userId = token.userId;
 
     const result = await prisma.$transaction(async (tx) => {
-      const { balance, bankBalance } = await getUserBalances(tx, userId);
+      const { balance, bankBalance } = await getUserBalances(tx as any, userId);
       if (balance < amount) return { insufficient: true };
 
       const newWallet = balance - amount;
@@ -71,7 +71,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, data: result });
   } catch (e: any) {
     if (e?.code === "P2002") {
-      // unique(idempotencyKey) 衝突 → 視為成功重放
       const body = await req.json().catch(() => ({}));
       const idem = body?.idempotencyKey || readIdempotencyKey(req);
       if (idem) {

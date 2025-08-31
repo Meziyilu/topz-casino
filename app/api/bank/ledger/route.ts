@@ -4,17 +4,17 @@ export const revalidate = 0;
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { verifyJWT } from "@/lib/jwt";
+import { verifyJWTFromRequest } from "@/lib/authz";
 
 export async function GET(req: Request) {
-  const token = await verifyJWT(req);
+  const token = await verifyJWTFromRequest(req);
   if (!token) return NextResponse.json({ ok: false, error: "UNAUTH" }, { status: 401 });
 
   const url = new URL(req.url);
   const cursor = url.searchParams.get("cursor");
   const limit = Math.min(parseInt(url.searchParams.get("limit") || "20", 10), 100);
   const type = url.searchParams.get("type") as any || undefined;
-  const peer = url.searchParams.get("peer"); // peerUserId 篩選
+  const peer = url.searchParams.get("peer");
   const groupId = url.searchParams.get("groupId");
 
   const where: any = { userId: token.userId };

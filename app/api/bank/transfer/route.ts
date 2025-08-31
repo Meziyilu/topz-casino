@@ -4,20 +4,20 @@ export const revalidate = 0;
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { verifyJWT } from "@/lib/jwt";
+import { verifyJWTFromRequest } from "@/lib/authz";
 import { getUserBalances, isValidAmount, readIdempotencyKey } from "@/lib/bank";
 import { randomUUID } from "crypto";
 
 export async function POST(req: Request) {
   try {
-    const token = await verifyJWT(req);
+    const token = await verifyJWTFromRequest(req);
     if (!token) return NextResponse.json({ ok: false, error: "UNAUTH" }, { status: 401 });
 
     const body = await req.json();
     const toUserId = body?.toUserId as string;
     const amount = body?.amount;
     const note = body?.note ?? null;
-    const feePct: number | undefined = body?.feePct; // 例如 0.01 = 1%
+    const feePct: number | undefined = body?.feePct;
     const feeSide: "SENDER" | "RECEIVER" | "NONE" = body?.feeSide ?? "NONE";
     const idem = body?.idempotencyKey || readIdempotencyKey(req);
 
@@ -25,7 +25,6 @@ export async function POST(req: Request) {
     if (!isValidAmount(amount)) return NextResponse.json({ ok: false, error: "INVALID_AMOUNT" }, { status: 400 });
     if (toUserId === token.userId) return NextResponse.json({ ok: false, error: "SELF_TRANSFER_NOT_ALLOWED" }, { status: 400 });
 
-    // 冪等（若重送，直接回原結果）
     if (idem) {
       const existed = await prisma.ledger.findUnique({ where: { idempotencyKey: idem } });
       if (existed) {
@@ -43,33 +42,22 @@ export async function POST(req: Request) {
     const fee = feePct && feePct > 0 ? Math.floor(amount * feePct) : 0;
 
     const result = await prisma.$transaction(async (tx) => {
-      // 讀餘額
       const s = await tx.user.findUnique({ where: { id: senderId }, select: { balance: true, bankBalance: true } });
       const r = await tx.user.findUnique({ where: { id: toUserId }, select: { balance: true, bankBalance: true } });
       if (!s || !r) throw new Error("USER_NOT_FOUND");
 
-      // 計算實際扣加
       let senderDeduct = amount;
       let receiverGain = amount;
 
       if (feeSide === "SENDER") senderDeduct += fee;
       if (feeSide === "RECEIVER") receiverGain -= fee;
 
-      if (senderDeduct <= 0 || receiverGain <= 0) {
-        return { invalid: true };
-      }
-      if (s.balance < senderDeduct) {
-        return { insufficient: true };
-      }
+      if (senderDeduct <= 0 || receiverGain <= 0) return { invalid: true };
+      if (s.balance < senderDeduct) return { insufficient: true };
 
-      // 更新 sender
       const sNewWallet = s.balance - senderDeduct;
-      await tx.user.update({
-        where: { id: senderId },
-        data: { balance: sNewWallet }, // P2P 僅影響 wallet
-      });
+      await tx.user.update({ where: { id: senderId }, data: { balance: sNewWallet } });
 
-      // 建 sender 分錄
       await tx.ledger.create({
         data: {
           userId: senderId,
@@ -81,7 +69,7 @@ export async function POST(req: Request) {
           amount,
           fee: feeSide === "SENDER" ? fee : 0,
           memo: note,
-          idempotencyKey: idem,              // 同一鍵落在 sender 分錄
+          idempotencyKey: idem, // sender 分錄掛冪等鍵
           transferGroupId: groupId,
           peerUserId: toUserId,
           balanceAfter: sNewWallet,
@@ -90,14 +78,9 @@ export async function POST(req: Request) {
         },
       });
 
-      // 更新 receiver
       const rNewWallet = r.balance + receiverGain;
-      await tx.user.update({
-        where: { id: toUserId },
-        data: { balance: rNewWallet },
-      });
+      await tx.user.update({ where: { id: toUserId }, data: { balance: rNewWallet } });
 
-      // 建 receiver 分錄（無 idempotencyKey，靠 groupId 關聯）
       await tx.ledger.create({
         data: {
           userId: toUserId,
@@ -130,7 +113,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, data: result });
   } catch (e: any) {
     if (e?.code === "P2002") {
-      // 冪等鍵碰撞 → 當成功重放
       const body = await req.json().catch(() => ({}));
       const toUserId = body?.toUserId;
       const idem = body?.idempotencyKey || readIdempotencyKey(req);
