@@ -1,3 +1,6 @@
+// app/api/auth/login/route.ts
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { signJWT } from "@/lib/jwt";
@@ -12,24 +15,29 @@ export async function POST(req: Request) {
     }
 
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) return NextResponse.json({ error: "用戶不存在" }, { status: 400 });
+    if (!user) {
+      return NextResponse.json({ error: "帳號或密碼錯誤" }, { status: 401 });
+    }
 
     const ok = await bcrypt.compare(password, user.password);
-    if (!ok) return NextResponse.json({ error: "密碼錯誤" }, { status: 400 });
+    if (!ok) {
+      return NextResponse.json({ error: "帳號或密碼錯誤" }, { status: 401 });
+    }
 
-    const token = await signJWT({ sub: user.id });
+    // 與 lib/jwt.ts 對齊：payload 需要 userId / isAdmin
+    const token = signJWT({ userId: user.id, isAdmin: user.isAdmin });
 
     const res = NextResponse.json({ ok: true });
-    // 在 Render/Next 上用 httpOnly cookie 存 JWT
+    // 以 HttpOnly Cookie 存 JWT（Render/Next 適用）
     res.cookies.set("token", token, {
       httpOnly: true,
       sameSite: "lax",
       path: "/",
-      secure: true,
-      maxAge: 60 * 60 * 24 * 7, // 7 天
+      secure: true,                 // 若本地開發要測試 cookie，可視情況改 false
+      maxAge: 60 * 60 * 24 * 7,     // 7 天
     });
     return res;
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "登入失敗" }, { status: 500 });
+    return NextResponse.json({ error: e?.message ?? "登入失敗" }, { status: 500 });
   }
 }
