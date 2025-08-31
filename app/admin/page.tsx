@@ -28,7 +28,7 @@ type LedgerRow = {
   user?: { email: string } | null;
 };
 
-const TABS = ["發幣/扣幣", "會員", "交易", "房間控制"] as const;
+const TABS = ["發幣/扣幣", "會員", "交易", "房間控制", "公告欄", "跑馬燈"] as const;
 type Tab = (typeof TABS)[number];
 
 // 小工具
@@ -85,6 +85,10 @@ export default function AdminPage() {
           {tab === "會員" && <UsersPanel />}
           {tab === "交易" && <LedgerPanel />}
           {tab === "房間控制" && <RoomsPanel />}
+
+          {/* 新增的兩個面板 */}
+          {tab === "公告欄" && <AnnouncementPanel />}
+          {tab === "跑馬燈" && <MarqueePanel />}
         </div>
       </div>
     </div>
@@ -530,6 +534,226 @@ function RoomsPanel() {
       </div>
       <div className="opacity-70 text-xs mt-3">
         * 此操作會把當日該房未結算的局標記為已結算並產生下一局。
+      </div>
+    </div>
+  );
+}
+
+/* =========================
+   5) 公告欄
+   ========================= */
+function AnnouncementPanel() {
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [list, setList] = useState<any[]>([]);
+  const [msg, setMsg] = useState("");
+
+  async function load() {
+    setMsg("");
+    try {
+      // 若你使用「公開簡化 API」，改為 /api/announcements
+      const res = await fetchJson<any[]>("/api/admin/announcements", { method: "GET" });
+      setList(res || []);
+    } catch (e: any) { setMsg(`❌ ${e.message || "讀取失敗"}`); }
+  }
+
+  async function add() {
+    if (!title || !content) { setMsg("請輸入標題與內容"); return; }
+    setMsg("");
+    try {
+      await fetchJson("/api/admin/announcements", {
+        method: "POST",
+        body: JSON.stringify({ title, content, enabled: true }),
+      });
+      setTitle(""); setContent("");
+      await load();
+      setMsg("✅ 已新增");
+    } catch (e: any) { setMsg(`❌ ${e.message || "新增失敗"}`); }
+  }
+
+  async function toggle(id: string, enabled: boolean) {
+    setMsg("");
+    try {
+      await fetchJson(`/api/admin/announcements/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ enabled }),
+      });
+      await load();
+      setMsg("✅ 已更新");
+    } catch (e: any) { setMsg(`❌ ${e.message || "更新失敗"}`); }
+  }
+
+  async function removeItem(id: string) {
+    if (!confirm("確定刪除此公告？")) return;
+    setMsg("");
+    try {
+      await fetchJson(`/api/admin/announcements/${id}`, { method: "DELETE" });
+      setList((xs) => xs.filter((x) => x.id !== id));
+      setMsg("🗑️ 已刪除");
+    } catch (e: any) { setMsg(`❌ ${e.message || "刪除失敗"}`); }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  return (
+    <div>
+      <div className="text-lg font-semibold mb-4">公告欄</div>
+      <div className="grid md:grid-cols-3 gap-2">
+        <input
+          value={title} onChange={(e)=>setTitle(e.target.value)}
+          placeholder="公告標題"
+          className="bg-transparent border border-white/20 rounded px-3 py-2 outline-none focus:border-white/40 md:col-span-1"
+        />
+        <input
+          value={content} onChange={(e)=>setContent(e.target.value)}
+          placeholder="公告內容"
+          className="bg-transparent border border-white/20 rounded px-3 py-2 outline-none focus:border-white/40 md:col-span-2"
+        />
+        <button onClick={add} className="btn md:col-span-3">發布公告</button>
+      </div>
+
+      {msg && <div className="mt-3 text-sm opacity-80">{msg}</div>}
+
+      <div className="mt-6 divide-y divide-white/10">
+        {list.map((a) => (
+          <div key={a.id} className="py-3 flex items-start justify-between gap-4">
+            <div>
+              <div className="font-semibold">
+                {a.title} {a.enabled ? "" : <span className="text-rose-300">(停用)</span>}
+              </div>
+              <div className="text-sm opacity-90">{a.content}</div>
+              <div className="text-xs opacity-60 mt-1">{new Date(a.createdAt).toLocaleString()}</div>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button className="px-3 py-1 rounded border" onClick={()=>toggle(a.id, !a.enabled)}>
+                {a.enabled ? "停用" : "啟用"}
+              </button>
+              <button className="px-3 py-1 rounded border border-red-500 text-red-400" onClick={()=>removeItem(a.id)}>
+                刪除
+              </button>
+            </div>
+          </div>
+        ))}
+        {list.length === 0 && <div className="py-6 text-center opacity-70">尚無公告</div>}
+      </div>
+    </div>
+  );
+}
+
+/* =========================
+   6) 跑馬燈
+   ========================= */
+function MarqueePanel() {
+  const [text, setText] = useState("");
+  const [priority, setPriority] = useState<number>(0);
+  const [list, setList] = useState<any[]>([]);
+  const [msg, setMsg] = useState("");
+
+  async function load() {
+    setMsg("");
+    try {
+      // 若你用「公開簡化 API」，改為 /api/marquees
+      const res = await fetchJson<any[]>("/api/admin/marquees", { method: "GET" });
+      setList(res || []);
+    } catch (e: any) { setMsg(`❌ ${e.message || "讀取失敗"}`); }
+  }
+
+  async function add() {
+    if (!text) { setMsg("請輸入內容"); return; }
+    setMsg("");
+    try {
+      await fetchJson("/api/admin/marquees", {
+        method: "POST",
+        body: JSON.stringify({ text, priority, enabled: true }),
+      });
+      setText(""); setPriority(0);
+      await load();
+      setMsg("✅ 已新增");
+    } catch (e: any) { setMsg(`❌ ${e.message || "新增失敗"}`); }
+  }
+
+  async function toggle(id: string, enabled: boolean) {
+    setMsg("");
+    try {
+      await fetchJson(`/api/admin/marquees/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ enabled }),
+      });
+      await load();
+      setMsg("✅ 已更新");
+    } catch (e: any) { setMsg(`❌ ${e.message || "更新失敗"}`); }
+  }
+
+  async function setPrio(id: string) {
+    const v = prompt("設定優先度（0~999，越大越前面）", "0");
+    if (v == null) return;
+    const n = Math.max(0, Math.min(999, Number(v) || 0));
+    setMsg("");
+    try {
+      await fetchJson(`/api/admin/marquees/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ priority: n }),
+      });
+      await load();
+      setMsg("✅ 已更新優先度");
+    } catch (e: any) { setMsg(`❌ ${e.message || "更新失敗"}`); }
+  }
+
+  async function removeItem(id: string) {
+    if (!confirm("確定刪除此訊息？")) return;
+    setMsg("");
+    try {
+      await fetchJson(`/api/admin/marquees/${id}`, { method: "DELETE" });
+      setList((xs)=>xs.filter(x=>x.id!==id));
+      setMsg("🗑️ 已刪除");
+    } catch (e: any) { setMsg(`❌ ${e.message || "刪除失敗"}`); }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  return (
+    <div>
+      <div className="text-lg font-semibold mb-4">跑馬燈</div>
+      <div className="grid md:grid-cols-3 gap-2">
+        <input
+          value={text} onChange={(e)=>setText(e.target.value)}
+          placeholder="跑馬燈內容"
+          className="bg-transparent border border-white/20 rounded px-3 py-2 outline-none focus:border-white/40 md:col-span-2"
+        />
+        <input
+          type="number" min={0} max={999}
+          value={priority} onChange={(e)=>setPriority(Number(e.target.value||0))}
+          placeholder="優先度（大在前）"
+          className="bg-transparent border border-white/20 rounded px-3 py-2 outline-none focus:border-white/40"
+        />
+        <button onClick={add} className="btn md:col-span-3">新增跑馬燈</button>
+      </div>
+
+      {msg && <div className="mt-3 text-sm opacity-80">{msg}</div>}
+
+      <div className="mt-6 divide-y divide-white/10">
+        {list.map((m) => (
+          <div key={m.id} className="py-3 flex items-start justify-between gap-4">
+            <div>
+              <div className="font-semibold">
+                {m.text} {m.enabled ? "" : <span className="text-rose-300">(停用)</span>}
+              </div>
+              <div className="text-xs opacity-60 mt-1">優先度：{m.priority} ｜ {new Date(m.createdAt).toLocaleString()}</div>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button className="px-3 py-1 rounded border" onClick={()=>toggle(m.id, !m.enabled)}>
+                {m.enabled ? "停用" : "啟用"}
+              </button>
+              <button className="px-3 py-1 rounded border" onClick={()=>setPrio(m.id)}>
+                調整優先度
+              </button>
+              <button className="px-3 py-1 rounded border border-red-500 text-red-400" onClick={()=>removeItem(m.id)}>
+                刪除
+              </button>
+            </div>
+          </div>
+        ))}
+        {list.length === 0 && <div className="py-6 text-center opacity-70">尚無跑馬燈</div>}
       </div>
     </div>
   );
