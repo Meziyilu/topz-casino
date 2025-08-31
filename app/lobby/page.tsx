@@ -1,11 +1,11 @@
 // app/lobby/page.tsx
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import Script from "next/script"; // 載入客服腳本
-import CheckinCard from "@/components/CheckinCard"; // ✅ 正確：在 /components/CheckinCard.tsx
+import Script from "next/script"; // 只保留客服腳本
+import CheckinCard from "@/app/components/CheckinCard"; // 每日簽到卡片
 
 /** 小工具 */
 function formatTime(d = new Date()) {
@@ -84,14 +84,14 @@ export default function LobbyPage() {
       } catch {}
     }
     loadMe();
-    const t = setInterval(loadMe, 5000); // 每 5 秒即時更新餘額/身分
+    const t = setInterval(loadMe, 5000);
     return () => {
       alive = false;
       clearInterval(t);
     };
   }, []);
 
-  /** ===== 狀態：公告、跑馬燈（可選，若沒有 API 也不影響） ===== */
+  /** ===== 狀態：公告、跑馬燈 ===== */
   const [anns, setAnns] = useState<Ann[]>([]);
   const [marq, setMarq] = useState<MarqueeConfig | null>(null);
   useEffect(() => {
@@ -110,7 +110,6 @@ export default function LobbyPage() {
         if (alive && m) setMarq(m as MarqueeConfig);
       } catch {}
     })();
-    // 60 秒更新一次公告/跑馬燈
     const t = setInterval(async () => {
       try {
         const a = await fetch("/api/admin/announcement", { cache: "no-store" }).then((r) =>
@@ -131,11 +130,11 @@ export default function LobbyPage() {
     };
   }, []);
 
-  /** ===== 頂部：跑馬燈 ===== */
-  const showMarquee = !!(marq?.enabled && marq.text?.trim());
+  /** ===== 跑馬燈 ===== */
+  const showMarquee = marq?.enabled && marq.text?.trim();
   const marqueeSpeed = Math.max(40, Math.min(300, marq?.speed ?? 90)); // px/s
 
-  /** ===== 房間卡片定義（可擴充） ===== */
+  /** ===== 房間卡片（可擴充） ===== */
   const rooms = [
     { code: "R30", name: "百家樂 R30", desc: "30 秒節奏，快感十足", gradient: "from-cyan-400/20 to-cyan-200/0" },
     { code: "R60", name: "百家樂 R60", desc: "經典 60 秒節奏", gradient: "from-violet-400/20 to-violet-200/0" },
@@ -205,7 +204,7 @@ export default function LobbyPage() {
             className="px-3 py-2 rounded-xl border border-white/15 hover:border-white/30 transition glass"
             title="切換主題"
           >
-            {theme === "dark" ? "🌙 深色" : "🌤️ 淺色"}
+            {theme === "dark" ? "🌙 深色" : "🌤 淺色"}
           </button>
 
           {/* 現在時間 */}
@@ -218,7 +217,7 @@ export default function LobbyPage() {
           <div className="glass px-3 py-2 rounded-xl">
             <div className="text-[10px] opacity-70">玩家</div>
             <div className="text-sm font-semibold">
-              {me?.name ?? me?.email ?? "未登入"}
+              {me?.name || me?.email || "未登入"}
             </div>
           </div>
           <div className="glass px-3 py-2 rounded-xl">
@@ -244,7 +243,7 @@ export default function LobbyPage() {
               onClick={playClick}
               className="px-3 py-2 rounded-xl border border-white/15 hover:border-white/30 transition glass"
             >
-              🛠️ 後台
+              🛠 後台
             </Link>
           )}
           <button
@@ -284,10 +283,7 @@ export default function LobbyPage() {
         <div className="grid lg:grid-cols-3 gap-6">
           {/* 左側：簽到卡 + 公告卡 */}
           <section className="lg:col-span-1 space-y-6">
-            {/* ✅ 每日簽到卡片 */}
             <CheckinCard />
-
-            {/* 公告欄（保留原有） */}
             <div className="glass rounded-2xl p-5 border border-white/15 shadow-lg">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-lg font-bold">📢 公告欄</h2>
@@ -376,37 +372,14 @@ export default function LobbyPage() {
       {/* 底部音效（click） */}
       <audio ref={clickSnd} src="/sounds/click.mp3" preload="auto" />
 
-      {/* 版權或頁尾 */}
+      {/* 頁尾 */}
       <footer className="max-w-7xl mx-auto px-4 pb-10 pt-6 opacity-70 text-xs relative z-10">
         © {new Date().getFullYear()} TOPZ Casino. All rights reserved.
       </footer>
 
-      {/* Minnit Chat 容器（保持官方屬性） */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
-        <span
-          className="minnit-chat-sembed"
-          style={{ display: "none" }}
-          data-chatname="https://organizations.minnit.chat/719691555913932/c/Main?embed"
-          data-style="width:90vw; max-width:960px; height:500px; max-height:90vh;"
-          data-version="1.52"
-        >
-          Chat
-        </span>
-        <p className="powered-by-minnit mt-2 text-xs opacity-60 text-center">
-          <a
-            href="https://minnit.chat"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline hover:opacity-100"
-          >
-            Add a group chat to your website with Minnit Chat
-          </a>
-        </p>
-      </div>
-
-      {/* Tawk.to 客服（afterInteractive，不影響水合） */}
+      {/* ✅ 僅保留：Tawk.to 客服（afterInteractive，不影響水合） */}
       <Script id="tawk-to" strategy="afterInteractive">{`
-        var Tawk_API = Tawk_API || {}, Tawk_LoadStart = new Date();
+        var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
         (function(){
           var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
           s1.async=true;
@@ -416,14 +389,6 @@ export default function LobbyPage() {
           s0.parentNode.insertBefore(s1,s0);
         })();
       `}</Script>
-
-      {/* Minnit Chat Script */}
-      <Script
-        id="minnit-embed"
-        src="https://minnit.chat/js/embed.js?c=1752216300"
-        strategy="afterInteractive"
-        defer
-      />
     </div>
   );
 }
