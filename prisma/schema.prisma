@@ -1,4 +1,4 @@
-// prisma/schema.prisma — TOPZ Casino v1.1.1 Final
+// prisma/schema.prisma — TOPZ Casino v1.1.1 + Bank 2.0
 
 generator client {
   provider = "prisma-client-js"
@@ -14,11 +14,11 @@ datasource db {
 */
 
 enum LedgerType {
-  DEPOSIT       // 充值
-  WITHDRAW      // 提領
+  DEPOSIT       // 充值（錢包→銀行）
+  WITHDRAW      // 提領（銀行→錢包）
   BET_PLACED    // 下單（扣款）
   PAYOUT        // 派彩（加款）
-  TRANSFER      // 內部轉帳（錢包 <-> 銀行）
+  TRANSFER      // 內部轉帳（含 P2P 與資產內部位移）
   ADMIN_ADJUST  // 管理員調整
 }
 
@@ -62,7 +62,7 @@ model User {
   email       String   @unique
   password    String
   name        String?
-  avatarUrl   String?      // 玩家頭像
+  avatarUrl   String?
   isAdmin     Boolean  @default(false)
   balance     Int      @default(0) // 錢包
   bankBalance Int      @default(0) // 銀行
@@ -80,17 +80,33 @@ model Ledger {
   id           String        @id @default(cuid())
   userId       String
   type         LedgerType
-  target       BalanceTarget
-  delta        Int           // 正負值（+入金 / -出金）
+  target       BalanceTarget           // ✅ 舊欄位：保留相容（推薦仍寫入）
+  delta        Int                     // ✅ 舊欄位：保留相容（正負變動，推薦仍寫入）
   memo         String?
-  balanceAfter Int            // 當下錢包餘額
-  bankAfter    Int            // 當下銀行餘額
+  balanceAfter Int                     // 當下錢包餘額
+  bankAfter    Int                     // 當下銀行餘額
   createdAt    DateTime      @default(now())
+
+  // --------- 新增（銀行 2.0） ---------
+  fromTarget       BalanceTarget?      // 來源（存款=WALLET、提款=BANK、P2P=null）
+  toTarget         BalanceTarget?      // 去向（存款=BANK、提款=WALLET、P2P=null）
+  amount           Int?                // 名目金額（通常=|delta|）
+  fee              Int?                // 手續費（>0 表平台收入）
+  idempotencyKey   String?  @unique    // 冪等鍵
+  transferGroupId  String?             // 雙分錄關聯（P2P）
+  peerUserId       String?             // 對手方（P2P）
+  meta             Json?               // 擴充：IP、AML flags、來源等
+
+  // （可選進階：若日後要更清楚的資產位移，可再加）
+  // deltaWallet     Int?              // 實際影響 wallet 的變動
+  // deltaBank       Int?              // 實際影響 bank 的變動
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
   @@index([type, createdAt])
+  @@index([transferGroupId])
+  @@index([peerUserId, createdAt])
 }
 
 model Room {
