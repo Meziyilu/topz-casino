@@ -192,7 +192,7 @@ function WalletAdjustPanel() {
           <input
             type="number"
             value={amount}
-            onChange={(e) => setAmount(Number(e.target.value || 0))}
+            onChange={(e) => setAmount(Number(e.target.value || 0)))}
             className="w-full bg-transparent border border-white/20 rounded px-3 py-2 outline-none focus:border-white/40"
           />
         </div>
@@ -476,7 +476,7 @@ function LedgerPanel() {
             })}
             {list.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-6 text-center opacity-70">無資料</td>
+                <td colSpan={7} className="py-6 text中心 opacity-70">無資料</td>
               </tr>
             )}
           </tbody>
@@ -551,10 +551,12 @@ function AnnouncementPanel() {
   async function load() {
     setMsg("");
     try {
-      // 若你使用「公開簡化 API」，改為 /api/announcements
-      const res = await fetchJson<any[]>("/api/admin/announcements", { method: "GET" });
-      setList(res || []);
-    } catch (e: any) { setMsg(`❌ ${e.message || "讀取失敗"}`); }
+      const res = await fetchJson<{ items: any[] }>("/api/admin/announcements", { method: "GET" });
+      setList(Array.isArray(res?.items) ? res.items : []);
+    } catch (e: any) {
+      setMsg(`❌ ${e.message || "讀取失敗"}`);
+      setList([]);
+    }
   }
 
   async function add() {
@@ -602,7 +604,7 @@ function AnnouncementPanel() {
         <input
           value={title} onChange={(e)=>setTitle(e.target.value)}
           placeholder="公告標題"
-          className="bg-transparent border border-white/20 rounded px-3 py-2 outline-none focus:border-white/40 md:col-span-1"
+          className="bg-transparent border border白/20 rounded px-3 py-2 outline-none focus:border-white/40 md:col-span-1"
         />
         <input
           value={content} onChange={(e)=>setContent(e.target.value)}
@@ -652,10 +654,12 @@ function MarqueePanel() {
   async function load() {
     setMsg("");
     try {
-      // 若你用「公開簡化 API」，改為 /api/marquees
-      const res = await fetchJson<any[]>("/api/admin/marquees", { method: "GET" });
-      setList(res || []);
-    } catch (e: any) { setMsg(`❌ ${e.message || "讀取失敗"}`); }
+      const res = await fetchJson<{ items: any[] }>("/api/admin/marquees", { method: "GET" });
+      setList(Array.isArray(res?.items) ? res.items : []);
+    } catch (e: any) {
+      setMsg(`❌ ${e.message || "讀取失敗"}`);
+      setList([]);
+    }
   }
 
   async function add() {
