@@ -1,14 +1,12 @@
 // app/login/page.tsx
 "use client";
 
-export const dynamic = "force-dynamic"; // ✅ 避免預渲染衝突
-export const revalidate = 0;
+export const dynamic = "force-dynamic";
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
-/** 外層只負責提供 Suspense 邊界 */
 export default function LoginPage() {
   return (
     <Suspense fallback={<div className="min-h-screen grid place-items-center text-white">載入中…</div>}>
@@ -26,7 +24,6 @@ function LoginInner() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // 已有 token 直接跳
   useEffect(() => {
     const t =
       typeof window !== "undefined" &&
@@ -67,11 +64,9 @@ function LoginInner() {
 
   return (
     <div className="relative min-h-screen overflow-hidden text-white">
-      {/* 背景與動畫（略，同你現版） */}
       <div className="absolute inset-0 bg-gradient-to-br from-[#0b0f1a] via-black to-[#0b0f1a]" />
       <div className="absolute -top-32 -left-20 w-[60vw] h-[60vw] rounded-full bg-indigo-600/20 blur-[120px]" />
       <div className="absolute -bottom-32 -right-20 w-[55vw] h-[55vw] rounded-full bg-fuchsia-600/20 blur-[120px]" />
-
       <div className="relative z-10 flex items-center justify-center min-h-screen p-6">
         <div className="w-full max-w-md p-8 rounded-3xl border border-white/10 bg-white/10 backdrop-blur-xl shadow-2xl">
           <header className="mb-6">
@@ -107,9 +102,7 @@ function LoginInner() {
               />
             </div>
 
-            {err && (
-              <div className="rounded-xl border border-rose-400/30 bg-rose-500/10 p-3 text-sm">{err}</div>
-            )}
+            {err && <div className="rounded-xl border border-rose-400/30 bg-rose-500/10 p-3 text-sm">{err}</div>}
 
             <button
               type="submit"
@@ -121,12 +114,8 @@ function LoginInner() {
           </form>
 
           <div className="mt-6 flex items-center justify-between text-sm opacity-90">
-            <Link href="/register" className="hover:underline">
-              立即註冊
-            </Link>
-            <Link href="/forgot-password" className="hover:underline">
-              忘記密碼？
-            </Link>
+            <Link href="/register" className="hover:underline">立即註冊</Link>
+            <Link href="/forgot-password" className="hover:underline">忘記密碼？</Link>
           </div>
         </div>
       </div>
