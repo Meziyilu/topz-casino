@@ -6,16 +6,15 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifyJWT } from "@/lib/jwt";
 
-const REWARDS = [100, 120, 150, 180, 220, 260, 320]; // 1~7 天循環
-
 const asAny = <T = any>(v: unknown) => v as T;
 
-// 以「台北當日 00:00」為日界（UTC 儲存）
-export function taipeiDayStart(date = new Date()) {
-  const utcMs = date.getTime();
-  const tpeMs = utcMs + 8 * 3600_000;
-  const tpeDayStartMs = Math.floor(tpeMs / 86_400_000) * 86_400_000;
-  return new Date(tpeDayStartMs - 8 * 3600_000);
+function noStoreJson(payload: any, status = 200) {
+  return NextResponse.json(payload, {
+    status,
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+    },
+  });
 }
 
 function readTokenFromHeaders(req: Request): string | null {
@@ -32,72 +31,66 @@ async function getUser(req: Request) {
   if (!payload?.sub) return null;
   return prisma.user.findUnique({
     where: { id: String(payload.sub) },
-    select: { id: true, email: true, name: true, balance: true },
+    select: { id: true, email: true, balance: true },
   });
 }
 
-function noStoreJson(payload: any, status = 200) {
-  return NextResponse.json(payload, {
-    status,
-    headers: {
-      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
-      Pragma: "no-cache",
-      Expires: "0",
-    },
-  });
+function taipeiDayStart(date = new Date()) {
+  const utc = date.getTime();
+  const tpe = utc + 8 * 3600_000;
+  const tpeStart = Math.floor(tpe / 86_400_000) * 86_400_000;
+  return new Date(tpeStart - 8 * 3600_000);
 }
 
 export async function GET(req: Request) {
-  const me = await getUser(req);
-  if (!me) return noStoreJson({ error: "未登入" }, 401);
+  try {
+    const me = await getUser(req);
+    if (!me) return noStoreJson({ error: "未登入" }, 401);
 
-  const today = taipeiDayStart(new Date());
-  const yesterday = taipeiDayStart(new Date(Date.now() - 86_400_000));
+    const dayStart = taipeiDayStart(new Date());
 
-  // 取最近一次簽到（依 day desc）
-  const last = await prisma.dailyCheckin.findFirst({
-    where: { userId: me.id },
-    orderBy: { day: "desc" },
-    select: { day: true, streak: true, reward: true, createdAt: true },
-  });
+    // 今天紀錄
+    const today = await prisma.dailyCheckin.findUnique({
+      where: { userId_day: { userId: me.id, day: dayStart } },
+      select: { id: true, reward: true, streak: true, createdAt: true },
+    });
 
-  // 今天是否已簽
-  const todayRow = await prisma.dailyCheckin.findUnique({
-    where: {
-      userId_day: {
-        userId: me.id,
-        day: today,
-      },
-    },
-    select: { reward: true, streak: true, createdAt: true },
-  });
+    // 前一筆（用來算 streak）
+    const prev = await prisma.dailyCheckin.findFirst({
+      where: { userId: me.id },
+      orderBy: { day: "desc" },
+      select: { day: true, streak: true },
+    });
 
-  let nextStreak = 1;
-  if (last?.day && last.day.getTime() === yesterday.getTime()) {
-    nextStreak = (last.streak ?? 0) + 1;
-  } else if (todayRow?.streak) {
-    nextStreak = todayRow.streak; // 如果今天已簽
-  } else {
-    nextStreak = 1;
+    // 計算下一次獎勵
+    const oneDayMs = 86_400_000;
+    let nextStreak = 1;
+    if (prev) {
+      const prevMs = new Date(prev.day).getTime();
+      const diffDays = Math.round((dayStart.getTime() - prevMs) / oneDayMs);
+      nextStreak = diffDays === 1 ? (prev.streak ?? 0) + 1 : 1;
+    }
+    const base = 100;
+    const extra = Math.max(0, (nextStreak - 1) * 10);
+    const nextReward = Math.min(base + extra, 300);
+
+    // 近 7 天
+    const recent = await prisma.dailyCheckin.findMany({
+      where: { userId: me.id },
+      orderBy: { day: "desc" },
+      take: 7,
+      select: { day: true, reward: true, streak: true, createdAt: true },
+    });
+
+    return noStoreJson({
+      ok: true,
+      canClaim: !today,
+      today: today ?? null,
+      nextReward,
+      recent,
+      balance: me.balance,
+    });
+  } catch (e: any) {
+    return noStoreJson({ error: e?.message || "Server error" }, 500);
   }
-  if (nextStreak > 7) nextStreak = 1; // 7 天循環
-
-  const todayReward = REWARDS[nextStreak - 1];
-
-  // 近 7 天紀錄（含今天）
-  const recent = await prisma.dailyCheckin.findMany({
-    where: { userId: me.id },
-    orderBy: { day: "desc" },
-    take: 7,
-    select: { day: true, reward: true, streak: true, createdAt: true },
-  });
-
-  return noStoreJson({
-    user: { id: me.id, name: me.name, email: me.email, balance: me.balance },
-    today: today.toISOString(),
-    claimedToday: !!todayRow,
-    nextStreak,
-    todayReward,
-    recent, // 用於顯示近幾天签到
-  });
 }
