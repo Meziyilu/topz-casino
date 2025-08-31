@@ -1,6 +1,6 @@
 // lib/auth.ts
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
+import jwt, { SignOptions, VerifyOptions } from "jsonwebtoken";
 import prisma from "@/lib/prisma";
 import { cookies as readCookies } from "next/headers";
 
@@ -17,15 +17,25 @@ export async function comparePassword(password: string, hash: string): Promise<b
   return bcrypt.compare(password, hash);
 }
 
+/** 簽發 JWT（同步簽發 → 包 Promise，避免多載誤判） */
 export async function signJWT(
   payload: Record<string, any>,
   opts?: { expiresIn?: string | number }
 ): Promise<string> {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: opts?.expiresIn ?? "7d" });
+  const options: SignOptions = {
+    expiresIn: (opts?.expiresIn ?? "7d") as unknown as SignOptions["expiresIn"],
+  };
+  const token = (jwt as any).sign(payload, JWT_SECRET, options) as string;
+  return Promise.resolve(token);
 }
 
-export async function verifyJWT(token: string): Promise<any> {
-  return jwt.verify(token, JWT_SECRET);
+/** 驗證 JWT（同步驗證 → 包 Promise） */
+export async function verifyJWT<T = any>(
+  token: string,
+  options?: VerifyOptions
+): Promise<T> {
+  const decoded = (jwt as any).verify(token, JWT_SECRET, options) as T;
+  return Promise.resolve(decoded);
 }
 
 /** ========== 從 Request 取出 JWT（Bearer 或 Cookie） ========== */
@@ -84,9 +94,9 @@ export async function getUserFromRequest(req: Request) {
 
 /** ========== 後台保護：需要管理員（統一回傳型別） ========== */
 /**
- * 使用方式（維持你原本寫法）：
+ * 使用方式：
  *   const gate = await requireAdmin(req);
- *   if (!gate.ok) return gate.res;   // ✅ 不會再有 TS 錯誤
+ *   if (!gate.ok) return gate.res;
  *   const me = gate.user!;
  */
 export async function requireAdmin(req: Request): Promise<{
