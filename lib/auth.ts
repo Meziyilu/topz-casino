@@ -6,7 +6,7 @@ import { cookies as readCookies } from "next/headers";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 
-/** ── Auth 基本工具 ───────────────────────────────────── */
+/** ========== 基本 Auth 工具 ========== */
 
 export async function hashPassword(password: string): Promise<string> {
   const salt = await bcrypt.genSalt(10);
@@ -28,7 +28,7 @@ export async function verifyJWT(token: string): Promise<any> {
   return jwt.verify(token, JWT_SECRET);
 }
 
-/** ── 共用：從 Request 取出 JWT（Bearer 或 Cookie）並驗證 ───────── */
+/** ========== 從 Request 取出 JWT（Bearer 或 Cookie） ========== */
 
 export type AuthToken = { userId: string; [k: string]: any } | null;
 
@@ -82,11 +82,18 @@ export async function getUserFromRequest(req: Request) {
   });
 }
 
-/** 後台保護：需要管理員（常用於 /api/admin/*） */
-export async function requireAdmin(req: Request): Promise<
-  | { ok: true; user: NonNullable<Awaited<ReturnType<typeof getUserFromRequest>>> }
-  | { ok: false; res: Response }
-> {
+/** ========== 後台保護：需要管理員（統一回傳型別） ========== */
+/**
+ * 使用方式（維持你原本寫法）：
+ *   const gate = await requireAdmin(req);
+ *   if (!gate.ok) return gate.res;   // ✅ 不會再有 TS 錯誤
+ *   const me = gate.user!;
+ */
+export async function requireAdmin(req: Request): Promise<{
+  ok: boolean;
+  user?: NonNullable<Awaited<ReturnType<typeof getUserFromRequest>>>;
+  res?: Response;
+}> {
   const user = await getUserFromRequest(req);
   if (!user) {
     return {
