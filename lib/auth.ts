@@ -1,38 +1,29 @@
 // lib/auth.ts
-import prisma from "@/lib/prisma";
-import { verifyJWT } from "@/lib/jwt";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 
-export type AuthedUser =
-  | { id: string; email: string; isAdmin: boolean }
-  | null;
+const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 
-// 從 Cookie 讀 token → 驗證 → 撈使用者
-export async function getUserFromRequest(req: Request): Promise<AuthedUser> {
-  try {
-    const raw = req.headers.get("cookie") || "";
-    const m = raw.match(/(?:^|;\s*)token=([^;]+)/);
-    if (!m) return null;
-
-    const token = decodeURIComponent(m[1]);
-    const payload = await verifyJWT(token).catch(() => null);
-    if (!payload?.sub) return null;
-
-    const user = await prisma.user.findUnique({
-      where: { id: String(payload.sub) },
-      select: { id: true, email: true, isAdmin: true },
-    });
-    return user;
-  } catch {
-    return null;
-  }
+// 雜湊密碼
+export async function hashPassword(password: string): Promise<string> {
+  const salt = await bcrypt.genSalt(10);
+  return bcrypt.hash(password, salt);
 }
 
-export async function requireAdmin(req: Request) {
-  const me = await getUserFromRequest(req);
-  if (!me?.isAdmin) {
-    const err: any = new Error("需要管理員權限");
-    err.status = 403;
-    throw err;
-  }
-  return me;
+// 比對密碼
+export async function comparePassword(password: string, hash: string): Promise<boolean> {
+  return bcrypt.compare(password, hash);
+}
+
+// 簽發 JWT
+export async function signJWT(
+  payload: Record<string, any>,
+  opts?: { expiresIn?: string | number }
+): Promise<string> {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: opts?.expiresIn ?? "7d" });
+}
+
+// 驗證 JWT（回傳 payload）
+export async function verifyJWT(token: string): Promise<any> {
+  return jwt.verify(token, JWT_SECRET);
 }

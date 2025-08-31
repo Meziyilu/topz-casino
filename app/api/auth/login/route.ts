@@ -2,7 +2,6 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { comparePassword, signJWT } from "@/lib/auth";
-import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
@@ -28,21 +27,16 @@ export async function POST(req: Request) {
 
     const token = await signJWT({ userId: user.id });
 
-    // 設置 HttpOnly Cookie（同時回傳 token，兩邊都支援）
     const res = NextResponse.json({ ok: true, token, userId: user.id });
-    try {
-      cookies().set("token", token, {
-        httpOnly: true,
-        secure: true,
-        sameSite: "lax",
-        path: "/",
-        maxAge: 60 * 60 * 24 * 7, // 7天
-      });
-    } catch {
-      // 在邊緣/特定執行環境讀寫 cookies() 可能會限制，失敗就只靠回傳 token
-    }
+    res.cookies.set("token", token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    });
     return res;
-  } catch (e: any) {
+  } catch (e) {
     return NextResponse.json({ ok: false, error: "SERVER_ERROR" }, { status: 500 });
   }
 }
