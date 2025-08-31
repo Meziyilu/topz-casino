@@ -1,4 +1,3 @@
-// app/api/auth/login/route.ts
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
@@ -24,17 +23,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "帳號或密碼錯誤" }, { status: 401 });
     }
 
-    // 與 lib/jwt.ts 對齊：payload 需要 userId / isAdmin
+    // 簽發 token，lib/jwt.ts 已處理好 userId + sub
     const token = signJWT({ userId: user.id, isAdmin: user.isAdmin });
 
     const res = NextResponse.json({ ok: true });
-    // 以 HttpOnly Cookie 存 JWT（Render/Next 適用）
     res.cookies.set("token", token, {
       httpOnly: true,
       sameSite: "lax",
       path: "/",
-      secure: true,                 // 若本地開發要測試 cookie，可視情況改 false
-      maxAge: 60 * 60 * 24 * 7,     // 7 天
+      secure: true,               // 如果在 localhost 測試，可以改成 false
+      maxAge: 60 * 60 * 24 * 7,   // 7 天
     });
     return res;
   } catch (e: any) {
