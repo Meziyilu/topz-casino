@@ -18,12 +18,24 @@ const config: Config = {
           violet: "#a78bfa",
           blue: "#60a5fa",
         },
+        // 排行榜色彩（壓暗版）
+        rank: {
+          gold: "#E6C200",
+          silver: "#A9A9A9",
+          bronze: "#A0522D",
+          neutral: "#CCCCCC",
+        },
       },
       boxShadow: {
         glow: "0 0 24px rgba(255,255,255,.15)",
         "glow-strong": "0 0 28px rgba(255,255,255,.26)",
         "gold-pulse":
           "0 0 24px rgba(255,215,0,.35), inset 0 0 22px rgba(255,215,0,.25)",
+        // 玻璃面板專用
+        glass: "0 8px 32px 0 rgba(0, 0, 0, 0.37)",
+      },
+      backdropBlur: {
+        xs: "2px",
       },
       keyframes: {
         drift: {
