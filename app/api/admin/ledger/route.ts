@@ -1,58 +1,27 @@
-// app/api/admin/ledger/route.ts
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth"; // 保持原 import
+
+export const dynamic = "force-dynamic";
 
 function noStoreJson(payload: any, status = 200) {
   return NextResponse.json(payload, {
     status,
-    headers: {
-      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
-      Pragma: "no-cache",
-      Expires: "0",
-    },
+    headers: { "cache-control": "no-store" },
   });
 }
 
 export async function GET(req: Request) {
-  try {
-    await requireAdmin(req);
-    const url = new URL(req.url);
-    const userId = url.searchParams.get("userId") || "";
-    const limit = Math.max(10, Math.min(200, Number(url.searchParams.get("limit") || 50)));
-    const cursor = url.searchParams.get("cursor") || undefined;
+  const gate = await requireAdmin(req);
+  if (!gate.ok) return gate.res;
 
-    const where = userId ? { userId } : {};
+  const url = new URL(req.url);
+  const limit = Math.min(parseInt(url.searchParams.get("limit") || "50", 10), 200);
 
-    const rows = await prisma.ledger.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      take: limit + 1,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-      select: {
-        id: true,
-        userId: true,
-        type: true,
-        delta: true,
-        memo: true,
-        balanceAfter: true,
-        bankAfter: true,
-        createdAt: true,
-        user: { select: { email: true } },
-      },
-    });
+  const items = await prisma.ledger.findMany({
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
 
-    let nextCursor: string | undefined = undefined;
-    if (rows.length > limit) {
-      nextCursor = rows[limit].id;
-      rows.splice(limit);
-    }
-
-    return noStoreJson({ items: rows, nextCursor });
-  } catch (e: any) {
-    return noStoreJson({ error: e?.message || "Server error" }, e?.status || 500);
-  }
+  return noStoreJson({ ok: true, data: { items } });
 }

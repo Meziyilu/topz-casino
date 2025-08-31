@@ -27,3 +27,5 @@ export async function signJWT(
 export async function verifyJWT(token: string): Promise<any> {
   return jwt.verify(token, JWT_SECRET);
 }
+// lib/auth.ts 末尾新增一行：
+export { verifyJWTFromRequest, getUserFromRequest, requireAdmin } from "./authz";
