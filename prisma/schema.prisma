@@ -1,3 +1,5 @@
+// prisma/schema.prisma — TOPZ Casino v1.1.1 Final
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,102 +9,17 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id                          String   @id @default(cuid())
-  email                       String   @unique
-  password                    String
-  name                        String?
-  createdAt                   DateTime @default(now())
-  balance                     Int      @default(0)
-  bankBalance                 Int      @default(0)
-  isAdmin                     Boolean  @default(false)
-  bets                        Bet[]
-  Ledger_Ledger_adminIdToUser Ledger[] @relation("Ledger_adminIdToUser")
-  ledgers                     Ledger[]
-
-  @@index([isAdmin])
-}
-
-model Ledger {
-  id                        String        @id @default(cuid())
-  userId                    String
-  adminId                   String?
-  type                      LedgerType
-  target                    BalanceTarget
-  delta                     Int
-  memo                      String?
-  balanceAfter              Int?
-  bankAfter                 Int?
-  createdAt                 DateTime      @default(now())
-  User_Ledger_adminIdToUser User?         @relation("Ledger_adminIdToUser", fields: [adminId], references: [id])
-  user                      User          @relation(fields: [userId], references: [id])
-
-  @@index([userId, createdAt])
-  @@index([adminId])
-  @@index([type, target])
-}
-
-model Room {
-  id              String   @id @default(cuid())
-  code            RoomCode @unique
-  name            String
-  durationSeconds Int
-  createdAt       DateTime @default(now())
-  bets            Bet[]
-  rounds          Round[]
-
-  @@index([code])
-}
-
-model Round {
-  id          String        @id @default(cuid())
-  roomId      String
-  day         DateTime
-  roundSeq    Int
-  phase       RoundPhase    @default(BETTING)
-  outcome     RoundOutcome?
-  playerTotal Int?
-  bankerTotal Int?
-  playerCards Json?
-  bankerCards Json?
-  playerPair  Boolean?
-  bankerPair  Boolean?
-  anyPair     Boolean?
-  perfectPair Boolean?
-  startedAt   DateTime
-  settledAt   DateTime?
-  createdAt   DateTime      @default(now())
-  bets        Bet[]
-  room        Room          @relation(fields: [roomId], references: [id])
-
-  @@unique([roomId, day, roundSeq])
-  @@index([roomId, day])
-}
-
-model Bet {
-  id        String   @id @default(cuid())
-  userId    String
-  roomId    String
-  day       DateTime
-  roundSeq  Int
-  side      BetSide
-  amount    Int
-  createdAt DateTime @default(now())
-  roundId   String?
-  room      Room     @relation(fields: [roomId], references: [id])
-  round     Round?   @relation(fields: [roundId], references: [id])
-  user      User     @relation(fields: [userId], references: [id])
-
-  @@index([roomId, day, roundSeq])
-  @@index([userId, roomId, createdAt])
-}
+/*
+ * ======================== Enums ========================
+*/
 
 enum LedgerType {
-  ADMIN_ADJUST
-  TRANSFER_IN
-  TRANSFER_OUT
-  BET_PLACED
-  BET_PAYOUT
+  DEPOSIT       // 充值
+  WITHDRAW      // 提領
+  BET_PLACED    // 下單（扣款）
+  PAYOUT        // 派彩（加款）
+  TRANSFER      // 內部轉帳（錢包 <-> 銀行）
+  ADMIN_ADJUST  // 管理員調整
 }
 
 enum BalanceTarget {
@@ -118,7 +35,7 @@ enum RoomCode {
 
 enum RoundPhase {
   BETTING
-  REVEAL
+  REVEALING
   SETTLED
 }
 
@@ -134,6 +51,141 @@ enum BetSide {
   TIE
   PLAYER_PAIR
   BANKER_PAIR
-  ANY_PAIR
-  PERFECT_PAIR
+}
+
+/*
+ * ======================== Models ========================
+*/
+
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  password    String
+  name        String?
+  avatarUrl   String?      // 玩家頭像
+  isAdmin     Boolean  @default(false)
+  balance     Int      @default(0) // 錢包
+  bankBalance Int      @default(0) // 銀行
+  createdAt   DateTime @default(now())
+
+  // relations
+  bets          Bet[]
+  ledgers       Ledger[]
+  dailyCheckins DailyCheckin[]
+
+  @@index([createdAt])
+}
+
+model Ledger {
+  id           String        @id @default(cuid())
+  userId       String
+  type         LedgerType
+  target       BalanceTarget
+  delta        Int           // 正負值（+入金 / -出金）
+  memo         String?
+  balanceAfter Int            // 當下錢包餘額
+  bankAfter    Int            // 當下銀行餘額
+  createdAt    DateTime      @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+}
+
+model Room {
+  id              String   @id @default(cuid())
+  code            RoomCode @unique
+  name            String
+  durationSeconds Int
+  createdAt       DateTime @default(now())
+
+  rounds Round[]
+  bets   Bet[]
+}
+
+model Round {
+  id     String @id @default(cuid())
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  day      DateTime   // 台北當日 00:00（以 UTC 儲存）
+  roundSeq Int
+  phase    RoundPhase @default(BETTING)
+
+  createdAt DateTime  @default(now())
+  startedAt DateTime
+  settledAt DateTime?
+
+  // 結果
+  outcome     RoundOutcome?
+  playerTotal Int?
+  bankerTotal Int?
+  playerPair  Boolean?
+  bankerPair  Boolean?
+  anyPair     Boolean?
+  perfectPair Boolean?
+  playerCards Json?
+  bankerCards Json?
+
+  bets Bet[]
+
+  @@unique([roomId, day, roundSeq])
+  @@index([roomId, day, roundSeq])
+  @@index([phase])
+  @@index([createdAt])
+}
+
+model Bet {
+  id        String   @id @default(cuid())
+  userId    String
+  roundId   String
+  roomId    String
+  side      BetSide
+  amount    Int
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  room  Room  @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([roomId])
+  @@index([roundId, userId])
+  @@index([userId, createdAt])
+}
+
+model Announcement {
+  id        String    @id @default(cuid())
+  title     String
+  content   String
+  enabled   Boolean   @default(true)
+  startAt   DateTime?
+  endAt     DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([enabled, createdAt])
+}
+
+model MarqueeMessage {
+  id        String   @id @default(cuid())
+  text      String
+  enabled   Boolean  @default(true)
+  priority  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([enabled, priority, createdAt])
+}
+
+model DailyCheckin {
+  id        String   @id @default(cuid())
+  userId    String
+  day       DateTime // 台北當日 00:00（以 UTC 儲存）
+  reward    Int
+  streak    Int
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, day])
+  @@index([userId, day])
 }
