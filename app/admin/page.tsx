@@ -18,9 +18,9 @@ type LedgerRow = {
   id: string;
   userId: string;
   type: string;
-  delta?: number;           // 若你的 API 回傳 delta
-  amount?: number;          // 或者 amount（二者擇一，面板會自動判斷）
-  memo?: string | null;     // 或 note
+  delta?: number;
+  amount?: number;
+  memo?: string | null;
   note?: string | null;
   balanceAfter?: number;
   bankAfter?: number;
@@ -192,7 +192,7 @@ function WalletAdjustPanel() {
           <input
             type="number"
             value={amount}
-            onChange={(e) => setAmount(Number(e.target.value || 0)))}
+            onChange={(e) => setAmount(Number(e.target.value || 0))}
             className="w-full bg-transparent border border-white/20 rounded px-3 py-2 outline-none focus:border-white/40"
           />
         </div>
@@ -433,7 +433,7 @@ function LedgerPanel() {
             min={10}
             value={limit}
             onChange={(e) => setLimit(Math.max(10, Number(e.target.value || 10)))}
-            className="w-full bg-transparent border border-white/20 rounded px-3 py-2 outline-none focus:border-white/40"
+            className="w-full bg透明 border border-white/20 rounded px-3 py-2 outline-none focus:border-white/40"
           />
         </div>
         <div className="flex gap-2">
@@ -476,7 +476,7 @@ function LedgerPanel() {
             })}
             {list.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-6 text中心 opacity-70">無資料</td>
+                <td colSpan={7} className="py-6 text-center opacity-70">無資料</td>
               </tr>
             )}
           </tbody>
@@ -604,7 +604,7 @@ function AnnouncementPanel() {
         <input
           value={title} onChange={(e)=>setTitle(e.target.value)}
           placeholder="公告標題"
-          className="bg-transparent border border白/20 rounded px-3 py-2 outline-none focus:border-white/40 md:col-span-1"
+          className="bg-transparent border border-white/20 rounded px-3 py-2 outline-none focus:border-white/40 md:col-span-1"
         />
         <input
           value={content} onChange={(e)=>setContent(e.target.value)}
