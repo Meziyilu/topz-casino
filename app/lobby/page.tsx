@@ -1,10 +1,11 @@
 // app/lobby/page.tsx
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import Script from "next/script"; // ✅ 新增：用來載入客服腳本
+import Script from "next/script"; // 載入客服腳本
+import CheckinCard from "@/components/CheckinCard"; // ✅ 正確：在 /components/CheckinCard.tsx
 
 /** 小工具 */
 function formatTime(d = new Date()) {
@@ -131,7 +132,7 @@ export default function LobbyPage() {
   }, []);
 
   /** ===== 頂部：跑馬燈 ===== */
-  const showMarquee = marq?.enabled && marq.text?.trim();
+  const showMarquee = !!(marq?.enabled && marq.text?.trim());
   const marqueeSpeed = Math.max(40, Math.min(300, marq?.speed ?? 90)); // px/s
 
   /** ===== 房間卡片定義（可擴充） ===== */
@@ -217,7 +218,7 @@ export default function LobbyPage() {
           <div className="glass px-3 py-2 rounded-xl">
             <div className="text-[10px] opacity-70">玩家</div>
             <div className="text-sm font-semibold">
-              {me?.name || me?.email || "未登入"}
+              {me?.name ?? me?.email ?? "未登入"}
             </div>
           </div>
           <div className="glass px-3 py-2 rounded-xl">
@@ -278,11 +279,15 @@ export default function LobbyPage() {
         </div>
       )}
 
-      {/* 主體：公告 + 房間區塊 */}
+      {/* 主體：簽到 + 公告 + 房間區塊 */}
       <main className="max-w-7xl mx-auto px-4 py-8 relative z-10">
         <div className="grid lg:grid-cols-3 gap-6">
-          {/* 左側：公告卡（獨立） */}
-          <section className="lg:col-span-1">
+          {/* 左側：簽到卡 + 公告卡 */}
+          <section className="lg:col-span-1 space-y-6">
+            {/* ✅ 每日簽到卡片 */}
+            <CheckinCard />
+
+            {/* 公告欄（保留原有） */}
             <div className="glass rounded-2xl p-5 border border-white/15 shadow-lg">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-lg font-bold">📢 公告欄</h2>
@@ -376,34 +381,32 @@ export default function LobbyPage() {
         © {new Date().getFullYear()} TOPZ Casino. All rights reserved.
       </footer>
 
-      {/* ✅ Minnit Chat 容器（保持官方屬性） */}
-{/* ✅ Minnit Chat：正中間底部（fixed） */}
-<div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
-  <span
-    className="minnit-chat-sembed"
-    style={{ display: "none" }}
-    data-chatname="https://organizations.minnit.chat/719691555913932/c/Main?embed"
-    data-style="width:90vw; max-width:960px; height:500px; max-height:90vh;"
-    data-version="1.52"
-  >
-    Chat
-  </span>
-  <p className="powered-by-minnit mt-2 text-xs opacity-60 text-center">
-    <a
-      href="https://minnit.chat"
-      target="_blank"
-      rel="noopener noreferrer"
-      className="underline hover:opacity-100"
-    >
-      Add a group chat to your website with Minnit Chat
-    </a>
-  </p>
-</div>
+      {/* Minnit Chat 容器（保持官方屬性） */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+        <span
+          className="minnit-chat-sembed"
+          style={{ display: "none" }}
+          data-chatname="https://organizations.minnit.chat/719691555913932/c/Main?embed"
+          data-style="width:90vw; max-width:960px; height:500px; max-height:90vh;"
+          data-version="1.52"
+        >
+          Chat
+        </span>
+        <p className="powered-by-minnit mt-2 text-xs opacity-60 text-center">
+          <a
+            href="https://minnit.chat"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:opacity-100"
+          >
+            Add a group chat to your website with Minnit Chat
+          </a>
+        </p>
+      </div>
 
-
-      {/* ✅ 新增：Tawk.to 客服（afterInteractive，不影響水合） */}
+      {/* Tawk.to 客服（afterInteractive，不影響水合） */}
       <Script id="tawk-to" strategy="afterInteractive">{`
-        var Tawk_API=Tawk_API||{}, Tawk_LoadStart=new Date();
+        var Tawk_API = Tawk_API || {}, Tawk_LoadStart = new Date();
         (function(){
           var s1=document.createElement("script"),s0=document.getElementsByTagName("script")[0];
           s1.async=true;
@@ -414,7 +417,7 @@ export default function LobbyPage() {
         })();
       `}</Script>
 
-      {/* ✅ Minnit Chat Script */}
+      {/* Minnit Chat Script */}
       <Script
         id="minnit-embed"
         src="https://minnit.chat/js/embed.js?c=1752216300"
