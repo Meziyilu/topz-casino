@@ -1,10 +1,11 @@
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { verifyJWT } from "@/lib/jwt";
-import { upsertMarqueeSchema } from "@/lib/validation/admin";
+import { verifyRequest } from "@/lib/jwt";
 
 export async function GET(req: Request) {
-  const auth = await verifyJWT(req);
+  const auth = verifyRequest(req);
   if (!auth?.isAdmin) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
 
   const list = await prisma.marqueeMessage.findMany({
@@ -14,11 +15,11 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const auth = await verifyJWT(req);
+  const auth = verifyRequest(req);
   if (!auth?.isAdmin) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
 
   const body = await req.json();
-  const data = upsertMarqueeSchema.parse(body);
+  const data = body;
 
   const created = await prisma.marqueeMessage.create({
     data: {
