@@ -315,7 +315,7 @@ export default function LobbyPage() {
                     </article>
                   ))
                 ) : (
-                  <div className="opacity-70 text-sm">目前沒有公告。</div>
+                  <div className="opacity-70 text-sm">目前功能都還在擴充當中。請各位耐心等候。</div>
                 )}
               </div>
             </div>
@@ -377,27 +377,29 @@ export default function LobbyPage() {
       </footer>
 
       {/* ✅ Minnit Chat 容器（保持官方屬性） */}
-      <div className="max-w-7xl mx-auto px-4 pb-8 pt-2 relative z-10">
-        <span
-          className="minnit-chat-sembed"
-          style={{ display: "none" }}
-          data-chatname="https://organizations.minnit.chat/719691555913932/c/Main?embed"
-          data-style="width:90%; height:500px; max-height:90vh;"
-          data-version="1.52"
-        >
-          Chat
-        </span>
-        <p className="powered-by-minnit mt-2 text-xs opacity-60">
-          <a
-            href="https://minnit.chat"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline hover:opacity-100"
-          >
-            Add a group chat to your website with Minnit Chat
-          </a>
-        </p>
-      </div>
+{/* ✅ Minnit Chat：正中間底部（fixed） */}
+<div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+  <span
+    className="minnit-chat-sembed"
+    style={{ display: "none" }}
+    data-chatname="https://organizations.minnit.chat/719691555913932/c/Main?embed"
+    data-style="width:90vw; max-width:960px; height:500px; max-height:90vh;"
+    data-version="1.52"
+  >
+    Chat
+  </span>
+  <p className="powered-by-minnit mt-2 text-xs opacity-60 text-center">
+    <a
+      href="https://minnit.chat"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="underline hover:opacity-100"
+    >
+      Add a group chat to your website with Minnit Chat
+    </a>
+  </p>
+</div>
+
 
       {/* ✅ 新增：Tawk.to 客服（afterInteractive，不影響水合） */}
       <Script id="tawk-to" strategy="afterInteractive">{`
