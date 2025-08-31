@@ -26,6 +26,20 @@ type LedgerItem = {
 type MarqueeMessage = { id: string; text: string; priority: number; enabled: boolean };
 type Announcement = { id: string; title: string; content: string; enabled: boolean };
 
+function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
+  const token =
+    typeof window !== "undefined"
+      ? localStorage.getItem("token") ||
+        localStorage.getItem("jwt") ||
+        localStorage.getItem("access_token")
+      : null;
+
+  const headers = new Headers(init.headers || {});
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  return fetch(input, { ...init, headers });
+}
+
 export default function BankPage() {
   const [balances, setBalances] = useState<Balances>({ wallet: 0, bank: 0 });
   const [amount, setAmount] = useState<string>("");
@@ -44,13 +58,13 @@ export default function BankPage() {
     typeof n === "number" ? n.toLocaleString() : "-";
 
   async function refreshBalances() {
-    const r = await fetch("/api/bank/balances", { cache: "no-store" });
+    const r = await authFetch("/api/bank/balances", { cache: "no-store" });
     const j = await r.json();
     if (j.ok) setBalances(j.data);
   }
 
   async function loadLedger() {
-    const r = await fetch("/api/bank/ledger?limit=20", { cache: "no-store" });
+    const r = await authFetch("/api/bank/ledger?limit=20", { cache: "no-store" });
     const j = await r.json();
     if (j.ok) setLedger(j.data.items);
   }
@@ -88,7 +102,7 @@ export default function BankPage() {
     setLoading(true);
     try {
       const idem = crypto.randomUUID();
-      const r = await fetch(url, {
+      const r = await authFetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": idem },
         body: JSON.stringify({ ...body, idempotencyKey: idem }),
