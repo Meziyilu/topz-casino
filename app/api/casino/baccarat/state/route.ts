@@ -48,6 +48,41 @@ function taipeiDayStart(date = new Date()) {
   return new Date(tpeStart - 8 * 3600_000);
 }
 
+// ----------------- 賠率/派彩：與排行榜一致（含本金） -----------------
+function getReturns() {
+  const noComm = (process.env.TOPZ_BANKER_NO_COMMISSION || "false").toLowerCase() === "true";
+  const tieOdds = Number(process.env.TOPZ_TIE_ODDS || 8);    // 8 or 9
+  const pairOdds = Number(process.env.TOPZ_PAIR_ODDS || 11); // 通常 11
+  return {
+    PLAYER_RETURN: 2,                 // 1:1 -> 含本金 2x
+    BANKER_RETURN: noComm ? 2 : 1.95, // 無佣 2x；有佣 1.95x
+    TIE_RETURN: 1 + tieOdds,          // 8:1 -> 9x（含本金）
+    PAIR_RETURN: 1 + pairOdds,        // 11:1 -> 12x（含本金）
+  };
+}
+
+/** 計算「單注派彩（含本金）」；輸=0；和局推注(押閒/莊遇和)退本金(1x) */
+function computePayout(
+  side: string,
+  outcome: string | null,
+  flags: { playerPair?: boolean | null; bankerPair?: boolean | null },
+  amount: number
+): number {
+  const { PLAYER_RETURN, BANKER_RETURN, TIE_RETURN, PAIR_RETURN } = getReturns();
+
+  if (side === "PLAYER" && outcome === "PLAYER") return Math.round(amount * PLAYER_RETURN);
+  if (side === "BANKER" && outcome === "BANKER") return Math.floor(amount * BANKER_RETURN);
+  if (side === "TIE"    && outcome === "TIE")    return Math.round(amount * TIE_RETURN);
+
+  // 和局推注：押閒/莊遇到 outcome=TIE → 退本金
+  if ((side === "PLAYER" || side === "BANKER") && outcome === "TIE") return amount;
+
+  if (side === "PLAYER_PAIR" && flags.playerPair) return Math.round(amount * PAIR_RETURN);
+  if (side === "BANKER_PAIR" && flags.bankerPair) return Math.round(amount * PAIR_RETURN);
+
+  return 0;
+}
+
 // ----------------- 資料庫交易工具 -----------------
 async function createNextRoundTx(
   tx: Prisma.TransactionClient,
@@ -121,7 +156,7 @@ async function ensureCardsOnReveal(
   });
 }
 
-// 結算（不重發牌）
+// 結算（不重發牌）— 已調整為「含本金返還」
 async function settleRoundTx(tx: Prisma.TransactionClient, roundId: string) {
   const r = await tx.round.findUnique({
     where: { id: roundId },
@@ -141,21 +176,18 @@ async function settleRoundTx(tx: Prisma.TransactionClient, roundId: string) {
     select: { id: true, userId: true, side: true, amount: true },
   });
 
-  // 基本賠率
-  const baseRate: Record<string, number> = {
-    PLAYER: 1.0,
-    BANKER: 0.95,
-    TIE: 8.0,
-    PLAYER_PAIR: 11.0,
-    BANKER_PAIR: 11.0,
-  };
-
   for (const b of bets) {
-    // 和局退非和注
-    if (r.outcome === asAny("TIE") && b.side !== asAny("TIE")) {
+    const payout = computePayout(
+      String(b.side),
+      String(r.outcome),
+      { playerPair: r.playerPair, bankerPair: r.bankerPair },
+      b.amount
+    );
+
+    if (payout > 0) {
       const after = await tx.user.update({
         where: { id: b.userId },
-        data: { balance: { increment: b.amount } },
+        data: { balance: { increment: payout } },
         select: { balance: true, bankBalance: true },
       });
       await tx.ledger.create({
@@ -163,42 +195,8 @@ async function settleRoundTx(tx: Prisma.TransactionClient, roundId: string) {
           userId: b.userId,
           type: asAny("PAYOUT"),
           target: asAny("WALLET"),
-          delta: b.amount,
-          memo: `和局退注`,
-          balanceAfter: after.balance,
-          bankAfter: after.bankBalance,
-        },
-      });
-      continue;
-    }
-
-    // 一般派彩
-    let win = 0;
-    if (b.side === asAny("PLAYER") && r.outcome === asAny("PLAYER")) {
-      win = Math.floor(b.amount * baseRate.PLAYER);
-    } else if (b.side === asAny("BANKER") && r.outcome === asAny("BANKER")) {
-      win = Math.floor(b.amount * baseRate.BANKER);
-    } else if (b.side === asAny("TIE") && r.outcome === asAny("TIE")) {
-      win = Math.floor(b.amount * baseRate.TIE);
-    } else if (b.side === asAny("PLAYER_PAIR") && r.playerPair) {
-      win = Math.floor(b.amount * baseRate.PLAYER_PAIR);
-    } else if (b.side === asAny("BANKER_PAIR") && r.bankerPair) {
-      win = Math.floor(b.amount * baseRate.BANKER_PAIR);
-    }
-
-    if (win > 0) {
-      const after = await tx.user.update({
-        where: { id: b.userId },
-        data: { balance: { increment: win } },
-        select: { balance: true, bankBalance: true },
-      });
-      await tx.ledger.create({
-        data: {
-          userId: b.userId,
-          type: asAny("PAYOUT"),
-          target: asAny("WALLET"),
-          delta: win,
-          memo: `派彩 ${String(b.side)} +${win}`,
+          delta: payout,
+          memo: `派彩 ${String(b.side)} +${payout}`,
           balanceAfter: after.balance,
           bankAfter: after.bankBalance,
         },
@@ -399,7 +397,7 @@ export async function GET(req: Request) {
             }
           : undefined,
       myBets,
-      // ⭐ 新增：把目前使用者錢包一起帶回前端（若未登入則為 null）
+      // ⭐ 把目前使用者錢包一起帶回前端（若未登入則為 null）
       balance: me?.balance ?? null,
       recent: recentRows.map((r) => ({
         roundSeq: r.roundSeq,
