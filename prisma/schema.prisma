@@ -1,4 +1,4 @@
-// prisma/schema.prisma — TOPZ Casino v1.1.1 + Bank 2.0
+// prisma/schema.prisma — TOPZ Casino v1.1.1 + Bank 2.0 (+ Lotto 1.0)
 
 generator client {
   provider = "prisma-client-js"
@@ -53,6 +53,37 @@ enum BetSide {
   BANKER_PAIR
 }
 
+/* ----------- 新增：大樂透使用的 Enums ----------- */
+
+enum LottoRoundStatus {
+  OPEN
+  LOCKED
+  DRAWN
+  SETTLED
+}
+
+enum LottoBetKind {
+  PICKS           // 一般選號（6/49）
+  SPECIAL_ODD     // 特別號「單」
+  SPECIAL_EVEN    // 特別號「雙」
+  BALL_ATTR       // 各球屬性（第1~6球的大/小/單/雙）
+}
+
+enum LottoAttr {
+  BIG
+  SMALL
+  ODD
+  EVEN
+}
+
+enum BetStatus {
+  PENDING
+  WON
+  LOST
+  PAID
+  CANCELED
+}
+
 /*
  * ======================== Models ========================
 */
@@ -72,6 +103,9 @@ model User {
   bets          Bet[]
   ledgers       Ledger[]
   dailyCheckins DailyCheckin[]
+
+  // NEW: 大樂透下注
+  lottoBets     LottoBet[]
 
   @@index([createdAt])
 }
@@ -96,10 +130,6 @@ model Ledger {
   transferGroupId  String?             // 雙分錄關聯（P2P）
   peerUserId       String?             // 對手方（P2P）
   meta             Json?               // 擴充：IP、AML flags、來源等
-
-  // （可選進階：若日後要更清楚的資產位移，可再加）
-  // deltaWallet     Int?              // 實際影響 wallet 的變動
-  // deltaBank       Int?              // 實際影響 bank 的變動
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -204,4 +234,60 @@ model DailyCheckin {
 
   @@unique([userId, day])
   @@index([userId, day])
+}
+
+/* ======================== NEW: Lotto Models ======================== */
+
+model LottoRound {
+  id        String            @id @default(cuid())
+  code      Int               @unique           // 期號（遞增）
+  drawAt    DateTime
+  status    LottoRoundStatus  @default(OPEN)
+  numbers   Int[]                              // 開出 6 顆
+  special   Int?                               // 特別號
+  pool      Int               @default(0)      // 累積獎池
+  jackpot   Int               @default(0)      // 當期頭獎實際發出
+  createdAt DateTime          @default(now())
+
+  bets      LottoBet[]
+}
+
+model LottoBet {
+  id         String        @id @default(cuid())
+  userId     String
+  roundId    String
+  kind       LottoBetKind               // PICKS / SPECIAL_ODD / SPECIAL_EVEN / BALL_ATTR
+  picks      Int[]                      // kind=PICKS：6 顆；其他留空
+  picksKey   String        @default("-")// 例如 "1-8-19-20-33-42"
+  ballIndex  Int?                        // kind=BALL_ATTR：第幾球（1~6）
+  attr       LottoAttr?                  // BIG/SMALL/ODD/EVEN
+  amount     Int
+  status     BetStatus     @default(PENDING)
+  payout     Int           @default(0)
+  matched    Int           @default(0)  // 命中幾顆（不含特別號）
+  hitSpecial Boolean       @default(false)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  round  LottoRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@index([roundId])
+  @@index([userId])
+
+  // 去重策略：PICKS 與 BALL_ATTR 分開保證唯一，避免 NULL 參與複合唯一
+  @@unique([userId, roundId, kind, picksKey])                    // for PICKS / SPECIAL_*
+  @@unique([userId, roundId, kind, ballIndex, attr])             // for BALL_ATTR
+}
+
+/* ======================== NEW: Config ======================== */
+/**
+ * 集中遊戲配置（倍率、封盤秒數、大小門檻、下注檔位、抽成比例等）
+ * key 範例：
+ * - "lotto.config"
+ */
+model GameConfig {
+  key       String @id
+  value     Json
+  updatedAt DateTime @updatedAt
 }
