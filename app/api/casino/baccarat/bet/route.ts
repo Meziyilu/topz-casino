@@ -1,14 +1,21 @@
 // app/api/casino/baccarat/bet/route.ts
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { $Enums } from "@prisma/client";
-import { verifyJWT } from "@/lib/jwt";
+import { verifyRequest } from "@/lib/jwt";
 
-function noStoreJson(payload: any, status = 200) {
-  return NextResponse.json(payload, {
+type BetSide =
+  | "PLAYER"
+  | "BANKER"
+  | "TIE"
+  | "PLAYER_PAIR"
+  | "BANKER_PAIR";
+
+const noStore = (payload: any, status = 200) =>
+  NextResponse.json(payload, {
     status,
     headers: {
       "Cache-Control":
@@ -17,114 +24,138 @@ function noStoreJson(payload: any, status = 200) {
       Expires: "0",
     },
   });
-}
 
-function readTokenFromHeaders(req: Request): string | null {
-  const raw = req.headers.get("cookie");
-  if (!raw) return null;
-  const m = raw.match(/(?:^|;\s*)token=([^;]+)/);
-  return m ? decodeURIComponent(m[1]) : null;
-}
-
-// 台北日 00:00 (UTC 儲存)
-function taipeiDayStart(date = new Date()) {
-  const utc = date.getTime();
-  const tpe = utc + 8 * 3600_000;
-  const tpeStart = Math.floor(tpe / 86_400_000) * 86_400_000;
-  return new Date(tpeStart - 8 * 3600_000);
-}
-function addDays(d: Date, days: number) {
-  return new Date(d.getTime() + days * 86_400_000);
-}
+type PostBody = {
+  roomId: string;
+  roundId: string;
+  side: BetSide;
+  amount: number;
+};
 
 export async function POST(req: Request) {
+  // ✅ 統一改成同步驗證，不再使用 verifyJWT<...>
+  const auth = verifyRequest(req);
+  const userId = auth?.userId || auth?.sub || null;
+  if (!userId) return noStore({ error: "UNAUTHORIZED" }, 401);
+
+  let body: PostBody;
   try {
-    // 1) 驗證登入
-    const token = readTokenFromHeaders(req);
-    const payload = token ? await verifyJWT(token).catch(() => null) : null;
-    if (!payload?.sub) return noStoreJson({ error: "未登入" }, 401);
+    body = await req.json();
+  } catch {
+    return noStore({ error: "INVALID_JSON" }, 400);
+  }
 
-    const me = await prisma.user.findUnique({
-      where: { id: String(payload.sub) },
-      select: { id: true, balance: true },
-    });
-    if (!me) return noStoreJson({ error: "用戶不存在" }, 401);
+  // 基本驗證
+  if (!body?.roomId || !body?.roundId)
+    return noStore({ error: "MISSING_PARAMS" }, 400);
 
-    // 2) 解析 body
-    const body = await req.json().catch(() => ({}));
-    const roomCode = String(body.roomCode || "").toUpperCase().trim();
-    const sideStr = String(body.side || "").toUpperCase().trim();
-    const amount = Number(body.amount || 0);
+  const validSides: BetSide[] = [
+    "PLAYER",
+    "BANKER",
+    "TIE",
+    "PLAYER_PAIR",
+    "BANKER_PAIR",
+  ];
+  if (!validSides.includes(body.side))
+    return noStore({ error: "INVALID_SIDE" }, 400);
 
-    if (!roomCode) return noStoreJson({ error: "缺少 roomCode" }, 400);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return noStoreJson({ error: "金額不合法" }, 400);
-    }
+  if (
+    !Number.isInteger(body.amount) ||
+    body.amount <= 0 ||
+    body.amount > 5_000_000
+  ) {
+    return noStore({ error: "INVALID_AMOUNT" }, 400);
+  }
 
-    // 主注三種
-    const allow: Array<$Enums.BetSide> = ["PLAYER", "BANKER", "TIE"];
-    if (!allow.includes(sideStr as $Enums.BetSide)) {
-      return noStoreJson({ error: "side 不合法" }, 400);
-    }
-    const side = sideStr as $Enums.BetSide;
+  // 確認回合狀態（下注期）
+  const round = await prisma.round.findUnique({
+    where: { id: body.roundId },
+    select: { id: true, roomId: true, phase: true },
+  });
+  if (!round) return noStore({ error: "ROUND_NOT_FOUND" }, 404);
+  if (round.roomId !== body.roomId)
+    return noStore({ error: "ROOM_MISMATCH" }, 400);
+  if (round.phase !== "BETTING")
+    return noStore({ error: "ROUND_NOT_BETTING" }, 400);
 
-    // 3) 找房間
-    const room = await prisma.room.findFirst({
-      where: { code: roomCode as unknown as $Enums.RoomCode },
-      select: { id: true, durationSeconds: true },
-    });
-    if (!room) return noStoreJson({ error: "房間不存在" }, 404);
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      // 取餘額
+      const me = await tx.user.findUnique({
+        where: { id: userId },
+        select: { id: true, balance: true, bankBalance: true },
+      });
+      if (!me) throw new Error("USER_NOT_FOUND");
+      if (me.balance < body.amount) throw new Error("INSUFFICIENT_BALANCE");
 
-    // 4) 當日最新一局（用區間，避免毫秒/時區等值誤差）
-    const dayStartUtc = taipeiDayStart(new Date());
-    const dayEndUtc = addDays(dayStartUtc, 1);
-    const round = await prisma.round.findFirst({
-      where: { roomId: room.id, day: { gte: dayStartUtc, lt: dayEndUtc } },
-      orderBy: { roundSeq: "desc" },
-      select: { id: true, phase: true },
-    });
-    if (!round) return noStoreJson({ error: "本日尚未開局" }, 400);
-    if (round.phase !== "BETTING") return noStoreJson({ error: "非下注時間" }, 400);
-
-    // 5) 餘額檢查
-    if (me.balance < amount) return noStoreJson({ error: "餘額不足" }, 400);
-
-    // 6) 交易（下注 + 扣款 + ledger）
-    const created = await prisma.$transaction(async (tx) => {
+      // 建立下注
       const bet = await tx.bet.create({
         data: {
-          amount,
-          side,
-          user:  { connect: { id: me.id } },
-          round: { connect: { id: round.id } },
-          room:  { connect: { id: room.id } }, // ✅ 必填關聯
+          userId: me.id,
+          roomId: body.roomId,
+          roundId: body.roundId,
+          side: body.side as any,
+          amount: body.amount,
         },
-        select: { id: true },
+        select: {
+          id: true,
+          side: true,
+          amount: true,
+          createdAt: true,
+          roomId: true,
+          roundId: true,
+        },
       });
 
-      const after = await tx.user.update({
+      // 扣款
+      const updated = await tx.user.update({
         where: { id: me.id },
-        data: { balance: { decrement: amount } },
+        data: { balance: { decrement: body.amount } },
         select: { balance: true, bankBalance: true },
       });
 
+      // 建立流水
       await tx.ledger.create({
         data: {
           userId: me.id,
           type: "BET_PLACED",
           target: "WALLET",
-          delta: -amount,
-          memo: `下注 ${side} -${amount}`,
-          balanceAfter: after.balance,
-          bankAfter: after.bankBalance,
-        },
+          delta: -body.amount,
+          balanceAfter: updated.balance,
+          bankAfter: updated.bankBalance,
+          memo: `Baccarat bet ${bet.id}`,
+          fromTarget: "WALLET",
+          toTarget: null,
+          amount: body.amount,
+          fee: 0,
+          transferGroupId: null,
+          peerUserId: null,
+          meta: {
+            game: "baccarat",
+            betId: bet.id,
+            roomId: body.roomId,
+            roundId: body.roundId,
+            side: body.side,
+          },
+        } as any,
       });
 
-      return bet;
+      return { bet, balanceAfter: updated.balance, bankAfter: updated.bankBalance };
     });
 
-    return noStoreJson({ ok: true, betId: created.id });
+    return noStore({
+      ok: true,
+      userId,
+      bet: result.bet,
+      balanceAfter: result.balanceAfter,
+      bankAfter: result.bankAfter,
+      serverTime: new Date().toISOString(),
+    });
   } catch (e: any) {
-    return noStoreJson({ error: e?.message || "Server error" }, 500);
+    if (e?.message === "USER_NOT_FOUND")
+      return noStore({ error: "USER_NOT_FOUND" }, 404);
+    if (e?.message === "INSUFFICIENT_BALANCE")
+      return noStore({ error: "INSUFFICIENT_BALANCE" }, 400);
+    return noStore({ error: "BET_FAILED" }, 500);
   }
 }
