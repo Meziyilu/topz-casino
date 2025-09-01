@@ -346,7 +346,7 @@ export async function GET(req: Request) {
     }
 
     // 我的投注（以 roundId 聚合）
-    let myBets: Partial<Record<BetSide, number>> = {};
+    const myBets: Partial<Record<BetSide, number>> = {};
     if (me && round) {
       const rows = (await prisma.bet.groupBy({
         by: ["side"],
