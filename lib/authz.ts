@@ -1,35 +1,50 @@
-// lib/authz.ts
-import { cookies as readCookies } from "next/headers";
+// lib/authz.ts — final (aligned with jwt.ts + noStoreJson)
 import prisma from "@/lib/prisma";
-import { verifyJWT } from "@/lib/auth"; // 這裡會被 auth.ts 的真正實作解析到
+import { verifyJWT } from "@/lib/jwt";
+import { noStoreJson } from "@/lib/http";
+import { cookies as readCookies } from "next/headers";
 
-export type AuthToken = { userId: string; [k: string]: any } | null;
+/** 標準化後的 Token 型別（對齊 jwt.ts） */
+export type AuthToken = { sub: string; isAdmin?: boolean } | null;
 
+/** 從 Request 取出 JWT（Authorization 或 Cookie），並驗簽還原 payload */
 export async function verifyJWTFromRequest(req: Request): Promise<AuthToken> {
   // 1) Authorization: Bearer <jwt>
-  const h = req.headers.get("authorization") || "";
-  const m = /^Bearer\s+(.+)$/.exec(h);
-  let tokenStr: string | null = m?.[1] || null;
+  const auth = req.headers.get("authorization") || "";
+  const m = /^Bearer\s+(.+)$/.exec(auth);
+  let token: string | null = m?.[1] || null;
 
-  // 2) HttpOnly Cookie（token/jwt/access_token 任一）
-  if (!tokenStr) {
-    try {
-      const c = readCookies();
-      tokenStr =
-        c.get("token")?.value ||
-        c.get("jwt")?.value ||
-        c.get("access_token")?.value ||
-        null;
-    } catch {
-      // 某些 runtime 無 cookies()，忽略
+  // 2) Cookie（先從 req.headers，失敗再 fallback 到 next/headers）
+  if (!token) {
+    const raw = req.headers.get("cookie") || "";
+    token =
+      parseCookie(raw, "token") ||
+      parseCookie(raw, "jwt") ||
+      parseCookie(raw, "access_token") ||
+      null;
+
+    if (!token) {
+      // 某些 runtime（node）才能安全取用 next/headers
+      try {
+        const c = readCookies();
+        token =
+          c.get("token")?.value ||
+          c.get("jwt")?.value ||
+          c.get("access_token")?.value ||
+          null;
+      } catch {
+        // ignore
+      }
     }
   }
 
-  if (!tokenStr) return null;
+  if (!token) return null;
+
   try {
-    const payload = await verifyJWT(tokenStr);
-    if (payload && typeof payload === "object" && "userId" in payload) {
-      return payload as any;
+    // 我們的 verifyJWT 已支援傳入字串或 Request
+    const payload = await verifyJWT(token);
+    if (payload && typeof payload === "object" && "sub" in payload) {
+      return payload;
     }
     return null;
   } catch {
@@ -37,12 +52,12 @@ export async function verifyJWTFromRequest(req: Request): Promise<AuthToken> {
   }
 }
 
-/** 取出目前登入使用者（含基本欄位） */
+/** 取得目前登入使用者（常用欄位） */
 export async function getUserFromRequest(req: Request) {
   const t = await verifyJWTFromRequest(req);
-  if (!t?.userId) return null;
+  if (!t?.sub) return null;
   return prisma.user.findUnique({
-    where: { id: t.userId },
+    where: { id: t.sub },
     select: {
       id: true,
       email: true,
@@ -59,7 +74,7 @@ export async function getUserFromRequest(req: Request) {
  * 後台保護：需要管理員
  * 用法：
  *   const gate = await requireAdmin(req);
- *   if (!gate.ok) return gate.res;
+ *   if (!gate.ok) return gate.res; // 401/403 已回傳
  *   const me = gate.user; // 已驗證的管理員
  */
 export async function requireAdmin(req: Request): Promise<
@@ -68,22 +83,23 @@ export async function requireAdmin(req: Request): Promise<
 > {
   const user = await getUserFromRequest(req);
   if (!user) {
-    return {
-      ok: false,
-      res: new Response(JSON.stringify({ ok: false, error: "UNAUTH" }), {
-        status: 401,
-        headers: { "content-type": "application/json", "cache-control": "no-store" },
-      }),
-    };
+    return { ok: false, res: noStoreJson({ ok: false, error: "UNAUTH" }, 401) };
   }
   if (!user.isAdmin) {
-    return {
-      ok: false,
-      res: new Response(JSON.stringify({ ok: false, error: "FORBIDDEN" }), {
-        status: 403,
-        headers: { "content-type": "application/json", "cache-control": "no-store" },
-      }),
-    };
+    return { ok: false, res: noStoreJson({ ok: false, error: "FORBIDDEN" }, 403) };
   }
   return { ok: true, user };
+}
+
+/* ---------------------------------------------------- */
+/* helpers                                              */
+/* ---------------------------------------------------- */
+function parseCookie(raw: string, key: string): string | null {
+  // 簡易 cookie 解析，避免引入額外套件
+  // raw 形如: "a=1; token=abc.def.ghi; x=y"
+  const parts = raw.split(";").map((s) => s.trim());
+  const kv = parts.find((p) => p.startsWith(key + "="));
+  if (!kv) return null;
+  const eq = kv.indexOf("=");
+  return eq >= 0 ? decodeURIComponent(kv.slice(eq + 1)) : null;
 }
