@@ -23,12 +23,15 @@ export function signJWT(
 }
 
 /** 驗證 JWT：Promise 版，舊碼可用 await ... .catch */
-export async function verifyJWT(token: string): Promise<AuthPayload | null> {
+export function verifyJWT<T extends Partial<AuthPayload> = AuthPayload>(
+  token?: string | null
+): T | null {
   try {
+    if (!token) return null;
     const raw = jwt.verify(token, JWT_SECRET) as any;
     const userId = raw?.userId ?? raw?.sub;
     if (!userId) return null;
-    return { userId, isAdmin: !!raw?.isAdmin, sub: raw?.sub ?? userId };
+    return { userId, isAdmin: !!raw?.isAdmin, sub: raw?.sub ?? userId } as T;
   } catch {
     return null;
   }
@@ -62,3 +65,4 @@ export function verifyRequest(req: Request): AuthPayload | null {
     return null;
   }
 }
+

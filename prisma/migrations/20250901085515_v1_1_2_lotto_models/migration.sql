@@ -75,3 +75,8 @@ ALTER TABLE "public"."LottoBet" ADD CONSTRAINT "LottoBet_userId_fkey" FOREIGN KE
 
 -- AddForeignKey
 ALTER TABLE "public"."LottoBet" ADD CONSTRAINT "LottoBet_roundId_fkey" FOREIGN KEY ("roundId") REFERENCES "public"."LottoRound"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- 在 20250901085515_v1_1_2_lotto_models/steps.sql 或類似檔案裡加入：
+ALTER TYPE "LottoBetKind" ADD VALUE IF NOT EXISTS 'SPECIAL_BIG';
+
+ALTER TYPE "LottoBetKind" ADD VALUE IF NOT EXISTS 'SPECIAL_SMALL';

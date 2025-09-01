@@ -66,6 +66,8 @@ enum LottoBetKind {
   PICKS           // 一般選號（6/49）
   SPECIAL_ODD     // 特別號「單」
   SPECIAL_EVEN    // 特別號「雙」
+  SPECIAL_BIG     // ✅ 新增：特別號「大」
+  SPECIAL_SMALL   // ✅ 新增：特別號「小」
   BALL_ATTR       // 各球屬性（第1~6球的大/小/單/雙）
 }
 

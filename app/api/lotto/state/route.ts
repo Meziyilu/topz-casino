@@ -1,51 +1,54 @@
+// app/api/lotto/state/route.ts
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { ensureCurrentRound, getLottoConfig, isLocked, drawNumbers, settleRound } from "@/lib/lotto";
+import { DEFAULT_LOTTO_CONFIG, LOTTO_CONFIG_KEY, type LottoConfig } from "@/lib/lotto";
+
+const noStore = (payload: any, status = 200) =>
+  NextResponse.json(payload, {
+    status,
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+      Pragma: "no-cache",
+      Expires: "0",
+    },
+  });
+
+async function readConfig(): Promise<LottoConfig> {
+  const row = await prisma.gameConfig.findUnique({ where: { key: LOTTO_CONFIG_KEY } });
+  if (!row) return DEFAULT_LOTTO_CONFIG;
+  return { ...DEFAULT_LOTTO_CONFIG, ...(row.value as Partial<LottoConfig>) };
+}
 
 export async function GET() {
-  const { round, cfg } = await ensureCurrentRound();
-  const now = new Date();
+  const [cfg, openRound, recent] = await Promise.all([
+    readConfig(),
+    prisma.lottoRound.findFirst({
+      where: { status: "OPEN" },
+      orderBy: [{ drawAt: "asc" }],
+      select: { id: true, code: true, drawAt: true, status: true },
+    }),
+    prisma.lottoRound.findMany({
+      where: { status: { in: ["DRAWN", "SETTLED"] } },
+      orderBy: [{ code: "desc" }],
+      take: 10,
+      select: { code: true, drawAt: true, numbers: true, special: true, jackpot: true, pool: true, status: true },
+    }),
+  ]);
 
-  // 到點尚未抽 → 抽號 (DRAWN)，供前端跑 ≥20s 動畫
-  if (now.getTime() >= round.drawAt.getTime() && (round.status === "OPEN" || round.status === "LOCKED")) {
-    const drawn = await prisma.lottoRound.update({
-      where: { id: round.id, status: { in: ["OPEN","LOCKED"] } as any },
-      data: { status: "DRAWN", ...drawNumbers(cfg.pickMax) }
-    });
-    return NextResponse.json(resp(drawn, cfg, now, true), { headers: noStore() });
-  }
+  const now = Date.now();
+  const timeLeftSec = openRound ? Math.max(0, Math.floor((new Date(openRound.drawAt).getTime() - now) / 1000)) : 0;
 
-  // 已 DRAWN 且 ≥20s → 自動結算
-  if (round.status === "DRAWN" && (now.getTime() - round.drawAt.getTime()) >= 20000) {
-    const check = await prisma.lottoRound.findUnique({ where: { id: round.id } });
-    if (check?.status === "DRAWN") await settleRound(round.id);
-    const latest = await prisma.lottoRound.findUnique({ where: { id: round.id } });
-    return NextResponse.json(resp(latest!, cfg, now, true), { headers: noStore() });
-  }
-
-  const locked = isLocked(now, round.drawAt, cfg.lockBeforeDrawSec);
-  if (locked && round.status === "OPEN") {
-    await prisma.lottoRound.update({ where: { id: round.id, status: "OPEN" }, data: { status: "LOCKED" } }).catch(()=>{});
-  }
-  return NextResponse.json(resp(round, cfg, now, locked), { headers: noStore() });
+  return noStore({
+    ok: true,
+    serverTime: new Date().toISOString(),
+    cfg,
+    current: openRound
+      ? { id: openRound.id, code: openRound.code, drawAt: openRound.drawAt, status: openRound.status, timeLeftSec }
+      : null,
+    recent,
+  });
 }
-
-function resp(r:any, cfg:any, now:Date, locked:boolean){
-  return {
-    current: {
-      id: r.id, code: r.code, drawAt: r.drawAt, status: r.status,
-      numbers: r.numbers ?? [], special: r.special ?? null,
-      pool: r.pool, jackpot: r.jackpot
-    },
-    config: cfg,
-    serverTime: now.toISOString(),
-    locked,
-  };
-}
-function noStore(){ return {
-  "Cache-Control":"no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
-  "Pragma":"no-cache","Expires":"0",
-};}

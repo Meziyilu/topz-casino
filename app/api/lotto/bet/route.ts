@@ -1,110 +1,240 @@
+// app/api/lotto/bet/route.ts
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { verifyJWT } from "@/lib/jwt";
-import { ensureCurrentRound, getLottoConfig, isLocked, picksKey } from "@/lib/lotto";
+import { verifyRequest } from "@/lib/jwt";
+import { DEFAULT_LOTTO_CONFIG, LOTTO_CONFIG_KEY, type LottoConfig } from "@/lib/lotto";
+import type { Prisma } from "@prisma/client";
 
-function readToken(req: Request){
-  const cookie = req.headers.get("cookie") ?? "";
-  return cookie.split(";").map(s=>s.trim()).find(s=>s.startsWith("token="))?.slice(6) ?? "";
+type SpecialKind = "SPECIAL_ODD" | "SPECIAL_EVEN" | "SPECIAL_BIG" | "SPECIAL_SMALL";
+type BallAttr = "BIG" | "SMALL" | "ODD" | "EVEN";
+
+type BetBody = {
+  roundCode?: number;
+  roundId?: string;
+  picks?: { numbers: number[]; amount: number };
+  special?: { kind: SpecialKind; amount: number };
+  perBall?: Array<{ index: number; attr: BallAttr; amount: number }>;
+};
+
+const noStore = (payload: any, status = 200) =>
+  NextResponse.json(payload, {
+    status,
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+      Pragma: "no-cache",
+      Expires: "0",
+    },
+  });
+
+async function readConfig(): Promise<LottoConfig> {
+  const row = await prisma.gameConfig.findUnique({ where: { key: LOTTO_CONFIG_KEY } });
+  if (!row) return DEFAULT_LOTTO_CONFIG;
+  return { ...DEFAULT_LOTTO_CONFIG, ...(row.value as Partial<LottoConfig>) };
+}
+
+function normNumbers(ns: unknown): number[] | null {
+  if (!Array.isArray(ns) || ns.length !== 6) return null;
+  const arr = [...ns];
+  if (!arr.every((n) => Number.isInteger(n) && n >= 1 && n <= 49)) return null;
+  if (new Set(arr).size !== 6) return null;
+  arr.sort((a, b) => a - b);
+  return arr as number[];
+}
+
+const picksKeyFrom = (numbers: number[]) => numbers.join("-");
+
+async function pickRoundId(body: BetBody): Promise<{ id: string; code: number }> {
+  if (body.roundId) {
+    const r = await prisma.lottoRound.findUnique({ where: { id: body.roundId }, select: { id: true, code: true, status: true } });
+    if (!r) throw new Error("ROUND_NOT_FOUND");
+    if (r.status !== "OPEN") throw new Error("ROUND_NOT_OPEN");
+    return { id: r.id, code: r.code };
+  }
+  if (typeof body.roundCode === "number") {
+    const r = await prisma.lottoRound.findUnique({ where: { code: body.roundCode }, select: { id: true, code: true, status: true } });
+    if (!r) throw new Error("ROUND_NOT_FOUND");
+    if (r.status !== "OPEN") throw new Error("ROUND_NOT_OPEN");
+    return { id: r.id, code: r.code };
+  }
+  const r = await prisma.lottoRound.findFirst({
+    where: { status: "OPEN" },
+    orderBy: [{ drawAt: "asc" }],
+    select: { id: true, code: true },
+  });
+  if (!r) throw new Error("NO_OPEN_ROUND");
+  return { id: r.id, code: r.code };
 }
 
 export async function POST(req: Request) {
-  const p = verifyJWT<{ uid:string }>(readToken(req));
-  if (!p?.uid) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  const auth = verifyRequest(req);
+  if (!auth?.userId) return noStore({ error: "UNAUTHORIZED" }, 401);
 
-  const body = await req.json();
-  const amount = Number(body?.amount || 0);
+  let body: BetBody;
+  try { body = await req.json(); } catch { return noStore({ error: "INVALID_JSON" }, 400); }
 
-  const { round, cfg } = await ensureCurrentRound();
-  const now = new Date();
-  if (isLocked(now, round.drawAt, cfg.lockBeforeDrawSec) || round.status !== "OPEN") {
-    return NextResponse.json({ error: "LOCKED" }, { status: 423 });
-  }
-  if (!cfg.betTiers.includes(amount)) {
-    return NextResponse.json({ error: "INVALID_AMOUNT" }, { status: 400 });
-  }
-
-  // 三種模式：picks[] | specialSide | (ballIndex, attr)
-  const picks: number[]|undefined = body?.picks;
-  const specialSide: "ODD"|"EVEN"|undefined = body?.specialSide;
-  const ballIndex: number|undefined = body?.ballIndex;
-  const attr: "BIG"|"SMALL"|"ODD"|"EVEN"|undefined = body?.attr;
-
-  let kind: "PICKS"|"SPECIAL_ODD"|"SPECIAL_EVEN"|"BALL_ATTR";
-  let _picks:number[]=[]; let _picksKey="-"; let _ballIndex:number|undefined; let _attr:any;
-
-  if (specialSide) {
-    kind = specialSide === "ODD" ? "SPECIAL_ODD" : "SPECIAL_EVEN";
-  } else if (ballIndex && attr) {
-    if (ballIndex < 1 || ballIndex > 6) return NextResponse.json({ error: "INVALID_BALLINDEX" }, { status: 400 });
-    kind = "BALL_ATTR"; _ballIndex = ballIndex; _attr = attr;
-  } else if (Array.isArray(picks)) {
-    if (picks.length !== cfg.picksCount) return NextResponse.json({ error:"INVALID_PICKS" }, { status: 400 });
-    const set = new Set<number>();
-    for (const n of picks) {
-      if (typeof n!=="number" || n<1 || n>cfg.pickMax || set.has(n)) return NextResponse.json({ error:"INVALID_PICKS" }, { status: 400 });
-      set.add(n);
+  const cfg = await readConfig();
+  const round = await (async () => {
+    try { return await pickRoundId(body); }
+    catch (e: any) {
+      if (e?.message === "ROUND_NOT_FOUND") return null;
+      if (e?.message === "ROUND_NOT_OPEN") return "ROUND_NOT_OPEN";
+      if (e?.message === "NO_OPEN_ROUND") return "NO_OPEN_ROUND";
+      return null;
     }
-    _picks = picks.slice().sort((a,b)=>a-b);
-    _picksKey = picksKey(_picks); kind = "PICKS";
-  } else {
-    return NextResponse.json({ error: "INVALID_PARAMS" }, { status: 400 });
+  })();
+
+  if (!round) return noStore({ error: "ROUND_NOT_FOUND" }, 404);
+  if (round === "ROUND_NOT_OPEN") return noStore({ error: "ROUND_NOT_OPEN" }, 400);
+  if (round === "NO_OPEN_ROUND") return noStore({ error: "NO_OPEN_ROUND" }, 400);
+
+  type InsertItem =
+    | { kind: "PICKS"; amount: number; picks: number[]; picksKey: string }
+    | { kind: SpecialKind; amount: number }
+    | { kind: "BALL_ATTR"; amount: number; ballIndex: number; attr: BallAttr };
+  const inserts: InsertItem[] = [];
+
+  if (body.picks) {
+    const nums = normNumbers(body.picks.numbers);
+    if (!nums) return noStore({ error: "INVALID_NUMBERS" }, 400);
+    if (!Number.isInteger(body.picks.amount) || body.picks.amount < cfg.minBet || body.picks.amount > cfg.maxBetPerTicket)
+      return noStore({ error: "INVALID_PICKS_AMOUNT", min: cfg.minBet, max: cfg.maxBetPerTicket }, 400);
+    inserts.push({ kind: "PICKS", amount: body.picks.amount, picks: nums, picksKey: picksKeyFrom(nums) });
   }
 
-  const poolIn = Math.floor(amount * cfg.poolInBps / 10000);
+  if (body.special) {
+    const k = body.special.kind;
+    if ((k === "SPECIAL_ODD" || k === "SPECIAL_EVEN") && !cfg.allowSpecialOddEven)
+      return noStore({ error: "SPECIAL_ODD_EVEN_NOT_ALLOWED" }, 400);
+    if ((k === "SPECIAL_BIG" || k === "SPECIAL_SMALL") && !cfg.allowSpecialBigSmall)
+      return noStore({ error: "SPECIAL_BIG_SMALL_NOT_ALLOWED" }, 400);
+    if (!Number.isInteger(body.special.amount) || body.special.amount < cfg.minBet || body.special.amount > cfg.maxBetPerTicket)
+      return noStore({ error: "INVALID_SPECIAL_AMOUNT", min: cfg.minBet, max: cfg.maxBetPerTicket }, 400);
+    inserts.push({ kind: k, amount: body.special.amount });
+  }
+
+  if (body.perBall && body.perBall.length > 0) {
+    if (!cfg.allowBallBigSmall) return noStore({ error: "PERBALL_NOT_ALLOWED" }, 400);
+    for (const i of body.perBall) {
+      if (!Number.isInteger(i.index) || i.index < 1 || i.index > 6)
+        return noStore({ error: "INVALID_BALL_INDEX", index: i.index }, 400);
+      if (!["BIG", "SMALL", "ODD", "EVEN"].includes(i.attr))
+        return noStore({ error: "INVALID_BALL_ATTR", attr: i.attr }, 400);
+      if (!Number.isInteger(i.amount) || i.amount < cfg.minBet || i.amount > cfg.maxBetPerTicket)
+        return noStore({ error: "INVALID_PERBALL_AMOUNT", index: i.index, min: cfg.minBet, max: cfg.maxBetPerTicket }, 400);
+      inserts.push({ kind: "BALL_ATTR", amount: i.amount, ballIndex: i.index, attr: i.attr });
+    }
+  }
+
+  if (inserts.length === 0) return noStore({ error: "EMPTY_BET" }, 400);
+  const totalAmount = inserts.reduce((s, x) => s + x.amount, 0);
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      const me = await tx.user.findUnique({ where: { id: p.uid }, select: { balance:true, bankBalance:true } });
-      if (!me || me.balance < amount) throw new Error("INSUFFICIENT");
+      const user = await tx.user.findUnique({
+        where: { id: auth.userId },
+        select: { id: true, balance: true, bankBalance: true },
+      });
+      if (!user) throw new Error("USER_NOT_FOUND");
+      if (user.balance < totalAmount) throw new Error("INSUFFICIENT_BALANCE");
 
-      const afterBal = me.balance - amount;
+      const createdBets = await Promise.all(
+        inserts.map((item) => {
+          if (item.kind === "PICKS") {
+            return tx.lottoBet.create({
+              data: {
+                userId: user.id,
+                roundId: round.id,
+                kind: "PICKS",
+                picks: item.picks,
+                picksKey: item.picksKey,
+                amount: item.amount,
+              },
+              select: { id: true, kind: true, amount: true, picks: true, ballIndex: true, attr: true, createdAt: true },
+            });
+          }
+          if (
+            item.kind === "SPECIAL_ODD" || item.kind === "SPECIAL_EVEN" ||
+            item.kind === "SPECIAL_BIG" || item.kind === "SPECIAL_SMALL"
+          ) {
+            return tx.lottoBet.create({
+              data: {
+                userId: user.id,
+                roundId: round.id,
+                kind: item.kind as any,
+                amount: item.amount,
+                picks: [],
+                picksKey: "-",
+              },
+              select: { id: true, kind: true, amount: true, picks: true, ballIndex: true, attr: true, createdAt: true },
+            });
+          }
+          return tx.lottoBet.create({
+            data: {
+              userId: user.id,
+              roundId: round.id,
+              kind: "BALL_ATTR",
+              ballIndex: item.ballIndex!,
+              attr: item.attr as any,
+              amount: item.amount,
+              picks: [],
+              picksKey: "-",
+            },
+            select: { id: true, kind: true, amount: true, picks: true, ballIndex: true, attr: true, createdAt: true },
+          });
+        })
+      );
 
-      await tx.user.update({ where: { id: p.uid }, data: { balance: afterBal } });
-
-      // Ledger：下注扣款（使用你的欄位：memo/target/delta/balanceAfter/bankAfter）
-      await tx.ledger.create({
-        data: {
-          userId: p.uid,
-          type: "BET_PLACED",
-          target: "WALLET",
-          delta: -amount,
-          memo: `LOTTO bet #${round.code} (${kind}${kind==="PICKS"?" "+_picksKey:kind==="BALL_ATTR"?` B${_ballIndex}/${_attr}`:""})`,
-          balanceAfter: afterBal,
-          bankAfter: me.bankBalance,
-        } as any
+      const updated = await tx.user.update({
+        where: { id: user.id },
+        data: { balance: { decrement: totalAmount } },
+        select: { balance: true, bankBalance: true },
       });
 
-      // pool 增加入池比例
-      await tx.lottoRound.update({ where: { id: round.id }, data: { pool: { increment: poolIn } } });
+      await tx.ledger.create({
+        data: {
+          userId: user.id,
+          type: "BET_PLACED",
+          target: "WALLET",
+          delta: -totalAmount,
+          balanceAfter: updated.balance,
+          bankAfter: updated.bankBalance,
+          memo: `Lotto bet for round ${round.code}`,
+          fromTarget: "WALLET",
+          toTarget: null,
+          amount: totalAmount,
+          fee: 0,
+          transferGroupId: null,
+          peerUserId: null,
+          meta: {
+            roundId: round.id,
+            roundCode: round.code,
+            bets: createdBets.map((b) => ({
+              id: b.id, kind: b.kind, amount: b.amount, picks: b.picks,
+              ballIndex: b.ballIndex ?? null, attr: b.attr ?? null, createdAt: b.createdAt,
+            })),
+          } as Prisma.InputJsonValue,
+        } as any,
+      });
 
-      // upsert（對應兩條唯一鍵）
-      const bet = kind === "BALL_ATTR"
-        ? await tx.lottoBet.upsert({
-            where: {
-              userId_roundId_kind_ballIndex_attr: {
-                userId: p.uid, roundId: round.id, kind, ballIndex: _ballIndex!, attr: _attr!
-              }
-            },
-            create: { userId: p.uid, roundId: round.id, kind, ballIndex: _ballIndex, attr: _attr, amount },
-            update: { amount: { increment: amount } }
-          })
-        : await tx.lottoBet.upsert({
-            where: { userId_roundId_kind_picksKey: { userId: p.uid, roundId: round.id, kind, picksKey: _picksKey } },
-            create: { userId: p.uid, roundId: round.id, kind, picks: _picks, picksKey: _picksKey, amount },
-            update: { amount: { increment: amount } }
-          });
-
-      return { betId: bet.id, balanceAfter: afterBal };
+      return { createdBets, balanceAfter: updated.balance, bankAfter: updated.bankBalance };
     });
 
-    return NextResponse.json({ ok:true, ...result });
-
-  } catch (e:any) {
-    if (e?.message === "INSUFFICIENT") return NextResponse.json({ error:"INSUFFICIENT_FUNDS" }, { status:409 });
-    return NextResponse.json({ error:"BET_FAILED" }, { status:500 });
+    return noStore({
+      ok: true,
+      userId: auth.userId,
+      round,
+      balanceAfter: result.balanceAfter,
+      bankAfter: result.bankAfter,
+      meta: { serverTime: new Date().toISOString() },
+    });
+  } catch (e: any) {
+    if (e?.message === "USER_NOT_FOUND") return noStore({ error: "USER_NOT_FOUND" }, 404);
+    if (e?.message === "INSUFFICIENT_BALANCE") return noStore({ error: "INSUFFICIENT_BALANCE" }, 400);
+    if (e?.code === "P2002") return noStore({ error: "DUPLICATE_BET" }, 409);
+    return noStore({ error: "BET_FAILED" }, 500);
   }
 }
