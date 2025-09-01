@@ -100,7 +100,6 @@ export async function PATCH(req: Request, ctx: { params: { id: string } }) {
         startAt: true,
         endAt: true,
         createdAt: true,
-        updatedAt: true,
       },
     }).catch((err) => {
       // 將 NotFound 轉成 404
