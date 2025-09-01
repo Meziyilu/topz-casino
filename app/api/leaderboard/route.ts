@@ -1,3 +1,4 @@
+export const runtime = "nodejs";
 // app/api/leaderboard/route.ts
 export const dynamic = "force-dynamic"; // 避免 build 時的 DYNAMIC_SERVER_USAGE
 export const revalidate = 0;

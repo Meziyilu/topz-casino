@@ -1,3 +1,4 @@
+export const runtime = "nodejs";
 // app/api/admin/users/[id]/route.ts
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
