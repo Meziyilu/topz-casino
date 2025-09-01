@@ -7,19 +7,13 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifyRequest } from "@/lib/jwt";
 
-type BetSide =
-  | "PLAYER"
-  | "BANKER"
-  | "TIE"
-  | "PLAYER_PAIR"
-  | "BANKER_PAIR";
+type BetSide = "PLAYER" | "BANKER" | "TIE" | "PLAYER_PAIR" | "BANKER_PAIR";
 
 const noStore = (payload: any, status = 200) =>
   NextResponse.json(payload, {
     status,
     headers: {
-      "Cache-Control":
-        "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
       Pragma: "no-cache",
       Expires: "0",
     },
@@ -33,7 +27,7 @@ type PostBody = {
 };
 
 export async function POST(req: Request) {
-  // ✅ 統一改成同步驗證，不再使用 verifyJWT<...>
+  // ✅ 統一：同步驗證，不再用 verifyJWT<...> 或 .catch
   const auth = verifyRequest(req);
   const userId = auth?.userId || auth?.sub || null;
   if (!userId) return noStore({ error: "UNAUTHORIZED" }, 401);
@@ -45,27 +39,13 @@ export async function POST(req: Request) {
     return noStore({ error: "INVALID_JSON" }, 400);
   }
 
-  // 基本驗證
-  if (!body?.roomId || !body?.roundId)
-    return noStore({ error: "MISSING_PARAMS" }, 400);
+  if (!body?.roomId || !body?.roundId) return noStore({ error: "MISSING_PARAMS" }, 400);
 
-  const validSides: BetSide[] = [
-    "PLAYER",
-    "BANKER",
-    "TIE",
-    "PLAYER_PAIR",
-    "BANKER_PAIR",
-  ];
-  if (!validSides.includes(body.side))
-    return noStore({ error: "INVALID_SIDE" }, 400);
+  const validSides: BetSide[] = ["PLAYER", "BANKER", "TIE", "PLAYER_PAIR", "BANKER_PAIR"];
+  if (!validSides.includes(body.side)) return noStore({ error: "INVALID_SIDE" }, 400);
 
-  if (
-    !Number.isInteger(body.amount) ||
-    body.amount <= 0 ||
-    body.amount > 5_000_000
-  ) {
+  if (!Number.isInteger(body.amount) || body.amount <= 0 || body.amount > 5_000_000)
     return noStore({ error: "INVALID_AMOUNT" }, 400);
-  }
 
   // 確認回合狀態（下注期）
   const round = await prisma.round.findUnique({
@@ -73,10 +53,8 @@ export async function POST(req: Request) {
     select: { id: true, roomId: true, phase: true },
   });
   if (!round) return noStore({ error: "ROUND_NOT_FOUND" }, 404);
-  if (round.roomId !== body.roomId)
-    return noStore({ error: "ROOM_MISMATCH" }, 400);
-  if (round.phase !== "BETTING")
-    return noStore({ error: "ROUND_NOT_BETTING" }, 400);
+  if (round.roomId !== body.roomId) return noStore({ error: "ROOM_MISMATCH" }, 400);
+  if (round.phase !== "BETTING") return noStore({ error: "ROUND_NOT_BETTING" }, 400);
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -97,14 +75,7 @@ export async function POST(req: Request) {
           side: body.side as any,
           amount: body.amount,
         },
-        select: {
-          id: true,
-          side: true,
-          amount: true,
-          createdAt: true,
-          roomId: true,
-          roundId: true,
-        },
+        select: { id: true, side: true, amount: true, createdAt: true, roomId: true, roundId: true },
       });
 
       // 扣款
@@ -152,10 +123,8 @@ export async function POST(req: Request) {
       serverTime: new Date().toISOString(),
     });
   } catch (e: any) {
-    if (e?.message === "USER_NOT_FOUND")
-      return noStore({ error: "USER_NOT_FOUND" }, 404);
-    if (e?.message === "INSUFFICIENT_BALANCE")
-      return noStore({ error: "INSUFFICIENT_BALANCE" }, 400);
+    if (e?.message === "USER_NOT_FOUND") return noStore({ error: "USER_NOT_FOUND" }, 404);
+    if (e?.message === "INSUFFICIENT_BALANCE") return noStore({ error: "INSUFFICIENT_BALANCE" }, 400);
     return noStore({ error: "BET_FAILED" }, 500);
   }
 }
