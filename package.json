@@ -32,6 +32,8 @@
     "@types/node": "^20.14.9",
     "@types/react": "^18.3.3",
     "autoprefixer": "10.4.20",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "15.5.2",
     "fast-glob": "^3.3.3",
     "postcss": "8.4.47",
     "prisma": "6.15.0",
