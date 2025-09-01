@@ -1,11 +1,11 @@
-export const runtime = "nodejs";
 // app/api/checkin/daily/route.ts
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { NextResponse } from "next/server";
 
-function noStoreJson(payload: any, status = 200) {
+function noStoreJson<T>(payload: T, status = 200) {
   return NextResponse.json(payload, {
     status,
     headers: {
@@ -18,13 +18,13 @@ function noStoreJson(payload: any, status = 200) {
 
 // 你可以自訂週期獎勵表
 const WEEKLY_TABLE = [
-  { day: 1, reward: 100 },
-  { day: 2, reward: 100 },
-  { day: 3, reward: 100 },
-  { day: 4, reward: 100 },
-  { day: 5, reward: 100 },
-  { day: 6, reward: 100 },
-  { day: 7, reward: 300 },
+  { day: 1, reward: 1000 },
+  { day: 2, reward: 2000 },
+  { day: 3, reward: 3000 },
+  { day: 4, reward: 4000 },
+  { day: 5, reward: 5000 },
+  { day: 6, reward: 6000 },
+  { day: 7, reward: 10000 },
 ];
 
 export async function GET() {

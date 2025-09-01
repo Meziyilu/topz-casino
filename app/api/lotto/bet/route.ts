@@ -1,4 +1,3 @@
-// app/api/lotto/bet/route.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -20,8 +19,8 @@ type BetBody = {
   perBall?: Array<{ index: number; attr: BallAttr; amount: number }>;
 };
 
-const noStore = (payload: any, status = 200) =>
-  NextResponse.json(payload, {
+function noStore<T>(payload: T, status = 200) {
+  return NextResponse.json(payload, {
     status,
     headers: {
       "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
@@ -29,6 +28,7 @@ const noStore = (payload: any, status = 200) =>
       Expires: "0",
     },
   });
+}
 
 async function readConfig(): Promise<LottoConfig> {
   const row = await prisma.gameConfig.findUnique({ where: { key: LOTTO_CONFIG_KEY } });
@@ -49,13 +49,19 @@ const picksKeyFrom = (numbers: number[]) => numbers.join("-");
 
 async function pickRoundId(body: BetBody): Promise<{ id: string; code: number }> {
   if (body.roundId) {
-    const r = await prisma.lottoRound.findUnique({ where: { id: body.roundId }, select: { id: true, code: true, status: true } });
+    const r = await prisma.lottoRound.findUnique({
+      where: { id: body.roundId },
+      select: { id: true, code: true, status: true },
+    });
     if (!r) throw new Error("ROUND_NOT_FOUND");
     if (r.status !== "OPEN") throw new Error("ROUND_NOT_OPEN");
     return { id: r.id, code: r.code };
   }
   if (typeof body.roundCode === "number") {
-    const r = await prisma.lottoRound.findUnique({ where: { code: body.roundCode }, select: { id: true, code: true, status: true } });
+    const r = await prisma.lottoRound.findUnique({
+      where: { code: body.roundCode },
+      select: { id: true, code: true, status: true },
+    });
     if (!r) throw new Error("ROUND_NOT_FOUND");
     if (r.status !== "OPEN") throw new Error("ROUND_NOT_OPEN");
     return { id: r.id, code: r.code };
@@ -70,19 +76,30 @@ async function pickRoundId(body: BetBody): Promise<{ id: string; code: number }>
 }
 
 export async function POST(req: Request) {
-  const auth = verifyRequest(req);
-  if (!auth?.userId) return noStore({ error: "UNAUTHORIZED" }, 401);
+  const auth = await verifyRequest(req);
+  const userId =
+    (auth as { userId?: string; sub?: string } | null)?.userId ??
+    (auth as { sub?: string } | null)?.sub ??
+    null;
+  if (!userId) return noStore({ error: "UNAUTHORIZED" }, 401);
 
   let body: BetBody;
-  try { body = await req.json(); } catch { return noStore({ error: "INVALID_JSON" }, 400); }
+  try {
+    body = await req.json();
+  } catch {
+    return noStore({ error: "INVALID_JSON" }, 400);
+  }
 
   const cfg = await readConfig();
+
   const round = await (async () => {
-    try { return await pickRoundId(body); }
-    catch (e: any) {
-      if (e?.message === "ROUND_NOT_FOUND") return null;
-      if (e?.message === "ROUND_NOT_OPEN") return "ROUND_NOT_OPEN";
-      if (e?.message === "NO_OPEN_ROUND") return "NO_OPEN_ROUND";
+    try {
+      return await pickRoundId(body);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      if (msg === "ROUND_NOT_FOUND") return null;
+      if (msg === "ROUND_NOT_OPEN") return "ROUND_NOT_OPEN" as const;
+      if (msg === "NO_OPEN_ROUND") return "NO_OPEN_ROUND" as const;
       return null;
     }
   })();
@@ -95,53 +112,65 @@ export async function POST(req: Request) {
     | { kind: "PICKS"; amount: number; picks: number[]; picksKey: string }
     | { kind: SpecialKind; amount: number }
     | { kind: "BALL_ATTR"; amount: number; ballIndex: number; attr: BallAttr };
+
   const inserts: InsertItem[] = [];
 
   if (body.picks) {
     const nums = normNumbers(body.picks.numbers);
     if (!nums) return noStore({ error: "INVALID_NUMBERS" }, 400);
-    if (!Number.isInteger(body.picks.amount) || body.picks.amount < cfg.minBet || body.picks.amount > cfg.maxBetPerTicket)
+    if (!Number.isInteger(body.picks.amount) || body.picks.amount < cfg.minBet || body.picks.amount > cfg.maxBetPerTicket) {
       return noStore({ error: "INVALID_PICKS_AMOUNT", min: cfg.minBet, max: cfg.maxBetPerTicket }, 400);
+    }
     inserts.push({ kind: "PICKS", amount: body.picks.amount, picks: nums, picksKey: picksKeyFrom(nums) });
   }
 
   if (body.special) {
     const k = body.special.kind;
-    if ((k === "SPECIAL_ODD" || k === "SPECIAL_EVEN") && !cfg.allowSpecialOddEven)
+    if ((k === "SPECIAL_ODD" || k === "SPECIAL_EVEN") && !cfg.allowSpecialOddEven) {
       return noStore({ error: "SPECIAL_ODD_EVEN_NOT_ALLOWED" }, 400);
-    if ((k === "SPECIAL_BIG" || k === "SPECIAL_SMALL") && !cfg.allowSpecialBigSmall)
+    }
+    if ((k === "SPECIAL_BIG" || k === "SPECIAL_SMALL") && !cfg.allowSpecialBigSmall) {
       return noStore({ error: "SPECIAL_BIG_SMALL_NOT_ALLOWED" }, 400);
-    if (!Number.isInteger(body.special.amount) || body.special.amount < cfg.minBet || body.special.amount > cfg.maxBetPerTicket)
+    }
+    if (!Number.isInteger(body.special.amount) || body.special.amount < cfg.minBet || body.special.amount > cfg.maxBetPerTicket) {
       return noStore({ error: "INVALID_SPECIAL_AMOUNT", min: cfg.minBet, max: cfg.maxBetPerTicket }, 400);
+    }
     inserts.push({ kind: k, amount: body.special.amount });
   }
 
   if (body.perBall && body.perBall.length > 0) {
     if (!cfg.allowBallBigSmall) return noStore({ error: "PERBALL_NOT_ALLOWED" }, 400);
     for (const i of body.perBall) {
-      if (!Number.isInteger(i.index) || i.index < 1 || i.index > 6)
+      if (!Number.isInteger(i.index) || i.index < 1 || i.index > 6) {
         return noStore({ error: "INVALID_BALL_INDEX", index: i.index }, 400);
-      if (!["BIG", "SMALL", "ODD", "EVEN"].includes(i.attr))
+      }
+      if (!["BIG", "SMALL", "ODD", "EVEN"].includes(i.attr)) {
         return noStore({ error: "INVALID_BALL_ATTR", attr: i.attr }, 400);
-      if (!Number.isInteger(i.amount) || i.amount < cfg.minBet || i.amount > cfg.maxBetPerTicket)
-        return noStore({ error: "INVALID_PERBALL_AMOUNT", index: i.index, min: cfg.minBet, max: cfg.maxBetPerTicket }, 400);
+      }
+      if (!Number.isInteger(i.amount) || i.amount < cfg.minBet || i.amount > cfg.maxBetPerTicket) {
+        return noStore(
+          { error: "INVALID_PERBALL_AMOUNT", index: i.index, min: cfg.minBet, max: cfg.maxBetPerTicket },
+          400
+        );
+      }
       inserts.push({ kind: "BALL_ATTR", amount: i.amount, ballIndex: i.index, attr: i.attr });
     }
   }
 
   if (inserts.length === 0) return noStore({ error: "EMPTY_BET" }, 400);
+
   const totalAmount = inserts.reduce((s, x) => s + x.amount, 0);
 
   try {
     const result = await prisma.$transaction(async (tx) => {
       const user = await tx.user.findUnique({
-        where: { id: auth.userId },
+        where: { id: String(userId) },
         select: { id: true, balance: true, bankBalance: true },
       });
       if (!user) throw new Error("USER_NOT_FOUND");
       if (user.balance < totalAmount) throw new Error("INSUFFICIENT_BALANCE");
 
-      const createdBets = await Promise.all(
+      await Promise.all(
         inserts.map((item) => {
           if (item.kind === "PICKS") {
             return tx.lottoBet.create({
@@ -153,23 +182,20 @@ export async function POST(req: Request) {
                 picksKey: item.picksKey,
                 amount: item.amount,
               },
-              select: { id: true, kind: true, amount: true, picks: true, ballIndex: true, attr: true, createdAt: true },
+              select: { id: true },
             });
           }
-          if (
-            item.kind === "SPECIAL_ODD" || item.kind === "SPECIAL_EVEN" ||
-            item.kind === "SPECIAL_BIG" || item.kind === "SPECIAL_SMALL"
-          ) {
+          if (item.kind === "SPECIAL_ODD" || item.kind === "SPECIAL_EVEN" || item.kind === "SPECIAL_BIG" || item.kind === "SPECIAL_SMALL") {
             return tx.lottoBet.create({
               data: {
                 userId: user.id,
                 roundId: round.id,
-                kind: item.kind as any,
+                kind: item.kind,
                 amount: item.amount,
                 picks: [],
                 picksKey: "-",
               },
-              select: { id: true, kind: true, amount: true, picks: true, ballIndex: true, attr: true, createdAt: true },
+              select: { id: true },
             });
           }
           return tx.lottoBet.create({
@@ -178,12 +204,12 @@ export async function POST(req: Request) {
               roundId: round.id,
               kind: "BALL_ATTR",
               ballIndex: item.ballIndex!,
-              attr: item.attr as any,
+              attr: item.attr,
               amount: item.amount,
               picks: [],
               picksKey: "-",
             },
-            select: { id: true, kind: true, amount: true, picks: true, ballIndex: true, attr: true, createdAt: true },
+            select: { id: true },
           });
         })
       );
@@ -198,7 +224,7 @@ export async function POST(req: Request) {
         data: {
           userId: user.id,
           type: "BET_PLACED",
-          target: "WALLET",
+          target: "WALLET", // Prisma enum: BalanceTarget
           delta: -totalAmount,
           balanceAfter: updated.balance,
           bankAfter: updated.bankBalance,
@@ -212,29 +238,27 @@ export async function POST(req: Request) {
           meta: {
             roundId: round.id,
             roundCode: round.code,
-            bets: createdBets.map((b) => ({
-              id: b.id, kind: b.kind, amount: b.amount, picks: b.picks,
-              ballIndex: b.ballIndex ?? null, attr: b.attr ?? null, createdAt: b.createdAt,
-            })),
           } as Prisma.InputJsonValue,
-        } as any,
+        },
       });
 
-      return { createdBets, balanceAfter: updated.balance, bankAfter: updated.bankBalance };
+      return { balanceAfter: updated.balance, bankAfter: updated.bankBalance };
     });
 
     return noStore({
       ok: true,
-      userId: auth.userId,
+      userId: String(userId),
       round,
       balanceAfter: result.balanceAfter,
       bankAfter: result.bankAfter,
       meta: { serverTime: new Date().toISOString() },
     });
-  } catch (e: any) {
-    if (e?.message === "USER_NOT_FOUND") return noStore({ error: "USER_NOT_FOUND" }, 404);
-    if (e?.message === "INSUFFICIENT_BALANCE") return noStore({ error: "INSUFFICIENT_BALANCE" }, 400);
-    if (e?.code === "P2002") return noStore({ error: "DUPLICATE_BET" }, 409);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "";
+    const code = (e as { code?: string } | null)?.code;
+    if (msg === "USER_NOT_FOUND") return noStore({ error: "USER_NOT_FOUND" }, 404);
+    if (msg === "INSUFFICIENT_BALANCE") return noStore({ error: "INSUFFICIENT_BALANCE" }, 400);
+    if (code === "P2002") return noStore({ error: "DUPLICATE_BET" }, 409);
     return noStore({ error: "BET_FAILED" }, 500);
   }
 }

@@ -7,8 +7,9 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifyRequest } from "@/lib/jwt";
 import { DEFAULT_LOTTO_CONFIG, LOTTO_CONFIG_KEY, type LottoConfig } from "@/lib/lotto";
+import type { Prisma } from "@prisma/client";
 
-const noStore = (payload: any, status = 200) =>
+const noStore = <T,>(payload: T, status = 200) =>
   NextResponse.json(payload, {
     status,
     headers: {
@@ -55,29 +56,43 @@ function validatePatch(body: Partial<LottoConfig>) {
   return { ok: true as const, next };
 }
 
+// 讀取設定（維持你原本的回傳型態：直接回 config 物件）
 export async function GET() {
-  return noStore(await readConfig());
+  const cfg = await readConfig();
+  return noStore(cfg);
 }
 
 export async function POST(req: Request) {
-  const auth = verifyRequest(req);
-  if (!auth?.isAdmin) return noStore({ error: "FORBIDDEN" }, 403);
+  // 驗證 + 管理員確認（以 DB 為準）
+  const auth = await verifyRequest(req);
+  const userId =
+    (auth as { userId?: string; sub?: string } | null)?.userId ??
+    (auth as { sub?: string } | null)?.sub ??
+    null;
+
+  if (!userId) return noStore({ error: "UNAUTH" } as const, 401);
+
+  const me = await prisma.user.findUnique({
+    where: { id: String(userId) },
+    select: { isAdmin: true },
+  });
+  if (!me?.isAdmin) return noStore({ error: "FORBIDDEN" } as const, 403);
 
   let patch: Partial<LottoConfig>;
   try {
-    patch = await req.json();
+    patch = (await req.json()) as Partial<LottoConfig>;
   } catch {
-    return noStore({ error: "INVALID_JSON" }, 400);
+    return noStore({ error: "INVALID_JSON" } as const, 400);
   }
 
   const v = validatePatch(patch);
-  if (!v.ok) return noStore({ error: v.error }, 400);
+  if (!v.ok) return noStore({ error: v.error } as const, 400);
 
   await prisma.gameConfig.upsert({
     where: { key: LOTTO_CONFIG_KEY },
-    update: { value: v.next as any },
-    create: { key: LOTTO_CONFIG_KEY, value: v.next as any },
+    update: { value: v.next as unknown as Prisma.InputJsonValue },
+    create: { key: LOTTO_CONFIG_KEY, value: v.next as unknown as Prisma.InputJsonValue },
   });
 
-  return noStore({ ok: true, config: v.next });
+  return noStore({ ok: true, config: v.next } as const);
 }

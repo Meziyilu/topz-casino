@@ -1,14 +1,14 @@
-export const runtime = "nodejs";
 // app/api/admin/users/route.ts
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
-import { getUserFromRequest } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 
-function json(payload: any, status = 200) {
+function json<T>(payload: T, status = 200) {
   return NextResponse.json(payload, {
     status,
     headers: {
@@ -22,19 +22,20 @@ function json(payload: any, status = 200) {
 // 取得使用者清單（可搜尋 q）
 export async function GET(req: Request) {
   try {
-    const me = await getUserFromRequest(req);
-    if (!me?.isAdmin) return json({ error: "需要管理員權限" }, 403);
+    const gate = await requireAdmin(req);
+    if (!gate.ok) return gate.res;
 
     const url = new URL(req.url);
     const q = (url.searchParams.get("q") || "").trim();
-    const take = Math.min(Number(url.searchParams.get("take") || 100), 200);
+    let take = Number.parseInt(url.searchParams.get("take") || "100", 10);
+    if (!Number.isFinite(take) || take <= 0) take = 100;
+    if (take > 200) take = 200;
 
     const where: Prisma.UserWhereInput = q
       ? {
           OR: [
-            { email: { contains: q, mode: "insensitive" as Prisma.QueryMode } },
-            // 如果 User.name 在 schema 裡是可選欄位，照樣可以用 contains 搜尋
-            { name: { contains: q, mode: "insensitive" as Prisma.QueryMode } },
+            { email: { contains: q, mode: "insensitive" } },
+            { name: { contains: q, mode: "insensitive" } },
           ],
         }
       : {};
@@ -54,8 +55,9 @@ export async function GET(req: Request) {
       },
     });
 
-    return json({ users });
-  } catch (e: any) {
-    return json({ error: e?.message || "Server error" }, 500);
+    return json({ ok: true, users });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "Server error";
+    return json({ ok: false, error: msg }, 500);
   }
 }

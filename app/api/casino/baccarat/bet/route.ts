@@ -1,4 +1,3 @@
-// app/api/casino/baccarat/bet/route.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -6,11 +5,12 @@ export const revalidate = 0;
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifyRequest } from "@/lib/jwt";
+import type { Prisma } from "@prisma/client";
 
 type BetSide = "PLAYER" | "BANKER" | "TIE" | "PLAYER_PAIR" | "BANKER_PAIR";
 
-const noStore = (payload: any, status = 200) =>
-  NextResponse.json(payload, {
+function noStore<T>(payload: T, status = 200) {
+  return NextResponse.json(payload, {
     status,
     headers: {
       "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
@@ -18,6 +18,7 @@ const noStore = (payload: any, status = 200) =>
       Expires: "0",
     },
   });
+}
 
 type PostBody = {
   roomId: string;
@@ -27,9 +28,11 @@ type PostBody = {
 };
 
 export async function POST(req: Request) {
-  // ✅ 統一：同步驗證，不再用 verifyJWT<...> 或 .catch
-  const auth = verifyRequest(req);
-  const userId = auth?.userId || auth?.sub || null;
+  const auth = await verifyRequest(req);
+  const userId =
+    (auth as { userId?: string; sub?: string } | null)?.userId ??
+    (auth as { sub?: string } | null)?.sub ??
+    null;
   if (!userId) return noStore({ error: "UNAUTHORIZED" }, 401);
 
   let body: PostBody;
@@ -44,10 +47,10 @@ export async function POST(req: Request) {
   const validSides: BetSide[] = ["PLAYER", "BANKER", "TIE", "PLAYER_PAIR", "BANKER_PAIR"];
   if (!validSides.includes(body.side)) return noStore({ error: "INVALID_SIDE" }, 400);
 
-  if (!Number.isInteger(body.amount) || body.amount <= 0 || body.amount > 5_000_000)
+  if (!Number.isInteger(body.amount) || body.amount <= 0 || body.amount > 5_000_000) {
     return noStore({ error: "INVALID_AMOUNT" }, 400);
+  }
 
-  // 確認回合狀態（下注期）
   const round = await prisma.round.findUnique({
     where: { id: body.roundId },
     select: { id: true, roomId: true, phase: true },
@@ -58,39 +61,35 @@ export async function POST(req: Request) {
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      // 取餘額
       const me = await tx.user.findUnique({
-        where: { id: userId },
+        where: { id: String(userId) },
         select: { id: true, balance: true, bankBalance: true },
       });
       if (!me) throw new Error("USER_NOT_FOUND");
       if (me.balance < body.amount) throw new Error("INSUFFICIENT_BALANCE");
 
-      // 建立下注
       const bet = await tx.bet.create({
         data: {
           userId: me.id,
           roomId: body.roomId,
           roundId: body.roundId,
-          side: body.side as any,
+          side: body.side as Prisma.$Enums.BetSide,
           amount: body.amount,
         },
         select: { id: true, side: true, amount: true, createdAt: true, roomId: true, roundId: true },
       });
 
-      // 扣款
       const updated = await tx.user.update({
         where: { id: me.id },
         data: { balance: { decrement: body.amount } },
         select: { balance: true, bankBalance: true },
       });
 
-      // 建立流水
       await tx.ledger.create({
         data: {
           userId: me.id,
           type: "BET_PLACED",
-          target: "WALLET",
+          target: "WALLET", // Prisma enum: BalanceTarget
           delta: -body.amount,
           balanceAfter: updated.balance,
           bankAfter: updated.bankBalance,
@@ -107,8 +106,8 @@ export async function POST(req: Request) {
             roomId: body.roomId,
             roundId: body.roundId,
             side: body.side,
-          },
-        } as any,
+          } as Prisma.InputJsonValue,
+        },
       });
 
       return { bet, balanceAfter: updated.balance, bankAfter: updated.bankBalance };
@@ -116,15 +115,16 @@ export async function POST(req: Request) {
 
     return noStore({
       ok: true,
-      userId,
+      userId: String(userId),
       bet: result.bet,
       balanceAfter: result.balanceAfter,
       bankAfter: result.bankAfter,
       serverTime: new Date().toISOString(),
     });
-  } catch (e: any) {
-    if (e?.message === "USER_NOT_FOUND") return noStore({ error: "USER_NOT_FOUND" }, 404);
-    if (e?.message === "INSUFFICIENT_BALANCE") return noStore({ error: "INSUFFICIENT_BALANCE" }, 400);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "";
+    if (msg === "USER_NOT_FOUND") return noStore({ error: "USER_NOT_FOUND" }, 404);
+    if (msg === "INSUFFICIENT_BALANCE") return noStore({ error: "INSUFFICIENT_BALANCE" }, 400);
     return noStore({ error: "BET_FAILED" }, 500);
   }
 }

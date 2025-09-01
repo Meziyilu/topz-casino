@@ -7,8 +7,8 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifyRequest } from "@/lib/jwt";
 
-const noStore = (payload: any, status = 200) =>
-  NextResponse.json(payload, {
+function noStore<T>(payload: T, status = 200) {
+  return NextResponse.json(payload, {
     status,
     headers: {
       "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
@@ -16,26 +16,56 @@ const noStore = (payload: any, status = 200) =>
       Expires: "0",
     },
   });
+}
 
 // /api/lotto/my-bets?limit=50&cursor=BET_ID
 export async function GET(req: Request) {
-  const auth = verifyRequest(req);
-  if (!auth?.userId) return noStore({ error: "UNAUTHORIZED" }, 401);
+  const auth = await verifyRequest(req);
+  const userId =
+    (auth as { userId?: string; sub?: string } | null)?.userId ??
+    (auth as { sub?: string } | null)?.sub;
+  if (!userId) return noStore({ error: "UNAUTHORIZED" }, 401);
 
   const { searchParams } = new URL(req.url);
-  const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "50", 10), 1), 200);
-  const cursor = searchParams.get("cursor");
+
+  // limit：1~200，預設 50
+  const limitParam = searchParams.get("limit");
+  const limitRaw = Number.parseInt(limitParam ?? "50", 10);
+  const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 50, 1), 200);
+
+  // cursor：bet id（字串）；空字串或 null 視為未提供
+  const cursorParam = searchParams.get("cursor");
+  const cursor = cursorParam && cursorParam.trim().length > 0 ? cursorParam : null;
 
   const take = limit + 1;
+
   const rows = await prisma.lottoBet.findMany({
-    where: { userId: auth.userId },
+    where: { userId: String(userId) },
     orderBy: [{ createdAt: "desc" }],
     take,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     select: {
-      id: true, createdAt: true, kind: true, amount: true, picks: true, ballIndex: true, attr: true,
-      status: true, payout: true, matched: true, hitSpecial: true,
-      round: { select: { id: true, code: true, drawAt: true, status: true, numbers: true, special: true } },
+      id: true,
+      createdAt: true,
+      kind: true,
+      amount: true,
+      picks: true,
+      ballIndex: true,
+      attr: true,
+      status: true,
+      payout: true,
+      matched: true,
+      hitSpecial: true,
+      round: {
+        select: {
+          id: true,
+          code: true,
+          drawAt: true,
+          status: true,
+          numbers: true,
+          special: true,
+        },
+      },
     },
   });
 

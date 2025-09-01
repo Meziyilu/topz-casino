@@ -7,8 +7,8 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { DEFAULT_LOTTO_CONFIG, LOTTO_CONFIG_KEY, type LottoConfig } from "@/lib/lotto";
 
-const noStore = (payload: any, status = 200) =>
-  NextResponse.json(payload, {
+function noStore<T>(payload: T, status = 200) {
+  return NextResponse.json(payload, {
     status,
     headers: {
       "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
@@ -16,6 +16,7 @@ const noStore = (payload: any, status = 200) =>
       Expires: "0",
     },
   });
+}
 
 async function readConfig(): Promise<LottoConfig> {
   const row = await prisma.gameConfig.findUnique({ where: { key: LOTTO_CONFIG_KEY } });
@@ -35,19 +36,35 @@ export async function GET() {
       where: { status: { in: ["DRAWN", "SETTLED"] } },
       orderBy: [{ code: "desc" }],
       take: 10,
-      select: { code: true, drawAt: true, numbers: true, special: true, jackpot: true, pool: true, status: true },
+      select: {
+        code: true,
+        drawAt: true,
+        numbers: true,
+        special: true,
+        jackpot: true,
+        pool: true,
+        status: true,
+      },
     }),
   ]);
 
   const now = Date.now();
-  const timeLeftSec = openRound ? Math.max(0, Math.floor((new Date(openRound.drawAt).getTime() - now) / 1000)) : 0;
+  const timeLeftSec = openRound
+    ? Math.max(0, Math.floor((new Date(openRound.drawAt).getTime() - now) / 1000))
+    : 0;
 
   return noStore({
     ok: true,
     serverTime: new Date().toISOString(),
     cfg,
     current: openRound
-      ? { id: openRound.id, code: openRound.code, drawAt: openRound.drawAt, status: openRound.status, timeLeftSec }
+      ? {
+          id: openRound.id,
+          code: openRound.code,
+          drawAt: openRound.drawAt,
+          status: openRound.status,
+          timeLeftSec,
+        }
       : null,
     recent,
   });

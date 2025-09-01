@@ -1,3 +1,4 @@
+// route.ts
 export const runtime = "nodejs";
 export const revalidate = 0;
 export const dynamic = "force-dynamic";
@@ -10,10 +11,20 @@ export async function GET() {
     const list = await prisma.marqueeMessage.findMany({
       where: { enabled: true },
       orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
-      select: { id: true, text: true, enabled: true, priority: true, createdAt: true },
+      select: {
+        id: true,
+        text: true,
+        enabled: true,
+        priority: true,
+        createdAt: true,
+      },
     });
-    return NextResponse.json(list);
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "failed" }, { status: 500 });
+
+    return NextResponse.json(list, {
+      headers: { "cache-control": "no-store" },
+    });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "failed";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

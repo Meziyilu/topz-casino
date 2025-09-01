@@ -1,16 +1,13 @@
-export const runtime = "nodejs";
 // app/api/checkin/status/route.ts
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { verifyJWT } from "@/lib/jwt";
+import { verifyRequest } from "@/lib/jwt";
 
-/** ---- 小工具（檔案私有，避免被當成 Route export） ---- */
-const asAny = <T = any>(v: unknown) => v as T;
-
-function noStoreJson(payload: any, status = 200) {
+function noStoreJson<T>(payload: T, status = 200) {
   return NextResponse.json(payload, {
     status,
     headers: {
@@ -21,35 +18,12 @@ function noStoreJson(payload: any, status = 200) {
   });
 }
 
-function readTokenFromHeaders(req: Request): string | null {
-  const raw = req.headers.get("cookie");
-  if (!raw) return null;
-  const m = raw.match(/(?:^|;\s*)token=([^;]+)/);
-  return m ? decodeURIComponent(m[1]) : null;
-}
-
-async function getUser(req: Request) {
-  const token = readTokenFromHeaders(req);
-  if (!token) return null;
-  const payload = await verifyJWT(token).catch(() => null);
-  if (!payload?.sub) return null;
-  return prisma.user.findUnique({
-    where: { id: String(payload.sub) },
-    select: { id: true, email: true, name: true, balance: true, bankBalance: true },
-  });
-}
-
 /** 台北當日 00:00（以 UTC 儲存） */
 function taipeiDayStart(date = new Date()) {
   const utc = date.getTime();
   const tpe = utc + 8 * 3600_000;
   const tpeStart = Math.floor(tpe / 86_400_000) * 86_400_000;
   return new Date(tpeStart - 8 * 3600_000);
-}
-
-/** 前一日（台北日） */
-function tpePrevDay(d: Date) {
-  return new Date(d.getTime() - 86_400_000);
 }
 
 /** 依照 streak 算今日獎勵（你可自由調整規則） */
@@ -71,7 +45,7 @@ async function calcStreak(userId: string, todayTpe: Date) {
   });
 
   // 把 day 轉成 time 值便於比對
-  const hasDay = new Set(rows.map(r => new Date(r.day).getTime()));
+  const hasDay = new Set(rows.map((r) => new Date(r.day).getTime()));
   let streak = 0;
   let cursor = todayTpe.getTime();
 
@@ -86,7 +60,16 @@ async function calcStreak(userId: string, todayTpe: Date) {
 /** ---- Handler ---- */
 export async function GET(req: Request) {
   try {
-    const me = await getUser(req);
+    const auth = await verifyRequest(req);
+    const userId =
+      (auth as { userId?: string; sub?: string } | null)?.userId ??
+      (auth as { sub?: string } | null)?.sub;
+    if (!userId) return noStoreJson({ error: "未登入" }, 401);
+
+    const me = await prisma.user.findUnique({
+      where: { id: String(userId) },
+      select: { id: true, email: true, name: true, balance: true, bankBalance: true },
+    });
     if (!me) return noStoreJson({ error: "未登入" }, 401);
 
     const today = taipeiDayStart(new Date());
@@ -113,7 +96,8 @@ export async function GET(req: Request) {
       streak,
       balance: me.balance,
     });
-  } catch (e: any) {
-    return noStoreJson({ error: e?.message || "Server error" }, 500);
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Server error";
+    return noStoreJson({ error: message }, 500);
   }
 }

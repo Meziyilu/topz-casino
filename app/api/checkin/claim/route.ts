@@ -1,15 +1,13 @@
-export const runtime = "nodejs";
 // app/api/checkin/claim/route.ts
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { verifyJWT } from "@/lib/jwt";
+import { verifyRequest } from "@/lib/jwt";
 
-const asAny = <T = any>(v: unknown) => v as T;
-
-function noStoreJson(payload: any, status = 200) {
+function noStoreJson<T>(payload: T, status = 200) {
   return NextResponse.json(payload, {
     status,
     headers: {
@@ -17,24 +15,6 @@ function noStoreJson(payload: any, status = 200) {
       Pragma: "no-cache",
       Expires: "0",
     },
-  });
-}
-
-function readTokenFromHeaders(req: Request): string | null {
-  const raw = req.headers.get("cookie");
-  if (!raw) return null;
-  const m = raw.match(/(?:^|;\s*)token=([^;]+)/);
-  return m ? decodeURIComponent(m[1]) : null;
-}
-
-async function getUser(req: Request) {
-  const token = readTokenFromHeaders(req);
-  if (!token) return null;
-  const payload = await verifyJWT(token).catch(() => null);
-  if (!payload?.sub) return null;
-  return prisma.user.findUnique({
-    where: { id: String(payload.sub) },
-    select: { id: true, balance: true, bankBalance: true },
   });
 }
 
@@ -58,7 +38,7 @@ async function calcStreak(userId: string, todayTpe: Date) {
     take: 14,
     select: { day: true },
   });
-  const hasDay = new Set(rows.map(r => new Date(r.day).getTime()));
+  const hasDay = new Set(rows.map((r) => new Date(r.day).getTime()));
   let streak = 0;
   let cursor = todayTpe.getTime();
   while (hasDay.has(cursor)) {
@@ -70,7 +50,16 @@ async function calcStreak(userId: string, todayTpe: Date) {
 
 export async function POST(req: Request) {
   try {
-    const me = await getUser(req);
+    const auth = await verifyRequest(req);
+    const userId =
+      (auth as { userId?: string; sub?: string } | null)?.userId ??
+      (auth as { sub?: string } | null)?.sub;
+    if (!userId) return noStoreJson({ error: "未登入" }, 401);
+
+    const me = await prisma.user.findUnique({
+      where: { id: String(userId) },
+      select: { id: true, balance: true, bankBalance: true },
+    });
     if (!me) return noStoreJson({ error: "未登入" }, 401);
 
     const today = taipeiDayStart(new Date());
@@ -116,8 +105,8 @@ export async function POST(req: Request) {
       await tx.ledger.create({
         data: {
           userId: me.id,
-          type: asAny("PAYOUT"),
-          target: asAny("WALLET"),
+          type: "PAYOUT",
+          target: "WALLET",
           delta: todayReward,
           memo: `每日簽到 +${todayReward}`,
           balanceAfter: after.balance,
@@ -135,7 +124,8 @@ export async function POST(req: Request) {
       streak: result.created.streak,
       balance: result.balance,
     });
-  } catch (e: any) {
-    return noStoreJson({ error: e?.message || "Server error" }, 500);
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Server error";
+    return noStoreJson({ error: message }, 500);
   }
 }

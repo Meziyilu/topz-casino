@@ -1,5 +1,5 @@
-export const runtime = "nodejs";
 // app/api/leaderboard/route.ts
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic"; // 避免 build 時的 DYNAMIC_SERVER_USAGE
 export const revalidate = 0;
 
@@ -52,10 +52,13 @@ function normalizeRoom(input: string) {
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const period = (searchParams.get("period") || "today") as Period;
+    const periodParam = (searchParams.get("period") || "today").toLowerCase();
+    const period: Period = periodParam === "week" ? "week" : "today";
+
     const roomParam = normalizeRoom(searchParams.get("room") || "all");
-    let limit = parseInt(searchParams.get("limit") || "10", 10);
-    if (!Number.isFinite(limit) || limit <= 0) limit = 10;
+
+    const limitRaw = Number.parseInt(searchParams.get("limit") || "10", 10);
+    let limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 10;
     if (limit > 100) limit = 100;
 
     const { start, end, label } = resolveWindow(period);
@@ -118,19 +121,23 @@ export async function GET(req: Request) {
       .sort((a, b) => b.profit - a.profit)
       .slice(0, limit);
 
-    return NextResponse.json({
-      period: { key: period, label, startISO: start.toISOString(), endISO: end.toISOString(), tz: "Asia/Taipei" },
-      room: roomParam,
-      limit,
-      items,
-      rules: {
-        bankerNoCommission: (process.env.TOPZ_BANKER_NO_COMMISSION || "false").toLowerCase() === "true",
-        tieOdds: Number(process.env.TOPZ_TIE_ODDS || 8),
-        pairOdds: Number(process.env.TOPZ_PAIR_ODDS || 11),
+    return NextResponse.json(
+      {
+        period: { key: period, label, startISO: start.toISOString(), endISO: end.toISOString(), tz: "Asia/Taipei" },
+        room: roomParam,
+        limit,
+        items,
+        rules: {
+          bankerNoCommission: (process.env.TOPZ_BANKER_NO_COMMISSION || "false").toLowerCase() === "true",
+          tieOdds: Number(process.env.TOPZ_TIE_ODDS || 8),
+          pairOdds: Number(process.env.TOPZ_PAIR_ODDS || 11),
+        },
       },
-    });
-  } catch (err: any) {
+      { headers: { "cache-control": "no-store" } }
+    );
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Internal Server Error";
     console.error("Leaderboard error:", err);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500, headers: { "cache-control": "no-store" } });
   }
 }
