@@ -165,14 +165,17 @@ model Round {
   startedAt DateTime
   settledAt DateTime?
 
-  // 結果
-  outcome     RoundOutcome?
-  playerTotal Int?
-  bankerTotal Int?
-  playerPair  Boolean?
-  bankerPair  Boolean?
-  anyPair     Boolean?
-  perfectPair Boolean?
+  // ======== 百家樂結果（最新版，向下相容） ========
+  outcome          RoundOutcome?
+  playerTotal      Int?
+  bankerTotal      Int?
+  playerPair       Boolean?         // 前兩張是否對子
+  bankerPair       Boolean?
+  anyPair          Boolean?
+  perfectPair      Boolean?
+  usedNoCommission Boolean @default(false) // ✅ 新增：莊 6 點勝（超級6）旗標
+  payoutSettled    Boolean @default(false) // ✅ 新增：已派彩冪等旗標
+
   playerCards Json?
   bankerCards Json?
 
@@ -182,6 +185,7 @@ model Round {
   @@index([roomId, day, roundSeq])
   @@index([phase])
   @@index([createdAt])
+  @@index([payoutSettled, phase])    // ✅ 新增：加速找出「已揭牌但未結算」的回合
 }
 
 model Bet {

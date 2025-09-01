@@ -1,130 +1,53 @@
+// app/api/casino/baccarat/bet/route.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const revalidate = 0;
 
-import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { verifyRequest } from "@/lib/jwt";
-import type { Prisma } from "@prisma/client";
+import { verifyJWT } from "@/lib/jwt";
+import { calcTiming } from "@/lib/gameclock";
+import { noStoreJson } from "@/lib/http";
 
-type BetSide = "PLAYER" | "BANKER" | "TIE" | "PLAYER_PAIR" | "BANKER_PAIR";
-
-function noStore<T>(payload: T, status = 200) {
-  return NextResponse.json(payload, {
-    status,
-    headers: {
-      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
-      Pragma: "no-cache",
-      Expires: "0",
-    },
-  });
-}
-
-type PostBody = {
-  roomId: string;
-  roundId: string;
-  side: BetSide;
-  amount: number;
-};
+type Room = "R30" | "R60" | "R90";
+type PlaceBetBody = { room?: Room; side: "PLAYER"|"BANKER"|"TIE"|"PLAYER_PAIR"|"BANKER_PAIR"; amount: number };
 
 export async function POST(req: Request) {
-  const auth = await verifyRequest(req);
-  const userId =
-    (auth as { userId?: string; sub?: string } | null)?.userId ??
-    (auth as { sub?: string } | null)?.sub ??
-    null;
-  if (!userId) return noStore({ error: "UNAUTHORIZED" }, 401);
+  const auth = verifyJWT(req);
+  if (!auth?.sub) return noStoreJson({ error: "UNAUTHORIZED" }, 401);
 
-  let body: PostBody;
-  try {
-    body = await req.json();
-  } catch {
-    return noStore({ error: "INVALID_JSON" }, 400);
+  const body = (await req.json().catch(() => null)) as PlaceBetBody | null;
+  if (!body || !body.side || !Number.isInteger(body.amount) || body.amount <= 0) {
+    return noStoreJson({ error: "BAD_REQUEST" }, 400);
   }
 
-  if (!body?.roomId || !body?.roundId) return noStore({ error: "MISSING_PARAMS" }, 400);
+  const room = body.room || "R60";
+  const now = new Date();
+  const { roundNo, startedAt, revealAt, lockAt, locked } = calcTiming(room, now);
+  if (locked) return noStoreJson({ error: "LOCKED" }, 423);
 
-  const validSides: BetSide[] = ["PLAYER", "BANKER", "TIE", "PLAYER_PAIR", "BANKER_PAIR"];
-  if (!validSides.includes(body.side)) return noStore({ error: "INVALID_SIDE" }, 400);
-
-  if (!Number.isInteger(body.amount) || body.amount <= 0 || body.amount > 5_000_000) {
-    return noStore({ error: "INVALID_AMOUNT" }, 400);
+  let round = await prisma.baccaratRound.findFirst({ where: { room, roundNo } });
+  if (!round) {
+    round = await prisma.baccaratRound.create({
+      data: { room, roundNo, phase: "BETTING", playerCards: [], bankerCards: [], startedAt, lockAt, revealAt },
+    });
   }
+  if (round.phase !== "BETTING") return noStoreJson({ error: "LOCKED" }, 423);
 
-  const round = await prisma.round.findUnique({
-    where: { id: body.roundId },
-    select: { id: true, roomId: true, phase: true },
-  });
-  if (!round) return noStore({ error: "ROUND_NOT_FOUND" }, 404);
-  if (round.roomId !== body.roomId) return noStore({ error: "ROOM_MISMATCH" }, 400);
-  if (round.phase !== "BETTING") return noStore({ error: "ROUND_NOT_BETTING" }, 400);
-
+  // 下注：檢查餘額 → 扣款 → 台帳 → 建 bet （同一交易）
   try {
-    const result = await prisma.$transaction(async (tx) => {
-      const me = await tx.user.findUnique({
-        where: { id: String(userId) },
-        select: { id: true, balance: true, bankBalance: true },
-      });
-      if (!me) throw new Error("USER_NOT_FOUND");
-      if (me.balance < body.amount) throw new Error("INSUFFICIENT_BALANCE");
+    const bet = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({ where: { id: auth.sub }, select: { balance: true } });
+      if (!user || user.balance < body.amount) throw new Error("INSUFFICIENT_FUNDS");
 
-      const bet = await tx.bet.create({
-        data: {
-          userId: me.id,
-          roomId: body.roomId,
-          roundId: body.roundId,
-          side: body.side as Prisma.$Enums.BetSide,
-          amount: body.amount,
-        },
-        select: { id: true, side: true, amount: true, createdAt: true, roomId: true, roundId: true },
-      });
-
-      const updated = await tx.user.update({
-        where: { id: me.id },
-        data: { balance: { decrement: body.amount } },
-        select: { balance: true, bankBalance: true },
-      });
-
+      await tx.user.update({ where: { id: auth.sub }, data: { balance: { decrement: body.amount } } });
       await tx.ledger.create({
-        data: {
-          userId: me.id,
-          type: "BET_PLACED",
-          target: "WALLET", // Prisma enum: BalanceTarget
-          delta: -body.amount,
-          balanceAfter: updated.balance,
-          bankAfter: updated.bankBalance,
-          memo: `Baccarat bet ${bet.id}`,
-          fromTarget: "WALLET",
-          toTarget: null,
-          amount: body.amount,
-          fee: 0,
-          transferGroupId: null,
-          peerUserId: null,
-          meta: {
-            game: "baccarat",
-            betId: bet.id,
-            roomId: body.roomId,
-            roundId: body.roundId,
-            side: body.side,
-          } as Prisma.InputJsonValue,
-        },
+        data: { userId: auth.sub, type: "BET_PLACED", target: "WALLET", amount: -body.amount, note: `Baccarat R${roundNo} ${body.side}` },
       });
-
-      return { bet, balanceAfter: updated.balance, bankAfter: updated.bankBalance };
+      return tx.baccaratBet.create({ data: { userId: auth.sub, roundId: round!.id, side: body.side, amount: body.amount } });
     });
 
-    return noStore({
-      ok: true,
-      userId: String(userId),
-      bet: result.bet,
-      balanceAfter: result.balanceAfter,
-      bankAfter: result.bankAfter,
-      serverTime: new Date().toISOString(),
-    });
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "";
-    if (msg === "USER_NOT_FOUND") return noStore({ error: "USER_NOT_FOUND" }, 404);
-    if (msg === "INSUFFICIENT_BALANCE") return noStore({ error: "INSUFFICIENT_BALANCE" }, 400);
-    return noStore({ error: "BET_FAILED" }, 500);
+    return noStoreJson({ ok: true, betId: bet.id });
+  } catch (e: any) {
+    if (String(e?.message) === "INSUFFICIENT_FUNDS") return noStoreJson({ error: "INSUFFICIENT_FUNDS" }, 402);
+    return noStoreJson({ error: "BET_FAILED" }, 500);
   }
 }
