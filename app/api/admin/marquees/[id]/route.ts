@@ -43,7 +43,7 @@ const PatchSchema = z.object({
 });
 type PatchInput = z.infer<typeof PatchSchema>;
 
-/** PATCH / 修改跑馬燈訊息 */
+/** PATCH / 修改跑馬燈訊�?*/
 export async function PATCH(req: Request, ctx: { params: { id: string } }) {
   try {
     verifyMethod(req, ["PATCH"]);
@@ -72,10 +72,10 @@ export async function PATCH(req: Request, ctx: { params: { id: string } }) {
       .update({
         where: { id },
         data: body,
-        select: { id: true, text: true, enabled: true, priority: true, createdAt: true, updatedAt: true },
+        select: { id: true, text: true, enabled: true, priority: true, createdAt: true, },
       })
       .catch((err) => {
-        // P2025 → Not found
+        // P2025 �?Not found
         if (err && typeof err === "object" && "code" in err && (err as any).code === "P2025") return null;
         throw err;
       });
@@ -103,7 +103,7 @@ export async function PATCH(req: Request, ctx: { params: { id: string } }) {
   }
 }
 
-/** DELETE / 刪除跑馬燈訊息 */
+/** DELETE / 刪除跑馬燈訊�?*/
 export async function DELETE(req: Request, ctx: { params: { id: string } }) {
   try {
     verifyMethod(req, ["DELETE"]);
@@ -135,3 +135,4 @@ export async function DELETE(req: Request, ctx: { params: { id: string } }) {
     return noStoreJson({ ok: false as const, error: "SERVER_ERROR" as const }, 500);
   }
 }
+
