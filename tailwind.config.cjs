@@ -71,5 +71,20 @@ const config: Config = {
   },
   plugins: [],
 };
-
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],
+  theme: {
+    extend: {
+      colors: { primary: { DEFAULT: "#7c3aed" } },
+      keyframes: {
+        pop: { "0%": { transform: "scale(0.6)" }, "70%": { transform: "scale(1.08)" }, "100%": { transform: "scale(1)" } },
+        flip: { "0%": { transform: "rotateY(90deg)" }, "100%": { transform: "rotateY(0deg)" } },
+        confetti: { "0%": { transform: "translateY(-20vh) rotate(0)", opacity: "0" }, "10%": { opacity: "1" }, "100%": { transform: "translateY(110vh) rotate(720deg)", opacity: "0" } },
+      },
+      animation: { pop: "pop .28s ease-out both", flip: "flip .4s ease-out both", confetti: "confetti 1.4s ease-in forwards" },
+    },
+  },
+  plugins: [],
+};
 export default config;

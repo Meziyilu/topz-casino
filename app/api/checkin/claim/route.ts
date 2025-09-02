@@ -1,5 +1,4 @@
-// app/api/checkin/claim/route.ts
-export const runtime = "nodejs";
+// app/(player-suite)/api/checkin/claim/route.ts
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -7,125 +6,82 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { verifyRequest } from "@/lib/jwt";
 
-function noStoreJson<T>(payload: T, status = 200) {
-  return NextResponse.json(payload, {
-    status,
-    headers: {
-      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
-      Pragma: "no-cache",
-      Expires: "0",
-    },
-  });
+function todayYmdUTC() {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0,0,0));
 }
 
-function taipeiDayStart(date = new Date()) {
-  const utc = date.getTime();
-  const tpe = utc + 8 * 3600_000;
-  const tpeStart = Math.floor(tpe / 86_400_000) * 86_400_000;
-  return new Date(tpeStart - 8 * 3600_000);
-}
-
-function rewardForStreak(streak: number) {
-  const mod = ((streak + 1) % 7) || 7;
-  if (mod === 7) return 300;
-  return 100;
-}
-
-async function calcStreak(userId: string, todayTpe: Date) {
-  const rows = await prisma.dailyCheckin.findMany({
-    where: { userId },
-    orderBy: { day: "desc" },
-    take: 14,
-    select: { day: true },
-  });
-  const hasDay = new Set(rows.map((r) => new Date(r.day).getTime()));
-  let streak = 0;
-  let cursor = todayTpe.getTime();
-  while (hasDay.has(cursor)) {
-    streak += 1;
-    cursor -= 86_400_000;
-  }
-  return streak;
+// 你可替換為更複雜的獎勵規則（例如連續 x 天加成）
+function computeCheckinAmount(streakAfter: number) {
+  // 範例：固定 100，且每滿 7 天 +200 獎勵
+  const base = 100;
+  const bonus = (streakAfter % 7 === 0) ? 200 : 0;
+  return base + bonus;
 }
 
 export async function POST(req: Request) {
-  try {
-    const auth = await verifyRequest(req);
-    const userId =
-      (auth as { userId?: string; sub?: string } | null)?.userId ??
-      (auth as { sub?: string } | null)?.sub;
-    if (!userId) return noStoreJson({ error: "未登入" }, 401);
+  const auth = verifyRequest(req);
+  if (!auth?.sub) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  const userId = auth.sub as string;
 
-    const me = await prisma.user.findUnique({
-      where: { id: String(userId) },
-      select: { id: true, balance: true, bankBalance: true },
-    });
-    if (!me) return noStoreJson({ error: "未登入" }, 401);
+  const ymd = todayYmdUTC();
 
-    const today = taipeiDayStart(new Date());
+  const result = await prisma.$transaction(async (tx) => {
+    const exists = await tx.dailyCheckinClaim.findUnique({ where: { userId_ymd: { userId, ymd } } });
+    if (exists) return { ok: false as const, reason: "ALREADY_CLAIMED" };
 
-    // 今天已簽到就直接回傳
-    const exists = await prisma.dailyCheckin.findUnique({
-      where: { userId_day: { userId: me.id, day: today } },
-      select: { reward: true, streak: true },
-    });
-    if (exists) {
-      return noStoreJson({
-        ok: true,
-        already: true,
-        reward: exists.reward,
-        streak: exists.streak,
-        balance: me.balance,
-      });
-    }
+    const state = await tx.userCheckinState.findUnique({ where: { userId } });
 
-    // 計算 streak 與今日應發獎勵
-    const streakBefore = await calcStreak(me.id, today);
-    const todayReward = rewardForStreak(streakBefore);
-    const newStreak = streakBefore + 1;
+    // 簡易續天判斷：昨天是否有領（你也可用 nextAvailableAt 判斷）
+    let streakBefore = state?.streak ?? 0;
+    let streakAfter = streakBefore + 1;
 
-    // 交易：寫 DailyCheckin、加錢、寫 Ledger
-    const result = await prisma.$transaction(async (tx) => {
-      const created = await tx.dailyCheckin.create({
-        data: {
-          userId: me.id,
-          day: today,
-          reward: todayReward,
-          streak: newStreak,
-        },
-        select: { id: true, reward: true, streak: true },
-      });
+    const amount = computeCheckinAmount(streakAfter);
 
-      const after = await tx.user.update({
-        where: { id: me.id },
-        data: { balance: { increment: todayReward } },
-        select: { balance: true, bankBalance: true },
-      });
-
-      await tx.ledger.create({
-        data: {
-          userId: me.id,
-          type: "PAYOUT",
-          target: "WALLET",
-          delta: todayReward,
-          memo: `每日簽到 +${todayReward}`,
-          balanceAfter: after.balance,
-          bankAfter: after.bankBalance,
-        },
-      });
-
-      return { created, balance: after.balance };
+    await tx.dailyCheckinClaim.create({
+      data: {
+        userId, ymd, amount, streakBefore, streakAfter
+      }
     });
 
-    return noStoreJson({
-      ok: true,
-      already: false,
-      reward: result.created.reward,
-      streak: result.created.streak,
-      balance: result.balance,
+    await tx.userCheckinState.upsert({
+      where: { userId },
+      update: {
+        lastClaimedYmd: ymd,
+        streak: streakAfter,
+        totalClaims: (state?.totalClaims ?? 0) + 1,
+        nextAvailableAt: new Date(ymd.getTime() + 24*3600*1000),
+      },
+      create: {
+        userId,
+        lastClaimedYmd: ymd,
+        streak: 1,
+        totalClaims: 1,
+        nextAvailableAt: new Date(ymd.getTime() + 24*3600*1000),
+      }
     });
-  } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : "Server error";
-    return noStoreJson({ error: message }, 500);
+
+    // 寫入錢包帳（CHECKIN_BONUS）
+    await tx.ledger.create({
+      data: {
+        userId,
+        type: "CHECKIN_BONUS",
+        target: "WALLET",
+        amount,
+      }
+    });
+
+    // 同步增加 User.balance（若你平時由 Ledger 統一驅動餘額，這段可省略）
+    await tx.user.update({
+      where: { id: userId },
+      data: { balance: { increment: amount } }
+    });
+
+    return { ok: true as const, amount, streakAfter };
+  });
+
+  if (!result.ok) {
+    return NextResponse.json({ error: result.reason }, { status: 409 });
   }
+  return NextResponse.json({ amount: result.amount, streakAfter: result.streakAfter });
 }

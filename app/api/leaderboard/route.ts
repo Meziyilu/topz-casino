@@ -1,143 +1,91 @@
-// app/api/leaderboard/route.ts
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic"; // 避免 build 時的 DYNAMIC_SERVER_USAGE
+// app/(player-suite)/api/leaderboard/route.ts
+export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { verifyRequest } from "@/lib/jwt"; // 你的現有方法
+import { rebuildSnapshot } from "@/lib/stats";
+import { currentWindow } from "@/lib/time-window";
 
-type Period = "today" | "week";
-
-const TAIPEI_OFFSET_HOURS = 8;
-
-// 賠率（總返還倍率；含本金）
-function cfg() {
-  const noComm = (process.env.TOPZ_BANKER_NO_COMMISSION || "false").toLowerCase() === "true";
-  const tieOdds = Number(process.env.TOPZ_TIE_ODDS || 8);    // 8 or 9
-  const pairOdds = Number(process.env.TOPZ_PAIR_ODDS || 11); // 通常 11
-
-  return {
-    PLAYER_RETURN: 2,                 // 1:1
-    BANKER_RETURN: noComm ? 2 : 1.95, // 無佣 2x；有佣 1.95x
-    TIE_RETURN: 1 + tieOdds,          // 8:1 -> 9x
-    PAIR_RETURN: 1 + pairOdds,        // 11:1 -> 12x
-  };
-}
-
-function toUTC(d: Date) {
-  return new Date(d.getTime() - TAIPEI_OFFSET_HOURS * 3600 * 1000);
-}
-function startOfTodayTaipei(now = new Date()) {
-  const t = new Date(now.getTime() + TAIPEI_OFFSET_HOURS * 3600 * 1000);
-  const startLocalMidnight = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate(), 0, 0, 0));
-  return toUTC(startLocalMidnight);
-}
-function startOfWeekTaipei(now = new Date()) {
-  const t = new Date(now.getTime() + TAIPEI_OFFSET_HOURS * 3600 * 1000);
-  const day = t.getUTCDay() || 7; // 週日=0 改 7
-  const diffDays = day - 1;
-  const monday = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate() - diffDays, 0, 0, 0));
-  return toUTC(monday);
-}
-function resolveWindow(period: Period): { start: Date; end: Date; label: string } {
-  const now = new Date();
-  if (period === "week") return { start: startOfWeekTaipei(now), end: now, label: "本週" };
-  return { start: startOfTodayTaipei(now), end: now, label: "本日" };
-}
-function normalizeRoom(input: string) {
-  const s = (input || "").toUpperCase();
-  return s === "R30" || s === "R60" || s === "R90" ? s : "ALL";
-}
-
+// GET /api/leaderboard?period=daily|weekly&limit=50&withBonus=false&room=R30|R60|R90|ALL
 export async function GET(req: Request) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const periodParam = (searchParams.get("period") || "today").toLowerCase();
-    const period: Period = periodParam === "week" ? "week" : "today";
+  const url = new URL(req.url);
+  const period = (url.searchParams.get("period") ?? "daily").toUpperCase() as "DAILY"|"WEEKLY";
+  const limit  = Math.min(parseInt(url.searchParams.get("limit") ?? "50", 10) || 50, 200);
+  const withBonus = (url.searchParams.get("withBonus") ?? "false") === "true";
 
-    const roomParam = normalizeRoom(searchParams.get("room") || "all");
+  let roomParam = url.searchParams.get("room") ?? "ALL";
+  roomParam = roomParam.toUpperCase();
+  const room = roomParam === "ALL" ? undefined : (["R30","R60","R90"].includes(roomParam) ? roomParam as "R30"|"R60"|"R90" : undefined);
 
-    const limitRaw = Number.parseInt(searchParams.get("limit") || "10", 10);
-    let limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 10;
-    if (limit > 100) limit = 100;
-
-    const { start, end, label } = resolveWindow(period);
-    const { PLAYER_RETURN, BANKER_RETURN, TIE_RETURN, PAIR_RETURN } = cfg();
-
-    // 彙總查詢
-    const rows = await prisma.$queryRaw<
-      Array<{ userId: string; wagered: bigint; payout: bigint }>
-    >`
-      SELECT
-        b."userId" as "userId",
-        SUM(b."amount")::bigint AS "wagered",
-        SUM(
-          CASE
-            WHEN b."side" = 'PLAYER'::"BetSide" AND r."outcome" = 'PLAYER'::"RoundOutcome"
-              THEN (b."amount" * ${PLAYER_RETURN})::int
-            WHEN b."side" = 'BANKER'::"BetSide" AND r."outcome" = 'BANKER'::"RoundOutcome"
-              THEN FLOOR(b."amount" * ${BANKER_RETURN})::int
-            WHEN b."side" = 'TIE'::"BetSide" AND r."outcome" = 'TIE'::"RoundOutcome"
-              THEN (b."amount" * ${TIE_RETURN})::int
-            WHEN r."outcome" = 'TIE'::"RoundOutcome" AND (b."side" = 'PLAYER'::"BetSide" OR b."side" = 'BANKER'::"BetSide")
-              THEN b."amount"
-            WHEN b."side" = 'PLAYER_PAIR'::"BetSide" AND r."playerPair" = TRUE
-              THEN (b."amount" * ${PAIR_RETURN})::int
-            WHEN b."side" = 'BANKER_PAIR'::"BetSide" AND r."bankerPair" = TRUE
-              THEN (b."amount" * ${PAIR_RETURN})::int
-            ELSE 0
-          END
-        )::bigint AS "payout"
-      FROM "Bet" b
-      JOIN "Round" r ON r."id" = b."roundId"
-      JOIN "Room" rm ON rm."id" = b."roomId"
-      WHERE
-        r."settledAt" IS NOT NULL
-        AND r."settledAt" >= ${start}
-        AND r."settledAt" < ${end}
-        AND (${roomParam} = 'ALL' OR rm."code" = ${roomParam}::"RoomCode")
-      GROUP BY b."userId"
-    `;
-
-    // 使用者顯示名
-    const userIds = rows.map(r => r.userId);
-    const users = userIds.length
-      ? await prisma.user.findMany({
-          where: { id: { in: userIds } },
-          select: { id: true, name: true, email: true },
-        })
-      : [];
-    const mapUser = new Map(users.map(u => [u.id, u]));
-
-    const items = rows
-      .map(r => {
-        const wagered = Number(r.wagered || 0);
-        const payout = Number(r.payout || 0);
-        const profit = payout - wagered;
-        const u = mapUser.get(r.userId);
-        const displayName = u?.name || (u?.email ? u.email.split("@")[0] : r.userId.slice(0, 6));
-        return { userId: r.userId, name: displayName, wagered, payout, profit };
-      })
-      .sort((a, b) => b.profit - a.profit)
-      .slice(0, limit);
-
-    return NextResponse.json(
-      {
-        period: { key: period, label, startISO: start.toISOString(), endISO: end.toISOString(), tz: "Asia/Taipei" },
-        room: roomParam,
-        limit,
-        items,
-        rules: {
-          bankerNoCommission: (process.env.TOPZ_BANKER_NO_COMMISSION || "false").toLowerCase() === "true",
-          tieOdds: Number(process.env.TOPZ_TIE_ODDS || 8),
-          pairOdds: Number(process.env.TOPZ_PAIR_ODDS || 11),
-        },
-      },
-      { headers: { "cache-control": "no-store" } }
-    );
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Internal Server Error";
-    console.error("Leaderboard error:", err);
-    return NextResponse.json({ error: message }, { status: 500, headers: { "cache-control": "no-store" } });
+  const auth = verifyRequest(req);
+  if (!auth?.sub) {
+    return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   }
+
+  // 確保快照存在（lazy rebuild）
+  await rebuildSnapshot(period, room);
+  const { windowStart, windowEnd } = currentWindow(period);
+
+  const where: any = { period, windowStart, windowEnd, room: room ?? null };
+
+  // 排序欄位：純遊戲損益或含獎勵
+  const orderBy = withBonus
+    ? { // (gamePayout + bonusIncome - gameBet)
+        // Prisma 不支援直接相加排序；改成取出後在程式排序（limit 會在程式側做）
+      }
+    : { netProfit: "desc" as const };
+
+  // 先取一批（多抓一點以便 withBonus 時本地排序）
+  const snapshots = await prisma.userStatSnapshot.findMany({
+    where,
+    orderBy: orderBy as any,
+    take: withBonus ? 500 : limit,
+    include: {
+      user: { select: { id: true, name: true, avatarUrl: true, publicSlug: true } }
+    }
+  });
+
+  let rows = snapshots.map(s => {
+    const netWithBonus = (s.gamePayout + s.bonusIncome) - s.gameBet;
+    return {
+      userId: s.userId,
+      userName: s.user?.name ?? "",
+      avatarUrl: s.user?.avatarUrl ?? null,
+      publicSlug: s.user?.publicSlug ?? null,
+      room: s.room,
+      period: s.period,
+      windowStart: s.windowStart,
+      windowEnd: s.windowEnd,
+      stats: {
+        bet: s.gameBet.toString(),
+        payout: s.gamePayout.toString(),
+        bonus: s.bonusIncome.toString(),
+        betsCount: s.betsCount,
+        wins: s.winsCount,
+        losses: s.lossesCount,
+        netProfit: s.netProfit.toString(),
+        netWithBonus: netWithBonus.toString(),
+      }
+    };
+  });
+
+  if (withBonus) {
+    rows.sort((a, b) => {
+      const A = BigInt(a.stats.netWithBonus);
+      const B = BigInt(b.stats.netWithBonus);
+      return (A===B)?0:(A<B?1:-1);
+    });
+    rows = rows.slice(0, limit);
+  }
+
+  return NextResponse.json({
+    period,
+    room: room ?? "ALL",
+    windowStart,
+    windowEnd,
+    withBonus,
+    items: rows
+  });
 }

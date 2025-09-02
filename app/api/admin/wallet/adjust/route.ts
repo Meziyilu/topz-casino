@@ -1,13 +1,14 @@
-export const runtime = "nodejs";
 // app/api/admin/wallet/adjust/route.ts
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
+import type { Prisma } from "@prisma/client";
 
-function noStoreJson(payload: any, status = 200) {
+function noStoreJson<T>(payload: T, status = 200) {
   return NextResponse.json(payload, {
     status,
     headers: {
@@ -18,30 +19,43 @@ function noStoreJson(payload: any, status = 200) {
   });
 }
 
+type Target = "WALLET" | "BANK";
+
 export async function POST(req: Request) {
   try {
-    await requireAdmin(req);
-    const body = await req.json().catch(() => ({}));
-    const { userId, amount, target = "WALLET", memo = "" } = body || {};
+    const gate = await requireAdmin(req);
+    if (!gate.ok) return gate.res;
 
-    if (!userId || !Number.isFinite(Number(amount))) {
-      return noStoreJson({ error: "userId / amount 不正確" }, 400);
-    }
-    if (!["WALLET", "BANK"].includes(String(target))) {
-      return noStoreJson({ error: "target 僅支援 WALLET / BANK" }, 400);
+    const body = (await req.json().catch(() => ({}))) as {
+      userId?: unknown;
+      amount?: unknown;
+      target?: unknown;
+      memo?: unknown;
+    };
+
+    const userId = typeof body.userId === "string" ? body.userId : "";
+    const rawAmount = Number(body.amount);
+    const target: Target =
+      (typeof body.target === "string" && (body.target === "WALLET" || body.target === "BANK")
+        ? body.target
+        : "WALLET");
+    const memo = typeof body.memo === "string" ? body.memo : "";
+
+    if (!userId || !Number.isFinite(rawAmount)) {
+      return noStoreJson({ error: "userId / amount 不正確" } as const, 400);
     }
 
-    const amt = Math.trunc(Number(amount));
+    const amt = Math.trunc(rawAmount);
 
     const result = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.findUnique({ where: { id: String(userId) } });
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        select: { id: true, balance: true, bankBalance: true },
+      });
       if (!user) throw new Error("使用者不存在");
 
-      let balanceAfter = user.balance;
-      let bankAfter = user.bankBalance;
-
-      if (target === "WALLET") balanceAfter = user.balance + amt;
-      else bankAfter = user.bankBalance + amt;
+      const balanceAfter = target === "WALLET" ? user.balance + amt : user.balance;
+      const bankAfter = target === "BANK" ? user.bankBalance + amt : user.bankBalance;
 
       if (balanceAfter < 0 || bankAfter < 0) {
         throw new Error("金額不可為負");
@@ -60,9 +74,9 @@ export async function POST(req: Request) {
         data: {
           userId: user.id,
           type: "ADMIN_ADJUST",
-          target: target as any, // BalanceTarget
+          target: target as Prisma.$Enums.BalanceTarget,
           delta: amt,
-          memo: memo ? String(memo) : null,
+          memo: memo || null,
           balanceAfter: updated.balance,
           bankAfter: updated.bankBalance,
         },
@@ -71,8 +85,9 @@ export async function POST(req: Request) {
       return { updated, ledger };
     });
 
-    return noStoreJson({ ok: true, ...result });
-  } catch (e: any) {
-    return noStoreJson({ error: e?.message || "Server error" }, e?.status || 500);
+    return noStoreJson({ ok: true, ...result } as const);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "Server error";
+    return noStoreJson({ error: msg } as const, 500);
   }
 }
