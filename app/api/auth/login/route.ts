@@ -11,12 +11,11 @@ const LoginSchema = z.object({
   password: z.string().min(6),
 });
 
-// ===== 環境設定（用 || 指定預設值，並以 jwt.Secret 斷言避免 overload 錯誤） =====
-const ACCESS_TTL: jwt.SignOptions['expiresIn'] = process.env.JWT_ACCESS_TTL || '15m';
-const REFRESH_TTL: jwt.SignOptions['expiresIn'] = process.env.JWT_REFRESH_TTL || '7d';
+// ✅ 正確寫法：用 `||` 指定預設值，再斷言成對應型別
+const ACCESS_TTL = (process.env.JWT_ACCESS_TTL || '15m') as jwt.SignOptions['expiresIn'];
+const REFRESH_TTL = (process.env.JWT_REFRESH_TTL || '7d') as jwt.SignOptions['expiresIn'];
 const JWT_SECRET = (process.env.JWT_SECRET || '') as jwt.Secret;
 const REFRESH_SECRET = (process.env.JWT_REFRESH_SECRET || '') as jwt.Secret;
-const VERIF_MODE = (process.env.EMAIL_VERIFICATION_MODE || 'strict') as 'strict' | 'soft';
 
 function assertSecrets() {
   if (!JWT_SECRET || !REFRESH_SECRET) {
