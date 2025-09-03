@@ -1,38 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { parseBody } from '@/lib/http';
+import { z } from 'zod';
 import bcrypt from 'bcryptjs';
-
-const ResetSchema = z.object({
-  token: z.string().min(32),
-  newPassword: z.string().min(6),
-});
 
 export const dynamic = 'force-dynamic';
 
+const ResetSchema = z.object({
+  token: z.string().length(32),
+  newPassword: z.string().min(6),
+});
+
 export async function POST(req: NextRequest) {
-  const ct = req.headers.get('content-type') || '';
-  if (!ct.includes('application/json')) {
-    return NextResponse.json({ message: 'Content-Type 必須為 application/json' }, { status: 415 });
+  try {
+    const raw = await parseBody(req);
+    const parsed = ResetSchema.safeParse(raw);
+    if (!parsed.success) return NextResponse.json({ ok: false, code: 'INVALID_INPUT' }, { status: 400 });
+
+    const { token, newPassword } = parsed.data;
+
+    const rec = await prisma.passwordResetToken.findUnique({
+      where: { token },
+      select: { userId: true, expiredAt: true, usedAt: true },
+    });
+    if (!rec) return NextResponse.json({ ok: false, code: 'TOKEN_INVALID' }, { status: 400 });
+    if (rec.usedAt) return NextResponse.json({ ok: false, code: 'TOKEN_USED' }, { status: 400 });
+    if (rec.expiredAt < new Date()) return NextResponse.json({ ok: false, code: 'TOKEN_EXPIRED' }, { status: 400 });
+
+    const hash = await bcrypt.hash(newPassword, 10);
+
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: rec.userId }, data: { password: hash } }),
+      prisma.passwordResetToken.update({ where: { token }, data: { usedAt: new Date() } }),
+    ]);
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error('[RESET_ERR]', err);
+    return NextResponse.json({ ok: false, code: 'SERVER_ERROR' }, { status: 500 });
   }
-
-  const raw = await req.json();
-  const parsed = ResetSchema.safeParse(raw);
-  if (!parsed.success) {
-    return NextResponse.json({ message: '參數錯誤' }, { status: 400 });
-  }
-
-  const { token, newPassword } = parsed.data;
-  const rec = await prisma.passwordResetToken.findUnique({ where: { token } });
-  if (!rec || (rec.expiredAt && rec.expiredAt < new Date()) || rec.usedAt) {
-    return NextResponse.json({ message: '重設連結無效或已過期' }, { status: 400 });
-  }
-
-  const hash = await bcrypt.hash(newPassword, 10);
-  await prisma.$transaction([
-    prisma.user.update({ where: { id: rec.userId }, data: { password: hash } }),
-    prisma.passwordResetToken.update({ where: { id: rec.id }, data: { usedAt: new Date() } }),
-  ]);
-
-  return NextResponse.json({ ok: true });
 }
