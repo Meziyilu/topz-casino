@@ -1,6 +1,5 @@
 // app/(public)/layout.tsx
 import '@/app/(public)/auth-theme.css';
-import Image from 'next/image';
 import Link from 'next/link';
 
 export default function PublicLayout({ children }: { children: React.ReactNode }) {
@@ -13,11 +12,10 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
       </div>
       <div className="auth-grain" aria-hidden />
 
-      {/* Header（極簡） */}
+      {/* Header（極簡，純文字 LOGO） */}
       <header className="auth-header">
         <Link href="/" className="auth-brand" aria-label="Topzcasino Home">
-          <Image src="/logo.svg" alt="" width={24} height={24} />
-          <span>Topzcasino</span>
+          TOPZCASINO
         </Link>
         <nav>
           <Link href="/login" className="link">登入</Link>

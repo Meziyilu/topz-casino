@@ -17,8 +17,8 @@
   --ring: 0 0 0 3px rgba(110, 168, 255, 0.25);
 }
 
-/* ===== 背景：素面 + 很淡的光暈動畫 ===== */
-.auth-shell {
+/* ===== 背景：素面 + 淡光暈動畫 ===== */
+auth-shell, .auth-shell {
   min-height: 100dvh;
   background:
     radial-gradient(900px 500px at 85% 15%, #111827 0%, transparent 70%),
@@ -57,14 +57,17 @@
   background-size: 3px 3px; opacity: .7;
 }
 
-/* ===== Header（品牌列，保持極簡） ===== */
+/* ===== Header（品牌列，極簡） ===== */
 .auth-header {
   position: relative; z-index: 2;
   display: flex; align-items: center; justify-content: space-between;
   padding: 18px 22px;
 }
-.auth-brand { display: flex; align-items: center; gap: 10px; color: var(--fg); text-decoration: none; font-weight: 700; font-size: 16px; letter-spacing: .2px; opacity: .95; }
-.auth-brand img { width: 24px; height: 24px; border-radius: 6px; }
+.auth-brand {
+  display: flex; align-items: center; gap: 10px;
+  color: var(--fg); text-decoration: none; font-weight: 800;
+  font-size: 16px; letter-spacing: .28em; opacity: .95;
+}
 .auth-header .link { color: var(--fg-dim); text-decoration: none; font-size: 13px; }
 .auth-header .link:hover { color: var(--fg); }
 
@@ -76,7 +79,7 @@
   padding: 32px 16px 48px;
 }
 
-/* ===== 玻璃卡片（更小、更素） ===== */
+/* ===== 玻璃卡片（小尺寸、素） ===== */
 .glass-card {
   width: min(380px, 92vw);
   border-radius: var(--radius);
