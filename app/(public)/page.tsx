@@ -1,34 +1,59 @@
-"use client";
-import { useEffect, useState } from "react";
+'use client';
 
-type Me = { id: string; email: string; displayName: string; isAdmin: boolean; balance: number; bankBalance: number; };
+import { useEffect, useState } from 'react';
 
-export default function Lobby() {
+type Me = {
+  id: string;
+  email: string;
+  displayName: string;
+  avatarUrl: string | null;
+  isAdmin: boolean;
+  vipTier: number;
+  balance: number;
+  bankBalance: number;
+};
+
+export default function LobbyPage() {
   const [me, setMe] = useState<Me | null>(null);
+  const [status, setStatus] = useState<'loading' | 'guest' | 'ok'>('loading');
 
   useEffect(() => {
-    (async () => {
-      const r = await fetch("/api/users/me", { credentials: "include", cache: "no-store" });
-      const j = await r.json();
-      setMe(j.me ?? null);
-    })();
+    fetch('/api/users/me')
+      .then(async (r) => (r.ok ? r.json() : null))
+      .then((u) => {
+        if (u) {
+          setMe(u); setStatus('ok');
+        } else {
+          setStatus('guest');
+        }
+      })
+      .catch(() => setStatus('guest'));
   }, []);
 
-  async function logout() {
-    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
-    location.href = "/login";
+  if (status === 'loading') return <p>載入中…</p>;
+
+  if (status === 'guest') {
+    return (
+      <main>
+        <h2>大廳</h2>
+        <p>你尚未登入。請前往 <a href="/login">登入</a> 或 <a href="/register">註冊</a>。</p>
+      </main>
+    );
   }
 
   return (
-    <main className="max-w-2xl mx-auto p-6">
-      <h1 className="text-2xl mb-2">大廳</h1>
-      {!me ? <div>載入中...</div> : (
-        <div className="space-y-2">
-          <div>Hi，<b>{me.displayName}</b>（{me.email}）{me.isAdmin && <span className="ml-2 text-xs px-2 py-0.5 border rounded">Admin</span>}</div>
-          <div>錢包：{me.balance}　銀行：{me.bankBalance}</div>
-          <button className="border px-3 py-1 rounded" onClick={logout}>登出</button>
-        </div>
-      )}
+    <main>
+      <h2>大廳</h2>
+      <p>歡迎，{me?.displayName}！</p>
+      <ul>
+        <li>Email：{me?.email}</li>
+        <li>VIP：{me?.vipTier}</li>
+        <li>錢包：{me?.balance}</li>
+        <li>銀行：{me?.bankBalance}</li>
+      </ul>
+      <form method="post" action="/api/auth/logout" style={{ marginTop: 16 }}>
+        <button>登出</button>
+      </form>
     </main>
   );
 }

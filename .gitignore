@@ -1,13 +1,1 @@
-/node_modules
-/.next
-/out
-.DS_Store
-*.log
-.env
-.env.*
-.env.local
-*.sqlite
-pnpm-lock.yaml
-yarn.lock
-dist
-coverage
+node_modules

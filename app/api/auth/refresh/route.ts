@@ -1,29 +1,32 @@
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { verifyRefresh, signAccessToken } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
 
-import { NextResponse } from "next/server";
-import { verifyRefreshToken, signAccessToken, cookieOptions } from "@/lib/jwt";
-import prisma from "@/lib/prisma";
-import { cookies } from "next/headers";
-
-function json(payload: any, status = 200) {
-  return NextResponse.json(payload, { status, headers: { "Cache-Control": "no-store" }});
-}
-
-export async function POST() {
-  const token = cookies().get("refresh_token")?.value;
-  if (!token) return json({ error: "NO_REFRESH" }, 401);
-
+export async function POST(_req: NextRequest) {
   try {
-    const p = verifyRefreshToken(token);
-    const user = await prisma.user.findUnique({ where: { id: p.sub }, select: { isBanned: true, isAdmin: true, displayName: true }});
-    if (!user || user.isBanned) return json({ error: "BANNED" }, 403);
+    const jar = cookies();
+    const token = jar.get('refresh_token')?.value;
+    if (!token) return NextResponse.json({ error: 'INVALID_REFRESH' }, { status: 401 });
 
-    const access = signAccessToken({ sub: p.sub, isAdmin: !!user.isAdmin, displayName: user.displayName ?? undefined });
-    const r = json({ ok: true });
-    r.cookies.set("token", access, cookieOptions(15 * 60));
-    return r;
-  } catch {
-    return json({ error: "INVALID_REFRESH" }, 401);
+    const payload = verifyRefresh(token);
+    if (payload.typ !== 'refresh') return NextResponse.json({ error: 'INVALID_REFRESH' }, { status: 401 });
+
+    const user = await prisma.user.findUnique({ where: { id: payload.sub }, select: { isBanned: true } });
+    if (!user || user.isBanned) return NextResponse.json({ error: 'BANNED' }, { status: 403 });
+
+    const access = signAccessToken(payload.sub);
+    // 只更新 access；refresh 保持原到期
+    jar.set('token', access, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: 15 * 60,
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    return NextResponse.json({ error: 'INVALID_REFRESH' }, { status: 401 });
   }
 }

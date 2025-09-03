@@ -1,16 +1,17 @@
-// app/layout.tsx
-import "./style/globals.css";  // ⬅️ 改這裡，指向 app/style/globals.css
-import type { Metadata } from "next";
-
-export const metadata: Metadata = {
-  title: "Topzcasino",
-  description: "Topzcasino v1.1.2",
-};
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="zh-Hant" suppressHydrationWarning>
-      <body>{children}</body>
+    <html lang="zh-Hant">
+      <body style={{ fontFamily: 'ui-sans-serif, system-ui', padding: 24 }}>
+        <header style={{ marginBottom: 16 }}>
+          <h1>Topzcasino</h1>
+          <nav style={{ display: 'flex', gap: 12 }}>
+            <a href="/">大廳</a>
+            <a href="/login">登入</a>
+            <a href="/register">註冊</a>
+          </nav>
+        </header>
+        {children}
+      </body>
     </html>
   );
 }

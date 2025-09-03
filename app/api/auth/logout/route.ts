@@ -1,7 +1,7 @@
-import { NextResponse } from 'next/server';
-import { clearAuthCookie } from '@/lib/auth';
+import { NextRequest, NextResponse } from 'next/server';
+import { clearAuthCookies } from '@/lib/auth';
 
-export async function POST() {
-  clearAuthCookie();
+export async function POST(_req: NextRequest) {
+  clearAuthCookies();
   return NextResponse.json({ ok: true });
 }

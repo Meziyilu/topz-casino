@@ -1,57 +1,70 @@
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { RegisterSchema } from '@/lib/validation';
+import { hashPassword, getClientIp } from '@/lib/auth';
+import crypto from 'crypto';
 
-import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
-import { registerSchema } from "@/lib/validation";
-import { rateLimit } from "@/lib/rate-limit";
-import bcrypt from "bcryptjs";
-import crypto from "crypto";
-
-function json(payload: any, status = 200) {
-  return NextResponse.json(payload, { status, headers: { "Cache-Control": "no-store" }});
+function makeReferralCode(len = 8) {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return Array.from({ length: len }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
+}
+function makeTokenHex32() {
+  return crypto.randomBytes(16).toString('hex'); // 32 hex chars
 }
 
-export async function POST(req: Request) {
-  const ip = req.headers.get("x-forwarded-for") ?? "ip";
-  if (!rateLimit(`reg:${ip}`, 5, 10 * 60 * 1000)) return json({ error: "RATE_LIMITED" }, 429);
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { email, password, displayName, referralCode, isOver18, acceptTOS } = RegisterSchema.parse(body);
 
-  const body = await req.json();
-  const parsed = registerSchema.safeParse(body);
-  if (!parsed.success) return json({ error: "INVALID", details: parsed.error.flatten() }, 400);
-  const { email, password, displayName, referralCode } = parsed.data;
+    // Unique checks
+    const [emailTaken, nameTaken] = await Promise.all([
+      prisma.user.findUnique({ where: { email } }),
+      prisma.user.findUnique({ where: { displayName } }),
+    ]);
+    if (emailTaken) return NextResponse.json({ error: 'EMAIL_TAKEN' }, { status: 409 });
+    if (nameTaken) return NextResponse.json({ error: 'DISPLAY_NAME_TAKEN' }, { status: 409 });
 
-  const exists = await prisma.user.findFirst({ where: { OR: [{ email }, { displayName }] }, select: { id: true }});
-  if (exists) return json({ error: "EMAIL_OR_NAME_TAKEN" }, 409);
+    // inviter（可選）
+    let inviterId: string | undefined;
+    if (referralCode) {
+      const inviter = await prisma.user.findFirst({ where: { referralCode } });
+      if (!inviter) return NextResponse.json({ error: 'INVALID_REFERRAL' }, { status: 400 });
+      inviterId = inviter.id;
+    }
 
-  const inviter = referralCode ? await prisma.user.findFirst({ where: { referralCode } }) : null;
+    const passHash = await hashPassword(password);
+    const myReferral = makeReferralCode(8);
+    const ip = getClientIp(req);
 
-  const hash = await bcrypt.hash(password, 12);
-  const myReferral = crypto.randomBytes(6).toString("base64url").toUpperCase().slice(0, 8);
+    const user = await prisma.$transaction(async (tx) => {
+      const u = await tx.user.create({
+        data: {
+          email,
+          password: passHash,
+          displayName,
+          referralCode: myReferral,
+          inviterId,
+          registeredIp: ip,
+        },
+        select: { id: true },
+      });
 
-  const adminList = (process.env.ADMIN_EMAILS || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
-  const isAdmin = adminList.includes(email);
+      const token = makeTokenHex32();
+      const expiredAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      await tx.emailVerifyToken.create({
+        data: { userId: u.id, token, expiredAt },
+      });
 
-  const ua = req.headers.get("user-agent") || "";
-  const ipNow = ip.split(",")[0].trim();
+      return { id: u.id, token };
+    });
 
-  const user = await prisma.user.create({
-    data: {
-      email, password: hash, displayName,
-      isAdmin,
-      referralCode: myReferral,
-      inviterId: inviter?.id ?? undefined,
-      registeredIp: ipNow,
-    },
-    select: { id: true, email: true }
-  });
-
-  const token = crypto.randomBytes(32).toString("base64url");
-  const expiredAt = new Date(Date.now() + 30 * 60 * 1000);
-  await prisma.emailVerifyToken.create({ data: { userId: user.id, token, expiredAt } });
-
-  const base = process.env.APP_BASE_URL || "http://localhost:3000";
-  const verificationUrl = `${base}/api/auth/verify?token=${token}`;
-
-  return json({ ok: true, verificationUrl });
+    const base = process.env.APP_BASE_URL ?? 'http://localhost:3000';
+    const verifyUrl = `${base}/api/auth/verify?token=${user.token}`;
+    return NextResponse.json({ userId: user.id, verifyUrl });
+  } catch (err: any) {
+    if (err.name === 'ZodError') return NextResponse.json({ error: 'INVALID_INPUT', details: err.issues }, { status: 400 });
+    console.error('register error', err);
+    return NextResponse.json({ error: 'SERVER_ERROR' }, { status: 500 });
+  }
 }
