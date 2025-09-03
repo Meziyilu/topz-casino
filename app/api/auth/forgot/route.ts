@@ -1,33 +1,46 @@
-// app/api/auth/forgot/route.ts
-export const dynamic = 'force-dynamic';
-
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { prisma } from '@/lib/prisma';
+import dayjs from 'dayjs';
 import crypto from 'node:crypto';
 
-const ForgotSchema = z.object({ email: z.string().email() });
+const ForgotSchema = z.object({
+  email: z.string().email(),
+});
 
-function token32() { return crypto.randomBytes(16).toString('hex'); }
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
-  const isJson = req.headers.get('content-type')?.includes('application/json');
-  const raw = isJson ? await req.json() : Object.fromEntries(await req.formData());
-  const parsed = ForgotSchema.safeParse(raw);
-  if (!parsed.success) return NextResponse.json({ ok: false }, { status: 400 });
+  const ct = req.headers.get('content-type') || '';
+  if (!ct.includes('application/json')) {
+    return NextResponse.json({ message: 'Content-Type 必須為 application/json' }, { status: 415 });
+  }
 
-  const user = await prisma.user.findUnique({ where: { email: parsed.data.email }, select: { id: true } });
+  const raw = await req.json();
+  const parsed = ForgotSchema.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json({ message: '參數錯誤' }, { status: 400 });
+  }
+
+  const { email } = parsed.data;
+  const user = await prisma.user.findUnique({ where: { email } });
   if (user) {
-    const token = token32();
-    const expiredAt = new Date(Date.now() + 60 * 60 * 1000); // 1h
+    const token = crypto.randomBytes(16).toString('hex'); // 32字
     await prisma.passwordResetToken.upsert({
       where: { userId: user.id },
-      update: { token, expiredAt, usedAt: null },
-      create: { userId: user.id, token, expiredAt },
+      update: {
+        token,
+        expiredAt: dayjs().add(1, 'hour').toDate(),
+        usedAt: null,
+      },
+      create: {
+        userId: user.id,
+        token,
+        expiredAt: dayjs().add(1, 'hour').toDate(),
+      },
     });
-    const base = process.env.APP_URL ?? req.nextUrl.origin;
-    return NextResponse.json({ ok: true, resetUrl: `${base}/reset?token=${token}` });
+    // 這裡照你的流程：回傳 resetUrl 或寄信
   }
-  // 為避免暴露帳號存在與否，仍回 ok
+
   return NextResponse.json({ ok: true });
 }
