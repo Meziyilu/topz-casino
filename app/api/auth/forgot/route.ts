@@ -1,38 +1,27 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { parseBody } from '@/lib/http';
-import { z } from 'zod';
-import crypto from 'crypto';
-
-export const dynamic = 'force-dynamic';
-
-const ForgotSchema = z.object({ email: z.string().email() });
+import { NextRequest, NextResponse } from "next/server";
+import prisma from "@/lib/prisma";
+import { parseFormData } from "@/lib/form";
+import { randomBytes } from "crypto";
 
 export async function POST(req: NextRequest) {
-  try {
-    const raw = await parseBody(req);
-    const parsed = ForgotSchema.safeParse(raw);
-    if (!parsed.success) return NextResponse.json({ ok: false, code: 'INVALID_INPUT' }, { status: 400 });
+  const body = req.headers.get("content-type")?.includes("application/json")
+    ? await req.json()
+    : await parseFormData(req);
 
-    const { email } = parsed.data;
-    const user = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+  const { email } = body;
+  if (!email) return NextResponse.json({ ok: false, error: "MISSING_EMAIL" }, { status: 400 });
 
-    // 不暴露帳號存在與否
-    if (!user) return NextResponse.json({ ok: true });
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) return NextResponse.json({ ok: true }); // 不洩漏帳號是否存在
 
-    const token = crypto.randomBytes(16).toString('hex'); // 32字
-    const expiredAt = new Date(Date.now() + 1000 * 60 * 30); // 30 分鐘
+  const token = randomBytes(32).toString("hex");
+  const expiredAt = new Date(Date.now() + 1000 * 60 * 30); // 30分鐘有效
 
-    await prisma.passwordResetToken.upsert({
-      where: { userId: user.id },
-      update: { token, expiredAt, usedAt: null },
-      create: { userId: user.id, token, expiredAt },
-    });
+  await prisma.passwordResetToken.upsert({
+    where: { userId: user.id },
+    update: { token, expiredAt, usedAt: null },
+    create: { userId: user.id, token, expiredAt },
+  });
 
-    const resetUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/reset?token=${token}`;
-    return NextResponse.json({ ok: true, resetUrl });
-  } catch (err) {
-    console.error('[FORGOT_ERR]', err);
-    return NextResponse.json({ ok: false, code: 'SERVER_ERROR' }, { status: 500 });
-  }
+  return NextResponse.json({ ok: true, resetUrl: `/reset?token=${token}` });
 }
