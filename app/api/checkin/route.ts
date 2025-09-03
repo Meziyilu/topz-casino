@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
 import { verifyRequest } from '@/lib/auth';
-import { claimReward } from '@/services/reward.service';
+import { claimCheckin } from '@/services/checkin.service';
 
-export async function POST(req: Request) {
+export async function POST() {
   const p = await verifyRequest();
   if (!p) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
-  const { code } = await req.json();
-  const res = await claimReward(p.sub, code);
+  const res = await claimCheckin(p.sub);
   return NextResponse.json(res);
 }

@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { verifyRequest } from '@/lib/auth';
-import { postMessage } from '@/services/chat.service';
+import { withdrawWallet } from '@/services/ledger.service';
 
 export async function POST(req: Request) {
   const p = await verifyRequest();
   if (!p) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
-  const { room, body } = await req.json();
-  const msg = await postMessage(room, p.sub, body);
-  return NextResponse.json({ msg });
+  const { amount } = await req.json();
+  const res = await withdrawWallet(p.sub, amount);
+  return NextResponse.json({ ok: true, balance: res.next });
 }

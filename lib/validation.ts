@@ -1,22 +1,12 @@
-// ==============================
-// file: lib/validation.ts
-// ==============================
-import { z } from "zod";
+import { z } from 'zod';
 
+export const zInt = z.number().int().nonnegative();
+export const zCuid = z.string().regex(/^c[\w-]{24,}$/);
 
-export const idCuid = z.string().min(10);
-export const positiveInt = z.number().int().nonnegative();
-export const moneyInt = z.number().int(); // 可為正負，單位以元
-
-
-export function safeParse<T extends z.ZodTypeAny>(schema: T, data: unknown): z.infer<T> | null {
-const r = schema.safeParse(data);
-return r.success ? (r.data as z.infer<T>) : null;
-}
-
-
-export function parseOrThrow<T extends z.ZodTypeAny>(schema: T, data: unknown, msg = "Invalid payload"): z.infer<T> {
-const r = schema.safeParse(data);
-if (!r.success) throw new Error(`${msg}: ${r.error.message}`);
-return r.data as z.infer<T>;
+export function parseJson<T>(schema: z.ZodSchema<T>, body: unknown) {
+  const res = schema.safeParse(body);
+  if (!res.success) {
+    throw new Error(res.error.issues.map(i => i.message).join(', '));
+  }
+  return res.data;
 }

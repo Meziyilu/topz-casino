@@ -1,5 +1,12 @@
-// tailwind.config.ts
-import type { Config } from "tailwindcss";
+/**** minimal, 可自行擴充 ****/
+module.exports = {
+  content: [
+    "./app/**/*.{ts,tsx}",
+    "./components/**/*.{ts,tsx}"
+  ],
+  theme: { extend: {} },
+  plugins: []
+};
 
 const config: Config = {
   content: [

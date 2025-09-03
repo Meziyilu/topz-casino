@@ -1,16 +1,11 @@
-// services/leaderboard.service.ts
-// 用途：提供讀榜查詢，封裝排序與資料整形
-import { getLeaderboard, LeaderboardQuery } from "@/lib/snapshot";
+import prisma from '@/lib/prisma';
+import { StatPeriod } from '@prisma/client';
 
-export class LeaderboardService {
-  async list(input: LeaderboardQuery) {
-    return getLeaderboard({
-      period: input.period,
-      room: input.room,
-      withBonus: input.withBonus,
-      limit: input.limit,
-    });
-  }
+export async function getTopNetProfit(period: StatPeriod, limit = 20) {
+  return prisma.userStatSnapshot.findMany({
+    where: { period },
+    orderBy: [{ netProfit: 'desc' }],
+    take: limit,
+    include: { user: { select: { id: true, displayName: true, avatarUrl: true } } }
+  });
 }
-
-export const leaderboardService = new LeaderboardService();

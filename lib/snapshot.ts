@@ -1,52 +1,41 @@
-// ==============================
-// file: lib/snapshot.ts
-// ==============================
-import prisma from "./prisma";
-import { StatPeriod } from "@prisma/client";
+import prisma from './prisma';
+import { StatPeriod, RoomCode } from '@prisma/client';
 
-
-export type SnapshotIncrement = {
-userId: string;
-room?: string | null; // e.g., "R30" | "R60" | null for lobby/global
-betsCount?: number; // 次數
-wagered?: number; // 下注總額
-payout?: number; // 派彩總額
-profit?: number; // 淨利(可為負)
-};
-
-
-function periodKey(p: StatPeriod): StatPeriod { return p; }
-
-
-async function upsertOne(p: StatPeriod, inc: SnapshotIncrement) {
-const { userId, room = null, betsCount = 0, wagered = 0, payout = 0, profit = 0 } = inc;
-return prisma.userStatSnapshot.upsert({
-where: { userId_period_room: { userId, period: periodKey(p), room } },
-create: {
-userId,
-period: periodKey(p),
-room,
-betsCount,
-wagered,
-payout,
-profit,
-},
-update: {
-betsCount: { increment: betsCount },
-wagered: { increment: wagered },
-payout: { increment: payout },
-profit: { increment: profit },
-},
-});
+export async function addUserSnapshotDelta(opts: {
+  userId: string;
+  period: StatPeriod;
+  room?: RoomCode | null;
+  gameBet?: bigint;
+  gamePayout?: bigint;
+  bonusIncome?: bigint;
+  betsCount?: number;
+  winsCount?: number;
+  lossesCount?: number;
+  netProfit?: bigint;
+  windowStart: Date; // 外部計算好視窗
+  windowEnd: Date;
+}) {
+  const { userId, period, room, windowStart, windowEnd, ...delta } = opts;
+  return prisma.userStatSnapshot.upsert({
+    where: { userId_period_windowStart_windowEnd_room: { userId, period, windowStart, windowEnd, room: room ?? null } },
+    update: {
+      gameBet: { increment: delta.gameBet ?? 0n },
+      gamePayout: { increment: delta.gamePayout ?? 0n },
+      bonusIncome: { increment: delta.bonusIncome ?? 0n },
+      betsCount: { increment: delta.betsCount ?? 0 },
+      winsCount: { increment: delta.winsCount ?? 0 },
+      lossesCount: { increment: delta.lossesCount ?? 0 },
+      netProfit: { increment: delta.netProfit ?? 0n }
+    },
+    create: {
+      userId, period, room: room ?? null, windowStart, windowEnd,
+      gameBet: delta.gameBet ?? 0n,
+      gamePayout: delta.gamePayout ?? 0n,
+      bonusIncome: delta.bonusIncome ?? 0n,
+      betsCount: delta.betsCount ?? 0,
+      winsCount: delta.winsCount ?? 0,
+      lossesCount: delta.lossesCount ?? 0,
+      netProfit: delta.netProfit ?? 0n
+    }
+  });
 }
-
-
-export async function bumpSnapshots(inc: SnapshotIncrement) {
-// Update ALL_TIME + rolling periods you track (DAILY/WEEKLY/MONTHLY)
-await Promise.all([
-upsertOne("ALL_TIME", inc),
-upsertOne("DAILY", inc),
-upsertOne("WEEKLY", inc),
-]);
-}
-

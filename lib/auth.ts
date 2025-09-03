@@ -1,21 +1,29 @@
-import { cookies } from "next/headers";
-import { verifyAccessToken } from "./jwt";
-import prisma from "./prisma";
+import jwt from 'jsonwebtoken';
+import { cookies } from 'next/headers';
 
-export type AuthPayload = { userId: string; isAdmin: boolean; displayName?: string } | null;
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
+export type AuthPayload = { sub: string; isAdmin?: boolean };
 
-export async function verifyRequest(): Promise<AuthPayload> {
-  const token = cookies().get("token")?.value;
+export function signJWT(payload: AuthPayload, opts?: jwt.SignOptions) {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d', ...opts });
+}
+
+export function setAuthCookie(token: string) {
+  cookies().set('token', token, { httpOnly: true, sameSite: 'lax', path: '/' });
+}
+
+export function clearAuthCookie() {
+  cookies().delete('token');
+}
+
+export async function verifyRequest(req?: Request) {
+  const c = cookies();
+  const token = c.get('token')?.value;
   if (!token) return null;
   try {
-    const payload = verifyAccessToken(token);
-    const user = await prisma.user.findUnique({
-      where: { id: payload.sub },
-      select: { isBanned: true, isAdmin: true, displayName: true },
-    });
-    if (!user || user.isBanned) return null;
-    return { userId: payload.sub, isAdmin: !!user.isAdmin, displayName: user.displayName ?? undefined };
-  } catch {
+    const payload = jwt.verify(token, JWT_SECRET) as AuthPayload;
+    return payload; // { sub, isAdmin }
+  } catch (e) {
     return null;
   }
 }
