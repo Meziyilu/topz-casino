@@ -1,69 +1,67 @@
 // lib/auth.ts
-import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
+import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
 
-const ACCESS_TTL_SEC = 15 * 60; // 15m
-const REFRESH_TTL_SEC = 7 * 24 * 60 * 60; // 7d
+const ACCESS_TTL_SEC = 60 * 15;      // 15m
+const REFRESH_TTL_SEC = 60 * 60 * 24 * 7; // 7d
 
-const cookieBase = {
-  httpOnly: true,
-  sameSite: 'lax' as const,
-  secure: process.env.NODE_ENV === 'production',
-  path: '/',
-};
-
-export type JwtPayload = {
-  sub: string; // userId
-  typ: 'access' | 'refresh';
-  iat: number;
-  exp: number;
-};
-
-export function signAccessToken(userId: string) {
-  const secret = process.env.JWT_SECRET!;
-  return jwt.sign({ sub: userId, typ: 'access' }, secret, { expiresIn: ACCESS_TTL_SEC });
+function getSecret() {
+  const s = process.env.JWT_SECRET;
+  if (!s) throw new Error('Missing JWT_SECRET');
+  return s;
 }
 
-export function signRefreshToken(userId: string) {
-  const secret = process.env.JWT_REFRESH_SECRET ?? process.env.JWT_SECRET!;
-  return jwt.sign({ sub: userId, typ: 'refresh' }, secret, { expiresIn: REFRESH_TTL_SEC });
+export function signAccessToken(payload: object) {
+  return jwt.sign(payload, getSecret(), { algorithm: 'HS256', expiresIn: ACCESS_TTL_SEC });
 }
 
-export function verifyAccess(token: string): JwtPayload {
-  const secret = process.env.JWT_SECRET!;
-  return jwt.verify(token, secret) as JwtPayload;
+export function signRefreshToken(payload: object) {
+  return jwt.sign(payload, getSecret(), { algorithm: 'HS256', expiresIn: REFRESH_TTL_SEC });
 }
 
-export function verifyRefresh(token: string): JwtPayload {
-  const secret = process.env.JWT_REFRESH_SECRET ?? process.env.JWT_SECRET!;
-  return jwt.verify(token, secret) as JwtPayload;
+export function verifyToken<T = any>(token: string): T | null {
+  try {
+    return jwt.verify(token, getSecret()) as T;
+  } catch {
+    return null;
+  }
 }
 
-export function setAuthCookies(access: string, refresh: string) {
-  const jar = cookies();
-  jar.set('token', access, { ...cookieBase, maxAge: ACCESS_TTL_SEC });
-  jar.set('refresh_token', refresh, { ...cookieBase, maxAge: REFRESH_TTL_SEC });
+export function setAuthCookies(userId: string) {
+  const c = cookies();
+  const access = signAccessToken({ sub: userId, typ: 'access' });
+  const refresh = signRefreshToken({ sub: userId, typ: 'refresh' });
+
+  const secure = process.env.NODE_ENV === 'production';
+
+  c.set('token', access, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure,
+    path: '/',
+    maxAge: ACCESS_TTL_SEC,
+  });
+
+  c.set('refresh_token', refresh, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure,
+    path: '/',
+    maxAge: REFRESH_TTL_SEC,
+  });
 }
 
 export function clearAuthCookies() {
-  const jar = cookies();
-  jar.set('token', '', { ...cookieBase, maxAge: 0 });
-  jar.set('refresh_token', '', { ...cookieBase, maxAge: 0 });
+  const c = cookies();
+  const secure = process.env.NODE_ENV === 'production';
+  c.set('token', '', { httpOnly: true, sameSite: 'lax', secure, path: '/', maxAge: 0 });
+  c.set('refresh_token', '', { httpOnly: true, sameSite: 'lax', secure, path: '/', maxAge: 0 });
 }
 
-export async function hashPassword(plain: string) {
-  const salt = await bcrypt.genSalt(10);
-  return bcrypt.hash(plain, salt);
-}
-
-export async function comparePassword(plain: string, hash: string) {
-  return bcrypt.compare(plain, hash);
-}
-
-export function getClientIp(req: NextRequest): string | undefined {
-  const xf = req.headers.get('x-forwarded-for');
-  if (xf) return xf.split(',')[0].trim();
-  return req.headers.get('x-real-ip') ?? undefined;
+export function getClientIp(req: NextRequest) {
+  // Render/Proxy 會帶 X-Forwarded-For
+  const xff = req.headers.get('x-forwarded-for');
+  if (xff) return xff.split(',')[0].trim();
+  return req.ip ?? '0.0.0.0';
 }

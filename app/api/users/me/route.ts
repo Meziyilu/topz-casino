@@ -1,32 +1,26 @@
-// 強制動態，不參與靜態預算
+// app/api/users/me/route.ts
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
-
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
-import { verifyAccess } from '@/lib/auth';
+import { verifyToken } from '@/lib/auth';
 
-export async function GET(_req: NextRequest) {
-  try {
-    const token = cookies().get('token')?.value;
-    if (!token) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
-
-    const payload = verifyAccess(token);
-    if (payload.typ !== 'access') return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
-
-    const u = await prisma.user.findUnique({
-      where: { id: payload.sub },
-      select: {
-        id: true, email: true, displayName: true, avatarUrl: true, isAdmin: true,
-        vipTier: true, balance: true, bankBalance: true,
-      },
-    });
-    if (!u) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
-
-    return NextResponse.json(u);
-  } catch {
-    return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+export async function GET() {
+  const tk = cookies().get('token')?.value;
+  const payload = tk ? verifyToken<{ sub: string; typ: string }>(tk) : null;
+  if (!payload || payload.typ !== 'access') {
+    return NextResponse.json({ ok: false }, { status: 401 });
   }
+
+  const user = await prisma.user.findUnique({
+    where: { id: payload.sub },
+    select: {
+      id: true, email: true, displayName: true, avatarUrl: true,
+      isAdmin: true, headframe: true, panelStyle: true, vipTier: true,
+    },
+  });
+  if (!user) return NextResponse.json({ ok: false }, { status: 401 });
+
+  return NextResponse.json({ ok: true, user });
 }

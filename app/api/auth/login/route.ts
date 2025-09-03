@@ -1,41 +1,46 @@
-// 強制動態，不參與靜態預算
+// app/api/auth/login/route.ts
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { LoginSchema } from '@/lib/validation';
-import { comparePassword, signAccessToken, signRefreshToken, setAuthCookies, getClientIp } from '@/lib/auth';
+import { z } from 'zod';
+import argon2 from 'argon2';
+import { setAuthCookies, getClientIp } from '@/lib/auth';
+
+const LoginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+});
 
 export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const { email, password } = LoginSchema.parse(body);
-
-    const user = await prisma.user.findUnique({
-      where: { email },
-      select: {
-        id: true, password: true, isBanned: true, emailVerifiedAt: true,
-      },
-    });
-    if (!user) return NextResponse.json({ error: 'INVALID_CREDENTIALS' }, { status: 401 });
-    if (user.isBanned) return NextResponse.json({ error: 'BANNED' }, { status: 403 });
-    if (!user.emailVerifiedAt) return NextResponse.json({ error: 'EMAIL_NOT_VERIFIED' }, { status: 403 });
-
-    const ok = await comparePassword(password, user.password);
-    if (!ok) return NextResponse.json({ error: 'INVALID_CREDENTIALS' }, { status: 401 });
-
-    const access = signAccessToken(user.id);
-    const refresh = signRefreshToken(user.id);
-    setAuthCookies(access, refresh);
-
-    const ip = getClientIp(req);
-    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date(), lastLoginIp: ip } });
-
-    return NextResponse.json({ ok: true });
-  } catch (err: any) {
-    if (err.name === 'ZodError') return NextResponse.json({ error: 'INVALID_INPUT' }, { status: 400 });
-    console.error('login error', err);
-    return NextResponse.json({ error: 'SERVER_ERROR' }, { status: 500 });
+  const isJson = req.headers.get('content-type')?.includes('application/json');
+  const raw = isJson ? await req.json() : Object.fromEntries(await req.formData());
+  const parsed = LoginSchema.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json({ ok: false, errors: parsed.error.flatten() }, { status: 400 });
   }
+
+  const { email, password } = parsed.data;
+
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) return NextResponse.json({ ok: false, message: '帳號或密碼錯誤' }, { status: 401 });
+
+  if (!user.emailVerifiedAt) {
+    return NextResponse.json({ ok: false, message: 'Email 尚未驗證' }, { status: 403 });
+  }
+  if (user.isBanned) {
+    return NextResponse.json({ ok: false, message: '帳號已封禁' }, { status: 403 });
+  }
+
+  const ok = await argon2.verify(user.password, password);
+  if (!ok) return NextResponse.json({ ok: false, message: '帳號或密碼錯誤' }, { status: 401 });
+
+  setAuthCookies(user.id);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { lastLoginAt: new Date(), lastLoginIp: getClientIp(req) },
+  });
+
+  return NextResponse.json({ ok: true });
 }

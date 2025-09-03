@@ -1,77 +1,63 @@
 'use client';
-
-import Link from 'next/link';
+import '../auth-theme.css';
 import { useState } from 'react';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [pwd, setPwd] = useState('');
+  const [msg, setMsg] = useState<{ t: 'e' | 's'; m: string } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
 
-  const onSubmit = async (e: React.FormEvent) => {
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setErr(null);
+    setMsg(null);
     setLoading(true);
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email, password: pwd }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      // 登入成功 → 導回大廳
-      window.location.href = '/';
-    } catch (e: any) {
-      setErr(e?.message || 'Login failed');
-    } finally {
-      setLoading(false);
+    const fd = new FormData(e.currentTarget);
+    const body = Object.fromEntries(fd.entries());
+
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      body: new URLSearchParams(body as Record<string, string>),
+    });
+    const data = await res.json();
+    setLoading(false);
+    if (!res.ok) {
+      setMsg({ t: 'e', m: data?.message ?? '登入失敗' });
+      return;
     }
-  };
+    setMsg({ t: 's', m: '登入成功，前往大廳…' });
+    const next = new URLSearchParams(window.location.search).get('next') ?? '/';
+    window.location.href = next;
+  }
 
   return (
-    <section className="auth-center">
-      <div className="auth-card">
+    <div className="auth-bg" style={{ display: 'grid', placeItems: 'center' }}>
+      <form onSubmit={onSubmit} className="auth-card">
+        <div className="brand">TOPZCASINO</div>
         <h1 className="auth-title">登入</h1>
-        <p className="auth-sub">歡迎回來</p>
 
-        <form onSubmit={onSubmit} className="auth-form">
-          <label className="auth-label">
-            <span>電子郵件</span>
-            <input
-              className="auth-input"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              required
-            />
-          </label>
+        {msg && <div className={msg.t === 'e' ? 'auth-error' : 'auth-success'}>{msg.m}</div>}
 
-          <label className="auth-label">
-            <span>密碼</span>
-            <input
-              className="auth-input"
-              type="password"
-              value={pwd}
-              onChange={(e) => setPwd(e.target.value)}
-              autoComplete="current-password"
-              required
-            />
-          </label>
+        <input name="email" type="email" placeholder="Email" className="auth-input" required />
+        <input name="password" type="password" placeholder="密碼" className="auth-input" required />
 
-          {err && <div className="auth-error">{err}</div>}
+        <button className="auth-button" disabled={loading}>{loading ? '登入中…' : '登入'}</button>
 
-          <button className="auth-btn" disabled={loading}>
-            {loading ? '登入中…' : '登入'}
-          </button>
-        </form>
-
-        <div className="auth-footer">
-          <Link href="/register" className="auth-link">沒有帳號？前往註冊</Link>
-          <Link href="/forgot" className="auth-link">忘記密碼</Link>
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <a className="auth-link" href="/register">沒有帳號？註冊</a>
+          <a className="auth-link" href="#" onClick={(e) => {
+            e.preventDefault();
+            const email = prompt('請輸入註冊 Email：');
+            if (!email) return;
+            fetch('/api/auth/forgot', {
+              method: 'POST',
+              headers: { 'content-type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({ email }),
+            }).then(async r => {
+              const d = await r.json();
+              alert(d?.resetUrl ? `重設連結：${d.resetUrl}` : '若帳號存在，已寄送重設連結');
+            });
+          }}>忘記密碼</a>
         </div>
-      </div>
-    </section>
+      </form>
+    </div>
   );
 }

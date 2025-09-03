@@ -1,24 +1,23 @@
-// 強制動態，不參與靜態預算
+// app/api/auth/forgot/route.ts
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { ForgotSchema } from '@/lib/validation';
-import crypto from 'crypto';
+import { z } from 'zod';
+import crypto from 'node:crypto';
 
-function token32() {
-  return crypto.randomBytes(16).toString('hex');
-}
+const ForgotSchema = z.object({ email: z.string().email() });
+
+function token32() { return crypto.randomBytes(16).toString('hex'); }
 
 export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const { email } = ForgotSchema.parse(body);
+  const isJson = req.headers.get('content-type')?.includes('application/json');
+  const raw = isJson ? await req.json() : Object.fromEntries(await req.formData());
+  const parsed = ForgotSchema.safeParse(raw);
+  if (!parsed.success) return NextResponse.json({ ok: false }, { status: 400 });
 
-    const user = await prisma.user.findUnique({ where: { email }, select: { id: true } });
-    // 不洩露帳號存在與否，統一回成功
-    if (!user) return NextResponse.json({ ok: true });
-
+  const user = await prisma.user.findUnique({ where: { email: parsed.data.email }, select: { id: true } });
+  if (user) {
     const token = token32();
     const expiredAt = new Date(Date.now() + 60 * 60 * 1000); // 1h
     await prisma.passwordResetToken.upsert({
@@ -26,14 +25,9 @@ export async function POST(req: NextRequest) {
       update: { token, expiredAt, usedAt: null },
       create: { userId: user.id, token, expiredAt },
     });
-
-    const base = process.env.APP_BASE_URL ?? 'http://localhost:3000';
-    const resetUrl = `${base}/api/auth/reset?token=${token}`;
-    // 實務上寄信；先回 resetUrl 方便你測
-    return NextResponse.json({ resetUrl });
-  } catch (err: any) {
-    if (err.name === 'ZodError') return NextResponse.json({ error: 'INVALID_INPUT' }, { status: 400 });
-    console.error('forgot error', err);
-    return NextResponse.json({ error: 'SERVER_ERROR' }, { status: 500 });
+    const base = process.env.APP_URL ?? req.nextUrl.origin;
+    return NextResponse.json({ ok: true, resetUrl: `${base}/reset?token=${token}` });
   }
+  // 為避免暴露帳號存在與否，仍回 ok
+  return NextResponse.json({ ok: true });
 }

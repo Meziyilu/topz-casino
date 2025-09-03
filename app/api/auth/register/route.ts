@@ -1,75 +1,78 @@
-// 強制動態，不參與靜態預算
+// app/api/auth/register/route.ts
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { RegisterSchema } from '@/lib/validation';
-import { hashPassword, getClientIp } from '@/lib/auth';
-import crypto from 'crypto';
+import { z } from 'zod';
+import argon2 from 'argon2';
+import crypto from 'node:crypto';
 
-function makeReferralCode(len = 8) {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  return Array.from({ length: len }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
+const RegisterSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+  displayName: z.string().min(2).max(20).regex(/^[\u4e00-\u9fa5\w_]+$/),
+  referralCode: z.string().optional(),
+  isOver18: z.coerce.boolean(),
+  acceptTOS: z.coerce.boolean(),
+});
+
+function makeReferralCode() {
+  return crypto.randomBytes(4).toString('hex'); // 8字元
 }
-function makeTokenHex32() {
-  return crypto.randomBytes(16).toString('hex'); // 32 hex chars
+function makeToken32() {
+  return crypto.randomBytes(16).toString('hex'); // 32字
+}
+function getBaseUrl(req: NextRequest) {
+  return process.env.APP_URL ?? `${req.nextUrl.protocol}//${req.headers.get('host')}`;
 }
 
 export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const { email, password, displayName, referralCode, isOver18, acceptTOS } = RegisterSchema.parse(body);
-
-    // Unique checks
-    const [emailTaken, nameTaken] = await Promise.all([
-      prisma.user.findUnique({ where: { email } }),
-      prisma.user.findUnique({ where: { displayName } }),
-    ]);
-    if (emailTaken) return NextResponse.json({ error: 'EMAIL_TAKEN' }, { status: 409 });
-    if (nameTaken) return NextResponse.json({ error: 'DISPLAY_NAME_TAKEN' }, { status: 409 });
-
-    // inviter（可選）
-    let inviterId: string | undefined;
-    if (referralCode) {
-      const inviter = await prisma.user.findFirst({ where: { referralCode } });
-      if (!inviter) return NextResponse.json({ error: 'INVALID_REFERRAL' }, { status: 400 });
-      inviterId = inviter.id;
-    }
-
-    const passHash = await hashPassword(password);
-    const myReferral = makeReferralCode(8);
-    const ip = getClientIp(req);
-
-    const user = await prisma.$transaction(async (tx) => {
-      const u = await tx.user.create({
-        data: {
-          email,
-          password: passHash,
-          displayName,
-          referralCode: myReferral,
-          inviterId,
-          registeredIp: ip,
-        },
-        select: { id: true },
-      });
-
-      const token = makeTokenHex32();
-      const expiredAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-      await tx.emailVerifyToken.create({
-        data: { userId: u.id, token, expiredAt },
-      });
-
-      return { id: u.id, token };
-    });
-
-    const base = process.env.APP_BASE_URL ?? 'http://localhost:3000';
-    const verifyUrl = `${base}/api/auth/verify?token=${user.token}`;
-    return NextResponse.json({ userId: user.id, verifyUrl });
-  } catch (err: any) {
-    if (err.name === 'ZodError') return NextResponse.json({ error: 'INVALID_INPUT', details: err.issues }, { status: 400 });
-    console.error('register error', err);
-    return NextResponse.json({ error: 'SERVER_ERROR' }, { status: 500 });
+  const isJson = req.headers.get('content-type')?.includes('application/json');
+  const raw = isJson ? await req.json() : Object.fromEntries(await req.formData());
+  const parsed = RegisterSchema.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json({ ok: false, errors: parsed.error.flatten() }, { status: 400 });
   }
+  const { email, password, displayName, referralCode, isOver18, acceptTOS } = parsed.data;
+  if (!isOver18 || !acceptTOS) {
+    return NextResponse.json({ ok: false, message: '請勾選已滿18歲並同意服務條款' }, { status: 400 });
+  }
+
+  // 唯一性檢查
+  const existing = await prisma.user.findFirst({
+    where: { OR: [{ email }, { displayName }] },
+    select: { id: true, email: true, displayName: true },
+  });
+  if (existing) {
+    return NextResponse.json({ ok: false, message: 'Email 或暱稱已被使用' }, { status: 409 });
+  }
+
+  const hashed = await argon2.hash(password, { type: argon2.argon2id });
+  const inviter = referralCode
+    ? await prisma.user.findFirst({ where: { referralCode }, select: { id: true } })
+    : null;
+
+  const user = await prisma.user.create({
+    data: {
+      email,
+      password: hashed,
+      displayName,
+      balance: 0,
+      bankBalance: 0,
+      referralCode: makeReferralCode(),
+      inviterId: inviter?.id ?? null,
+      registeredIp: req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? req.ip ?? undefined,
+    },
+    select: { id: true },
+  });
+
+  // 建立驗證 token（24h）
+  const token = makeToken32();
+  const expiredAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  await prisma.emailVerifyToken.create({
+    data: { userId: user.id, token, expiredAt },
+  });
+
+  const verifyUrl = `${getBaseUrl(req)}/api/auth/verify?token=${token}`;
+  return NextResponse.json({ ok: true, verifyUrl }, { status: 201 });
 }

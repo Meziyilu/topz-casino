@@ -1,11 +1,10 @@
-// 強制動態，不參與靜態預算
+// app/api/auth/logout/route.ts
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { clearAuthCookies } from '@/lib/auth';
 
-export async function POST(_req: NextRequest) {
+export async function POST() {
   clearAuthCookies();
   return NextResponse.json({ ok: true });
 }

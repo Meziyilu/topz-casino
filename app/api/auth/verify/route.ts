@@ -1,32 +1,23 @@
-// 強制動態，不參與靜態預算
+// app/api/auth/verify/route.ts
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { VerifySchema } from '@/lib/validation';
 
 export async function GET(req: NextRequest) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const token = searchParams.get('token');
-    const { token: t } = VerifySchema.parse({ token });
+  const token = req.nextUrl.searchParams.get('token') ?? '';
+  if (!token) return NextResponse.json({ ok: false, message: '缺少 token' }, { status: 400 });
 
-    const row = await prisma.emailVerifyToken.findUnique({ where: { token: t } });
-    if (!row) return NextResponse.json({ error: 'TOKEN_INVALID' }, { status: 400 });
-    if (row.usedAt) return NextResponse.json({ error: 'TOKEN_USED' }, { status: 400 });
-    if (row.expiredAt < new Date()) return NextResponse.json({ error: 'TOKEN_EXPIRED' }, { status: 400 });
+  const rec = await prisma.emailVerifyToken.findUnique({ where: { token } });
+  if (!rec) return NextResponse.json({ ok: false, message: '無效 token' }, { status: 400 });
+  if (rec.usedAt) return NextResponse.json({ ok: false, message: '已使用' }, { status: 410 });
+  if (rec.expiredAt < new Date()) return NextResponse.json({ ok: false, message: '已過期' }, { status: 410 });
 
-    await prisma.$transaction([
-      prisma.user.update({ where: { id: row.userId }, data: { emailVerifiedAt: new Date() } }),
-      prisma.emailVerifyToken.update({ where: { token: t }, data: { usedAt: new Date() } }),
-    ]);
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: rec.userId }, data: { emailVerifiedAt: new Date() } }),
+    prisma.emailVerifyToken.update({ where: { id: rec.id }, data: { usedAt: new Date() } }),
+  ]);
 
-    return NextResponse.json({ ok: true });
-  } catch (err: any) {
-    if (err.name === 'ZodError') return NextResponse.json({ error: 'INVALID_INPUT' }, { status: 400 });
-    console.error('verify error', err);
-    return NextResponse.json({ error: 'SERVER_ERROR' }, { status: 500 });
-  }
+  const url = new URL('/login?verified=1', process.env.APP_URL ?? `${req.nextUrl.protocol}//${req.headers.get('host')}`);
+  return NextResponse.redirect(url);
 }
