@@ -1,86 +1,65 @@
+// app/api/auth/register/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { z } from 'zod';
 import bcrypt from 'bcryptjs';
-import crypto from 'node:crypto';
-import dayjs from 'dayjs';
+import { sendEmail } from '@/lib/mailer';
+
+export const dynamic = 'force-dynamic'; // ← 避免 build 時靜態分析錯誤
 
 const RegisterSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
-  displayName: z.string().min(2).max(20).regex(/^[\u4e00-\u9fa5\w_]+$/),
+  displayName: z.string().min(2).max(20),
   referralCode: z.string().optional(),
-  isOver18: z.boolean(),
-  acceptTOS: z.boolean(),
+  isOver18: z.coerce.boolean(),
+  acceptTOS: z.coerce.boolean(),
 });
 
-export const dynamic = 'force-dynamic';
-
 export async function POST(req: NextRequest) {
-  const ct = req.headers.get('content-type') || '';
-  if (!ct.includes('application/json')) {
-    return NextResponse.json({ message: 'Content-Type 必須為 application/json' }, { status: 415 });
-  }
-
   const raw = await req.json();
   const parsed = RegisterSchema.safeParse(raw);
-  if (!parsed.success) {
-    return NextResponse.json({ message: '參數錯誤' }, { status: 400 });
-  }
+  if (!parsed.success) return NextResponse.json({ ok: false }, { status: 400 });
+  const { email, password, displayName, referralCode } = parsed.data;
 
-  const { email, password, displayName, referralCode, isOver18, acceptTOS } = parsed.data;
-  if (!isOver18 || !acceptTOS) {
-    return NextResponse.json({ message: '需年滿18且同意條款' }, { status: 400 });
-  }
-
-  const exists = await prisma.user.findFirst({
-    where: { OR: [{ email }, { displayName }] },
-    select: { id: true, email: true, displayName: true },
-  });
-  if (exists) {
-    return NextResponse.json({ message: 'Email 或 暱稱 已被使用' }, { status: 409 });
-  }
-
-  const refCodeSelf = crypto.randomBytes(4).toString('hex');
-  const inviter = referralCode
-    ? await prisma.user.findFirst({ where: { referralCode }, select: { id: true } })
-    : null;
+  // 檢查唯一性
+  const exists = await prisma.user.findFirst({ where: { OR: [{ email }, { displayName }] } });
+  if (exists) return NextResponse.json({ ok: false, code: 'DUPLICATE' }, { status: 409 });
 
   const hash = await bcrypt.hash(password, 10);
+  const inviter = referralCode
+    ? await prisma.user.findFirst({ where: { referralCode } })
+    : null;
 
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || '0.0.0.0';
-
-  const user = await prisma.user.create({
+  const newUser = await prisma.user.create({
     data: {
       email,
       password: hash,
       displayName,
-      referralCode: refCodeSelf,
       inviterId: inviter?.id ?? null,
-      registeredIp: ip,
+      referralCode: crypto.randomUUID().replace(/-/g, '').slice(0, 10),
+      registeredIp: req.headers.get('x-forwarded-for') ?? req.ip ?? null,
     },
-    select: { id: true, email: true },
   });
 
-  // 建立驗證信 token
-  const token = crypto.randomBytes(16).toString('hex');
+  // 產生驗證 token
+  const token = crypto.randomUUID().replace(/-/g, '');
+  const expiredAt = new Date(Date.now() + 1000 * 60 * 60 * 24); // 24h
   await prisma.emailVerifyToken.upsert({
-    where: { userId: user.id },
-    update: {
-      token,
-      expiredAt: dayjs().add(1, 'day').toDate(),
-      usedAt: null,
-    },
-    create: {
-      userId: user.id,
-      token,
-      expiredAt: dayjs().add(1, 'day').toDate(),
-    },
+    where: { userId: newUser.id },
+    update: { token, expiredAt, usedAt: null },
+    create: { userId: newUser.id, token, expiredAt },
   });
 
-  // 回傳驗證連結（或在此觸發寄信）
-  const base = process.env.APP_URL || 'http://localhost:3000';
+  const base = process.env.APP_URL || `${req.nextUrl.protocol}//${req.nextUrl.host}`;
   const verifyUrl = `${base}/api/auth/verify?token=${token}`;
+
+  // DEV 模式：不真的寄，回傳 verifyUrl
+  await sendEmail({
+    to: email,
+    subject: 'Topzcasino｜請完成信箱驗證',
+    html: `<p>請點擊以下連結完成驗證：</p><p><a href="${verifyUrl}">${verifyUrl}</a></p>`,
+  });
 
   return NextResponse.json({ ok: true, verifyUrl });
 }
