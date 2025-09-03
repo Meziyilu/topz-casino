@@ -1,210 +1,159 @@
-/* app/(public)/auth-theme.css */
+/* app/(public)/auth-theme.css — Minimal Dark Glass */
+
 :root {
-  --auth-bg: #0b0f16;
-  --auth-fg: #e6e9ef;
-  --auth-fg-dim: #b7beca;
-  --auth-primary: #6ea8ff;         /* 主色：可自行調整 */
-  --auth-primary-2: #9b6bff;       /* 漸層副色 */
-  --auth-danger: #ff6b6b;
+  --bg: #0a0d12;
+  --fg: #e7eaf0;
+  --fg-dim: #acb2bf;
+  --primary: #6ea8ff;
+  --primary-2: #8f7cff;
 
-  --glass: rgba(18, 22, 32, 0.55);
-  --glass-border: rgba(255, 255, 255, 0.10);
-  --glass-highlight: rgba(255, 255, 255, 0.25);
+  --glass-bg: rgba(18, 22, 30, 0.55);
+  --glass-bd: rgba(255, 255, 255, 0.08);
+  --glass-hl: rgba(255, 255, 255, 0.18);
 
-  --radius: 16px;
-  --shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.45);
-  --shadow-sm: 0 6px 20px rgba(0, 0, 0, 0.35);
+  --radius: 14px;
+  --shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
 
-  --ring: 0 0 0 3px rgba(110, 168, 255, 0.35);
+  --ring: 0 0 0 3px rgba(110, 168, 255, 0.25);
 }
 
+/* ===== 背景：素面 + 很淡的光暈動畫 ===== */
 .auth-shell {
   min-height: 100dvh;
-  color: var(--auth-fg);
-  background: radial-gradient(1200px 700px at 75% 10%, #121829 0%, transparent 70%),
-              radial-gradient(1100px 600px at 0% 100%, #0c1222 0%, transparent 70%),
-              linear-gradient(180deg, #070a12 0%, #0b0f16 100%);
+  background:
+    radial-gradient(900px 500px at 85% 15%, #111827 0%, transparent 70%),
+    radial-gradient(800px 500px at 0% 100%, #0c1321 0%, transparent 70%),
+    linear-gradient(180deg, #070a10, var(--bg));
+  color: var(--fg);
   position: relative;
   overflow: hidden;
   isolation: isolate;
 }
 
-/* ===== 動態背景 blobs ===== */
-.auth-bg {
-  position: absolute;
-  inset: -15% -10% -10% -10%;
-  z-index: -1;
-  filter: blur(40px) saturate(130%);
-}
-
+/* 柔和移動的光團（低調、低飽和） */
+.auth-bg { position: absolute; inset: -20%; z-index: -1; filter: blur(36px); }
 .auth-blob {
-  position: absolute;
-  width: 40vmax;
-  height: 40vmax;
-  border-radius: 50%;
-  opacity: 0.6;
-  background: radial-gradient(circle at 30% 30%, var(--auth-primary), transparent 60%),
-              radial-gradient(circle at 70% 70%, var(--auth-primary-2), transparent 60%);
-  animation: blobFloat 28s ease-in-out infinite alternate;
+  position: absolute; width: 55vmin; height: 55vmin; border-radius: 50%;
+  opacity: 0.28;
+  background:
+    radial-gradient(circle at 30% 30%, var(--primary) 0%, transparent 60%),
+    radial-gradient(circle at 70% 70%, var(--primary-2) 0%, transparent 60%);
+  animation: floaty 40s ease-in-out infinite alternate;
   mix-blend-mode: screen;
 }
+.auth-blob.b1 { right: -8%; top: -6%; transform: scale(.95); }
+.auth-blob.b2 { left: -12%; bottom: -10%; animation-delay: -12s; transform: scale(.9) rotate(8deg); }
 
-.auth-blob.b2 { animation-delay: -8s; left: -10%; top: 40%; transform: scale(0.9) rotate(12deg); }
-.auth-blob.b1 { right: -8%; top: -4%; transform: rotate(-10deg); }
-.auth-blob.b3 { left: 30%; bottom: -20%; transform: scale(1.2) rotate(6deg); animation-delay: -16s; }
-
-@keyframes blobFloat {
-  0%   { transform: translate3d(0, 0, 0) scale(1) rotate(0deg); }
-  50%  { transform: translate3d(-3%, 2%, 0) scale(1.05) rotate(10deg); }
-  100% { transform: translate3d(3%, -2%, 0) scale(0.95) rotate(-8deg); }
+@keyframes floaty {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(2%, -2%, 0) scale(1.03); }
+  100% { transform: translate3d(-2%, 2%, 0) scale(0.98); }
 }
 
-/* 細微噪點疊加（不吃效能） */
+/* 細微噪點，增加質感（很淡） */
 .auth-grain {
-  position: absolute; inset: 0;
-  pointer-events: none;
-  z-index: 1;
-  background-image:
-    radial-gradient(rgba(255,255,255,0.025) 1px, transparent 1px);
-  background-size: 3px 3px;
-  opacity: .8;
+  position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background-image: radial-gradient(rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size: 3px 3px; opacity: .7;
 }
 
-/* ===== Header ===== */
+/* ===== Header（品牌列，保持極簡） ===== */
 .auth-header {
-  width: 100%;
-  padding: 20px 24px;
-  display: flex; align-items: center; justify-content: space-between;
   position: relative; z-index: 2;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 22px;
 }
-
-.auth-brand {
-  display: flex; align-items: center; gap: 12px;
-  font-weight: 700; font-size: 18px; letter-spacing: .4px;
-  text-decoration: none; color: var(--auth-fg);
-}
-.auth-brand img { width: 28px; height: 28px; border-radius: 8px; }
-
-.auth-header .link {
-  color: var(--auth-fg-dim); text-decoration: none; font-size: 14px;
-}
-.auth-header .link:hover { color: var(--auth-fg); }
+.auth-brand { display: flex; align-items: center; gap: 10px; color: var(--fg); text-decoration: none; font-weight: 700; font-size: 16px; letter-spacing: .2px; opacity: .95; }
+.auth-brand img { width: 24px; height: 24px; border-radius: 6px; }
+.auth-header .link { color: var(--fg-dim); text-decoration: none; font-size: 13px; }
+.auth-header .link:hover { color: var(--fg); }
 
 /* ===== 內容容器 ===== */
 .auth-main {
-  display: grid; place-items: center;
-  min-height: calc(100dvh - 72px);
-  padding: 32px 20px 48px;
   position: relative; z-index: 2;
+  min-height: calc(100dvh - 64px);
+  display: grid; place-items: center;
+  padding: 32px 16px 48px;
 }
 
-/* ===== 玻璃卡片 ===== */
+/* ===== 玻璃卡片（更小、更素） ===== */
 .glass-card {
-  position: relative;
-  width: min(480px, 92vw);
+  width: min(380px, 92vw);
   border-radius: var(--radius);
-  background: var(--glass);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--shadow-lg);
-  backdrop-filter: blur(22px) saturate(130%);
-  -webkit-backdrop-filter: blur(22px) saturate(130%);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-bd);
+  backdrop-filter: blur(22px) saturate(125%);
+  -webkit-backdrop-filter: blur(22px) saturate(125%);
+  box-shadow: var(--shadow);
   overflow: clip;
+  transform: translateZ(0);
 }
 
 .glass-card::before {
-  /* 內側高光邊 */
   content: "";
-  position: absolute; inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
+  position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
   background:
-    linear-gradient(180deg, rgba(255,255,255,0.20), rgba(255,255,255,0.04)) border-box;
+    linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.04)) border-box;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-          mask-composite: exclude;
-  padding: 1px; /* 製造 1px 亮邊 */
-  opacity: .7;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  padding: 1px; opacity: .6;
 }
 
-.glass-card .head {
-  padding: 24px 22px 10px;
-}
-.glass-card .title {
-  font-size: 22px; font-weight: 700; letter-spacing: .3px;
-}
-.glass-card .sub {
-  margin-top: 6px; color: var(--auth-fg-dim); font-size: 14px;
-}
-
-.glass-card .body {
-  padding: 16px 22px 22px;
-}
+.glass-card .head { padding: 18px 18px 8px; }
+.glass-card .title { font-size: 20px; font-weight: 700; letter-spacing: .2px; }
+.glass-card .sub { margin-top: 4px; color: var(--fg-dim); font-size: 13px; }
+.glass-card .body { padding: 14px 18px 18px; }
 
 /* ===== 表單 ===== */
-.auth-field { display: grid; gap: 8px; margin: 12px 0; }
-.auth-label  { font-size: 13px; color: var(--auth-fg); letter-spacing: .2px; }
+.auth-field { display: grid; gap: 6px; margin: 10px 0; }
+.auth-label { font-size: 12px; color: var(--fg); letter-spacing: .2px; opacity: .95; }
 .auth-input {
-  height: 44px; padding: 0 14px; border-radius: 12px; font-size: 14px;
-  color: var(--auth-fg); background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.16);
-  outline: none; transition: box-shadow .2s, border-color .2s, background .2s;
+  height: 42px; padding: 0 12px; border-radius: 11px; font-size: 14px;
+  color: var(--fg); background: rgba(255,255,255,0.035);
+  border: 1px solid rgba(255,255,255,0.12);
+  outline: none; transition: box-shadow .18s, border-color .18s, background .18s;
 }
-.auth-input::placeholder { color: #8c95a5; }
+.auth-input::placeholder { color: #8b93a3; }
 .auth-input:focus {
-  border-color: rgba(110,168,255,0.55);
-  box-shadow: var(--ring);
-  background: rgba(255,255,255,0.065);
+  border-color: rgba(110,168,255,0.5); box-shadow: var(--ring);
+  background: rgba(255,255,255,0.055);
 }
-.auth-help { font-size: 12px; color: var(--auth-fg-dim); }
+.auth-help { font-size: 12px; color: var(--fg-dim); }
 
-.auth-error { color: var(--auth-danger); font-size: 13px; margin-top: 4px; }
-
-/* ===== 按鈕 ===== */
 .auth-btn {
-  height: 44px; border-radius: 12px; width: 100%;
-  color: #0b0f16; font-weight: 700; letter-spacing: .3px;
-  border: 0; cursor: pointer;
+  height: 42px; border-radius: 11px; width: 100%;
+  color: #0b0f16; font-weight: 700; letter-spacing: .2px; border: 0; cursor: pointer;
   background:
-    radial-gradient(120% 120% at 10% 10%, rgba(255,255,255,0.35) 0%, transparent 30%),
-    linear-gradient(90deg, var(--auth-primary), var(--auth-primary-2));
-  box-shadow: var(--shadow-sm);
-  transition: transform .06s ease, box-shadow .2s ease, filter .2s ease;
+    radial-gradient(120% 120% at 10% 10%, rgba(255,255,255,0.3) 0%, transparent 30%),
+    linear-gradient(90deg, var(--primary), var(--primary-2));
+  transition: transform .06s ease, filter .18s ease;
 }
-.auth-btn:hover  { filter: brightness(1.05); }
+.auth-btn:hover { filter: brightness(1.04); }
 .auth-btn:active { transform: translateY(1px) scale(0.996); }
 .auth-btn:disabled { opacity: .6; cursor: not-allowed; }
 
 .alt-row {
-  display: flex; justify-content: space-between; align-items: center; gap: 16px;
-  margin-top: 14px;
+  display: flex; justify-content: space-between; align-items: center; gap: 14px;
+  margin-top: 10px;
 }
-.link-muted { color: var(--auth-fg-dim); text-decoration: none; font-size: 13px; }
-.link-muted:hover { color: var(--auth-fg); text-decoration: underline; }
+.link-muted { color: var(--fg-dim); text-decoration: none; font-size: 12px; }
+.link-muted:hover { color: var(--fg); }
 
-/* ===== 小動畫點綴 ===== */
-.shimmer {
-  position: relative; overflow: hidden;
-}
-.shimmer::after {
-  content:""; position:absolute; inset:0;
-  background: linear-gradient(120deg, transparent 0%, rgba(255,255,255,.22) 18%, transparent 36%);
-  transform: translateX(-120%);
-  animation: shimmerMove 2.8s ease-in-out infinite;
-}
-@keyframes shimmerMove { to { transform: translateX(120%); } }
-
-/* ===== 卡片內分隔線 ===== */
+/* 素面分隔線 */
 .hr {
-  height: 1px; width: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent);
-  margin: 16px 0;
+  height: 1px; width: 100%; margin: 14px 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
 }
 
-/* ===== 可及性：鍵盤 focus 可見 ===== */
+/* 可及性：清楚 focus 樣式 */
 a:focus-visible, button:focus-visible, input:focus-visible {
-  outline: none;
-  box-shadow: var(--ring);
-  border-radius: 10px;
+  outline: none; box-shadow: var(--ring); border-radius: 10px;
+}
+
+/* 行動端間距微調 */
+@media (max-width: 390px) {
+  .glass-card { width: 92vw; }
+  .glass-card .head { padding: 16px 14px 6px; }
+  .glass-card .body { padding: 12px 14px 16px; }
 }

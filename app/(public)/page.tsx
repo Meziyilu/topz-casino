@@ -1,59 +1,38 @@
-'use client';
+// app/(public)/login/page.tsx
+export const metadata = { title: '登入 | Topzcasino' };
 
-import { useEffect, useState } from 'react';
-
-type Me = {
-  id: string;
-  email: string;
-  displayName: string;
-  avatarUrl: string | null;
-  isAdmin: boolean;
-  vipTier: number;
-  balance: number;
-  bankBalance: number;
-};
-
-export default function LobbyPage() {
-  const [me, setMe] = useState<Me | null>(null);
-  const [status, setStatus] = useState<'loading' | 'guest' | 'ok'>('loading');
-
-  useEffect(() => {
-    fetch('/api/users/me')
-      .then(async (r) => (r.ok ? r.json() : null))
-      .then((u) => {
-        if (u) {
-          setMe(u); setStatus('ok');
-        } else {
-          setStatus('guest');
-        }
-      })
-      .catch(() => setStatus('guest'));
-  }, []);
-
-  if (status === 'loading') return <p>載入中…</p>;
-
-  if (status === 'guest') {
-    return (
-      <main>
-        <h2>大廳</h2>
-        <p>你尚未登入。請前往 <a href="/login">登入</a> 或 <a href="/register">註冊</a>。</p>
-      </main>
-    );
-  }
-
+export default function LoginPage() {
   return (
-    <main>
-      <h2>大廳</h2>
-      <p>歡迎，{me?.displayName}！</p>
-      <ul>
-        <li>Email：{me?.email}</li>
-        <li>VIP：{me?.vipTier}</li>
-        <li>錢包：{me?.balance}</li>
-        <li>銀行：{me?.bankBalance}</li>
-      </ul>
-      <form method="post" action="/api/auth/logout" style={{ marginTop: 16 }}>
-        <button>登出</button>
-      </form>
-    </main>
+    <section className="glass-card" aria-label="登入">
+      <div className="head">
+        <h1 className="title">登入</h1>
+        <p className="sub">使用你的 Email 與密碼</p>
+      </div>
+      <div className="body">
+        <form action="/api/auth/login" method="POST" noValidate>
+          <div className="auth-field">
+            <label htmlFor="email" className="auth-label">Email</label>
+            <input id="email" name="email" type="email" required placeholder="you@example.com" className="auth-input" />
+          </div>
+
+          <div className="auth-field">
+            <label htmlFor="password" className="auth-label">密碼</label>
+            <input id="password" name="password" type="password" required minLength={8} className="auth-input" />
+            <div className="alt-row">
+              <a className="link-muted" href="/forgot">忘記密碼</a>
+            </div>
+          </div>
+
+          <button className="auth-btn" type="submit">登入</button>
+
+          <div className="hr" />
+
+          <div className="alt-row">
+            <span className="auth-help">還沒有帳號？</span>
+            <a className="link-muted" href="/register">前往註冊</a>
+          </div>
+        </form>
+      </div>
+    </section>
   );
 }

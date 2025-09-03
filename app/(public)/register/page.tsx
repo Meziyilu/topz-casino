@@ -3,10 +3,10 @@ export const metadata = { title: '註冊 | Topzcasino' };
 
 export default function RegisterPage() {
   return (
-    <section className="glass-card">
+    <section className="glass-card" aria-label="註冊">
       <div className="head">
-        <h1 className="title">建立你的帳號</h1>
-        <p className="sub">2–20 字暱稱、Email 驗證後即可遊玩</p>
+        <h1 className="title">建立帳號</h1>
+        <p className="sub">Email 驗證後即可遊玩</p>
       </div>
       <div className="body">
         <form action="/api/auth/register" method="POST" noValidate>
@@ -14,7 +14,7 @@ export default function RegisterPage() {
             <label htmlFor="displayName" className="auth-label">玩家暱稱</label>
             <input id="displayName" name="displayName" type="text" required minLength={2} maxLength={20}
                    placeholder="玩家_001" className="auth-input" />
-            <p className="auth-help">可用中文/英文/數字/底線</p>
+            <p className="auth-help">中文 / 英數 / 底線，2–20 字</p>
           </div>
 
           <div className="auth-field">
@@ -25,7 +25,7 @@ export default function RegisterPage() {
           <div className="auth-field">
             <label htmlFor="password" className="auth-label">密碼</label>
             <input id="password" name="password" type="password" required minLength={8} className="auth-input" />
-            <p className="auth-help">至少 8 碼，建議混合大小寫與符號</p>
+            <p className="auth-help">至少 8 碼，建議包含大小寫與符號</p>
           </div>
 
           <div className="auth-field">
@@ -40,7 +40,7 @@ export default function RegisterPage() {
             </label>
           </div>
 
-          <button className="auth-btn shimmer" type="submit">建立帳號</button>
+          <button className="auth-btn" type="submit">建立帳號</button>
 
           <div className="hr" />
 
