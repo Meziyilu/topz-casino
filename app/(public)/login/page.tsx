@@ -1,69 +1,38 @@
-'use client';
-
-import { useState } from 'react';
+// app/(public)/login/page.tsx
+export const metadata = { title: '登入 | Topzcasino' };
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('demo@example.com');
-  const [password, setPassword] = useState('P@ssw0rd!');
-  const [msg, setMsg] = useState<string | null>(null);
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setMsg(null);
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-    if (res.ok) {
-      location.href = '/';
-    } else {
-      const j = await res.json().catch(() => ({}));
-      setMsg(j.error ?? '登入失敗');
-    }
-  }
-
   return (
-    <main>
-      <h2>登入</h2>
-      <form onSubmit={onSubmit} style={{ display: 'grid', gap: 8, maxWidth: 360 }}>
-        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
-        <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="密碼" type="password" />
-        <button type="submit">登入</button>
-        {msg && <p style={{ color: 'crimson' }}>{msg}</p>}
-      </form>
-      <p style={{ marginTop: 12 }}>
-        忘記密碼？ <Forgot />
-      </p>
-    </main>
-  );
-}
+    <section className="glass-card">
+      <div className="head">
+        <h1 className="title">歡迎回來</h1>
+        <p className="sub">請使用您的帳號登入</p>
+      </div>
+      <div className="body">
+        <form action="/api/auth/login" method="POST" noValidate>
+          <div className="auth-field">
+            <label htmlFor="email" className="auth-label">Email</label>
+            <input id="email" name="email" type="email" required placeholder="you@example.com" className="auth-input" />
+          </div>
 
-function Forgot() {
-  const [email, setEmail] = useState('');
-  const [link, setLink] = useState<string | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
+          <div className="auth-field">
+            <label htmlFor="password" className="auth-label">密碼</label>
+            <input id="password" name="password" type="password" required minLength={8} className="auth-input" />
+            <div className="alt-row">
+              <a className="link-muted" href="/forgot">忘記密碼？</a>
+            </div>
+          </div>
 
-  async function send() {
-    setMsg(null); setLink(null);
-    const res = await fetch('/api/auth/forgot', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email }),
-    });
-    const j = await res.json();
-    if (res.ok) {
-      setLink(j.resetUrl);
-      setMsg('已寄發（此處先回連結供測試）');
-    } else {
-      setMsg(j.error ?? '失敗');
-    }
-  }
+          <button className="auth-btn shimmer" type="submit">登入</button>
 
-  return (
-    <span>
-      <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" style={{ width: 200 }} />
-      <button onClick={send}>送出</button>
-      {msg && <span> — {msg} {link && (<a href={link} style={{ marginLeft: 8 }}>立刻重設</a>)}</span>}
-    </span>
+          <div className="hr" />
+
+          <div className="alt-row">
+            <span className="auth-help">還沒有帳號？</span>
+            <a className="link-muted" href="/register">前往註冊</a>
+          </div>
+        </form>
+      </div>
+    </section>
   );
 }

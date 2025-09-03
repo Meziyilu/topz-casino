@@ -1,50 +1,55 @@
-'use client';
-
-import { useState } from 'react';
+// app/(public)/register/page.tsx
+export const metadata = { title: '註冊 | Topzcasino' };
 
 export default function RegisterPage() {
-  const [email, setEmail] = useState('demo@example.com');
-  const [password, setPassword] = useState('P@ssw0rd!');
-  const [displayName, setDisplayName] = useState('玩家_001');
-  const [referralCode, setReferralCode] = useState('');
-  const [verifyUrl, setVerifyUrl] = useState<string | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setMsg(null);
-    const payload = {
-      email, password, displayName,
-      referralCode: referralCode || undefined,
-      isOver18: true, acceptTOS: true,
-    };
-    const res = await fetch('/api/auth/register', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const j = await res.json();
-    if (res.ok) {
-      setVerifyUrl(j.verifyUrl);
-      setMsg('註冊成功！請點擊驗證連結完成驗證。');
-    } else {
-      setMsg(j.error ?? '註冊失敗');
-    }
-  }
-
   return (
-    <main>
-      <h2>註冊</h2>
-      <form onSubmit={onSubmit} style={{ display: 'grid', gap: 8, maxWidth: 420 }}>
-        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
-        <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="密碼 (≥8)" type="password" />
-        <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="暱稱（2–20，中英數與底線）" />
-        <input value={referralCode} onChange={(e) => setReferralCode(e.target.value)} placeholder="邀請碼（可選）" />
-        <button type="submit">建立帳號</button>
-      </form>
-      {msg && <p style={{ color: verifyUrl ? 'green' : 'crimson' }}>{msg}</p>}
-      {verifyUrl && (
-        <p>測試用驗證連結： <a href={verifyUrl}>{verifyUrl}</a></p>
-      )}
-    </main>
+    <section className="glass-card">
+      <div className="head">
+        <h1 className="title">建立你的帳號</h1>
+        <p className="sub">2–20 字暱稱、Email 驗證後即可遊玩</p>
+      </div>
+      <div className="body">
+        <form action="/api/auth/register" method="POST" noValidate>
+          <div className="auth-field">
+            <label htmlFor="displayName" className="auth-label">玩家暱稱</label>
+            <input id="displayName" name="displayName" type="text" required minLength={2} maxLength={20}
+                   placeholder="玩家_001" className="auth-input" />
+            <p className="auth-help">可用中文/英文/數字/底線</p>
+          </div>
+
+          <div className="auth-field">
+            <label htmlFor="email" className="auth-label">Email</label>
+            <input id="email" name="email" type="email" required placeholder="you@example.com" className="auth-input" />
+          </div>
+
+          <div className="auth-field">
+            <label htmlFor="password" className="auth-label">密碼</label>
+            <input id="password" name="password" type="password" required minLength={8} className="auth-input" />
+            <p className="auth-help">至少 8 碼，建議混合大小寫與符號</p>
+          </div>
+
+          <div className="auth-field">
+            <label htmlFor="referralCode" className="auth-label">邀請碼（選填）</label>
+            <input id="referralCode" name="referralCode" type="text" placeholder="ABCDEFGH" className="auth-input" />
+          </div>
+
+          <div className="auth-field" style={{ alignItems: 'start' }}>
+            <label className="auth-label" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <input type="checkbox" name="acceptTOS" required />
+              我已閱讀並同意服務條款
+            </label>
+          </div>
+
+          <button className="auth-btn shimmer" type="submit">建立帳號</button>
+
+          <div className="hr" />
+
+          <div className="alt-row">
+            <span className="auth-help">已經有帳號？</span>
+            <a className="link-muted" href="/login">前往登入</a>
+          </div>
+        </form>
+      </div>
+    </section>
   );
 }

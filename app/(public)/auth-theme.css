@@ -1,0 +1,210 @@
+/* app/(public)/auth-theme.css */
+:root {
+  --auth-bg: #0b0f16;
+  --auth-fg: #e6e9ef;
+  --auth-fg-dim: #b7beca;
+  --auth-primary: #6ea8ff;         /* 主色：可自行調整 */
+  --auth-primary-2: #9b6bff;       /* 漸層副色 */
+  --auth-danger: #ff6b6b;
+
+  --glass: rgba(18, 22, 32, 0.55);
+  --glass-border: rgba(255, 255, 255, 0.10);
+  --glass-highlight: rgba(255, 255, 255, 0.25);
+
+  --radius: 16px;
+  --shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.45);
+  --shadow-sm: 0 6px 20px rgba(0, 0, 0, 0.35);
+
+  --ring: 0 0 0 3px rgba(110, 168, 255, 0.35);
+}
+
+.auth-shell {
+  min-height: 100dvh;
+  color: var(--auth-fg);
+  background: radial-gradient(1200px 700px at 75% 10%, #121829 0%, transparent 70%),
+              radial-gradient(1100px 600px at 0% 100%, #0c1222 0%, transparent 70%),
+              linear-gradient(180deg, #070a12 0%, #0b0f16 100%);
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* ===== 動態背景 blobs ===== */
+.auth-bg {
+  position: absolute;
+  inset: -15% -10% -10% -10%;
+  z-index: -1;
+  filter: blur(40px) saturate(130%);
+}
+
+.auth-blob {
+  position: absolute;
+  width: 40vmax;
+  height: 40vmax;
+  border-radius: 50%;
+  opacity: 0.6;
+  background: radial-gradient(circle at 30% 30%, var(--auth-primary), transparent 60%),
+              radial-gradient(circle at 70% 70%, var(--auth-primary-2), transparent 60%);
+  animation: blobFloat 28s ease-in-out infinite alternate;
+  mix-blend-mode: screen;
+}
+
+.auth-blob.b2 { animation-delay: -8s; left: -10%; top: 40%; transform: scale(0.9) rotate(12deg); }
+.auth-blob.b1 { right: -8%; top: -4%; transform: rotate(-10deg); }
+.auth-blob.b3 { left: 30%; bottom: -20%; transform: scale(1.2) rotate(6deg); animation-delay: -16s; }
+
+@keyframes blobFloat {
+  0%   { transform: translate3d(0, 0, 0) scale(1) rotate(0deg); }
+  50%  { transform: translate3d(-3%, 2%, 0) scale(1.05) rotate(10deg); }
+  100% { transform: translate3d(3%, -2%, 0) scale(0.95) rotate(-8deg); }
+}
+
+/* 細微噪點疊加（不吃效能） */
+.auth-grain {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background-image:
+    radial-gradient(rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 3px 3px;
+  opacity: .8;
+}
+
+/* ===== Header ===== */
+.auth-header {
+  width: 100%;
+  padding: 20px 24px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: relative; z-index: 2;
+}
+
+.auth-brand {
+  display: flex; align-items: center; gap: 12px;
+  font-weight: 700; font-size: 18px; letter-spacing: .4px;
+  text-decoration: none; color: var(--auth-fg);
+}
+.auth-brand img { width: 28px; height: 28px; border-radius: 8px; }
+
+.auth-header .link {
+  color: var(--auth-fg-dim); text-decoration: none; font-size: 14px;
+}
+.auth-header .link:hover { color: var(--auth-fg); }
+
+/* ===== 內容容器 ===== */
+.auth-main {
+  display: grid; place-items: center;
+  min-height: calc(100dvh - 72px);
+  padding: 32px 20px 48px;
+  position: relative; z-index: 2;
+}
+
+/* ===== 玻璃卡片 ===== */
+.glass-card {
+  position: relative;
+  width: min(480px, 92vw);
+  border-radius: var(--radius);
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(22px) saturate(130%);
+  -webkit-backdrop-filter: blur(22px) saturate(130%);
+  overflow: clip;
+}
+
+.glass-card::before {
+  /* 內側高光邊 */
+  content: "";
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.20), rgba(255,255,255,0.04)) border-box;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  padding: 1px; /* 製造 1px 亮邊 */
+  opacity: .7;
+}
+
+.glass-card .head {
+  padding: 24px 22px 10px;
+}
+.glass-card .title {
+  font-size: 22px; font-weight: 700; letter-spacing: .3px;
+}
+.glass-card .sub {
+  margin-top: 6px; color: var(--auth-fg-dim); font-size: 14px;
+}
+
+.glass-card .body {
+  padding: 16px 22px 22px;
+}
+
+/* ===== 表單 ===== */
+.auth-field { display: grid; gap: 8px; margin: 12px 0; }
+.auth-label  { font-size: 13px; color: var(--auth-fg); letter-spacing: .2px; }
+.auth-input {
+  height: 44px; padding: 0 14px; border-radius: 12px; font-size: 14px;
+  color: var(--auth-fg); background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.16);
+  outline: none; transition: box-shadow .2s, border-color .2s, background .2s;
+}
+.auth-input::placeholder { color: #8c95a5; }
+.auth-input:focus {
+  border-color: rgba(110,168,255,0.55);
+  box-shadow: var(--ring);
+  background: rgba(255,255,255,0.065);
+}
+.auth-help { font-size: 12px; color: var(--auth-fg-dim); }
+
+.auth-error { color: var(--auth-danger); font-size: 13px; margin-top: 4px; }
+
+/* ===== 按鈕 ===== */
+.auth-btn {
+  height: 44px; border-radius: 12px; width: 100%;
+  color: #0b0f16; font-weight: 700; letter-spacing: .3px;
+  border: 0; cursor: pointer;
+  background:
+    radial-gradient(120% 120% at 10% 10%, rgba(255,255,255,0.35) 0%, transparent 30%),
+    linear-gradient(90deg, var(--auth-primary), var(--auth-primary-2));
+  box-shadow: var(--shadow-sm);
+  transition: transform .06s ease, box-shadow .2s ease, filter .2s ease;
+}
+.auth-btn:hover  { filter: brightness(1.05); }
+.auth-btn:active { transform: translateY(1px) scale(0.996); }
+.auth-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+.alt-row {
+  display: flex; justify-content: space-between; align-items: center; gap: 16px;
+  margin-top: 14px;
+}
+.link-muted { color: var(--auth-fg-dim); text-decoration: none; font-size: 13px; }
+.link-muted:hover { color: var(--auth-fg); text-decoration: underline; }
+
+/* ===== 小動畫點綴 ===== */
+.shimmer {
+  position: relative; overflow: hidden;
+}
+.shimmer::after {
+  content:""; position:absolute; inset:0;
+  background: linear-gradient(120deg, transparent 0%, rgba(255,255,255,.22) 18%, transparent 36%);
+  transform: translateX(-120%);
+  animation: shimmerMove 2.8s ease-in-out infinite;
+}
+@keyframes shimmerMove { to { transform: translateX(120%); } }
+
+/* ===== 卡片內分隔線 ===== */
+.hr {
+  height: 1px; width: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent);
+  margin: 16px 0;
+}
+
+/* ===== 可及性：鍵盤 focus 可見 ===== */
+a:focus-visible, button:focus-visible, input:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+  border-radius: 10px;
+}
