@@ -1,128 +1,150 @@
 // services/baccarat.service.ts
 import prisma from "@/lib/prisma";
-import { getGameConfig, setGameConfig } from "@/lib/game-config";
-import { taipeiDayStartUTC } from "@/lib/utils";
-import type { BetSide, Room, RoomCode } from "@prisma/client";
+import { getBaccaratRoomConfig, setBaccaratRoomConfig } from "@/lib/game-config";
+import { seeded, taipeiDayStartUTC } from "@/lib/utils";
+import type { BetSide, RoundOutcome, RoundPhase, RoomCode } from "@prisma/client";
 
-export type Payouts = { PLAYER:number; BANKER:number; TIE:number; PLAYER_PAIR:number; BANKER_PAIR:number };
-export type BaccaratRoomConfig = {
-  payouts: Payouts;
-  minBet: number;
-  maxBet: number;
-  durationSeconds: number;
-  lockBeforeRevealSec: number;
+/** 預設設定（可被 GameConfig 覆蓋） */
+const DEFAULTS: Record<RoomCode, {
+  payouts: Record<BetSide, number>;
+  minBet: number; maxBet: number;
+  durationSeconds: number; lockBeforeRevealSec: number;
+  enabled: boolean;
+}> = {
+  R30: { payouts: basePayouts(), minBet: 10, maxBet: 100000, durationSeconds: 30, lockBeforeRevealSec: 8,  enabled: true },
+  R60: { payouts: basePayouts(), minBet: 10, maxBet: 100000, durationSeconds: 60, lockBeforeRevealSec: 10, enabled: true },
+  R90: { payouts: basePayouts(), minBet: 10, maxBet: 100000, durationSeconds: 90, lockBeforeRevealSec: 15, enabled: true },
 };
-
-const DEFAULTS: Record<RoomCode, BaccaratRoomConfig> = {
-  R30:{ payouts:{PLAYER:1,BANKER:1,TIE:8,PLAYER_PAIR:11,BANKER_PAIR:11}, minBet:10,maxBet:100000,durationSeconds:30,lockBeforeRevealSec:8 },
-  R60:{ payouts:{PLAYER:1,BANKER:1,TIE:8,PLAYER_PAIR:11,BANKER_PAIR:11}, minBet:10,maxBet:100000,durationSeconds:60,lockBeforeRevealSec:10 },
-  R90:{ payouts:{PLAYER:1,BANKER:1,TIE:8,PLAYER_PAIR:11,BANKER_PAIR:11}, minBet:10,maxBet:100000,durationSeconds:90,lockBeforeRevealSec:15 },
-};
-
-const KEY = (room: RoomCode) => `baccarat.room.${room}`;
-
-export async function getRoomConfig(room: RoomCode): Promise<BaccaratRoomConfig> {
-  const row = await getGameConfig(KEY(room));
-  if (!row) return DEFAULTS[room];
-  const v = row as Partial<BaccaratRoomConfig>;
-  const d = DEFAULTS[room];
+function basePayouts(): Record<BetSide, number> {
   return {
-    payouts: { ...d.payouts, ...(v.payouts ?? {}) },
-    minBet: Number.isFinite(v.minBet) ? (v.minBet as number) : d.minBet,
-    maxBet: Number.isFinite(v.maxBet) ? (v.maxBet as number) : d.maxBet,
-    durationSeconds: Number.isFinite(v.durationSeconds) ? (v.durationSeconds as number) : d.durationSeconds,
-    lockBeforeRevealSec: Number.isFinite(v.lockBeforeRevealSec) ? (v.lockBeforeRevealSec as number) : d.lockBeforeRevealSec,
+    PLAYER: 1, BANKER: 1, TIE: 8,
+    PLAYER_PAIR: 11, BANKER_PAIR: 11,
+    ANY_PAIR: 5, PERFECT_PAIR: 25,
+    BANKER_SUPER_SIX: 12, // 可調
+  } as any;
+}
+const KEY = (room: RoomCode) => `room.${room}`;
+
+/** 取房設定（合併 DB 覆蓋預設） */
+export async function getRoomConfig(room: RoomCode) {
+  const d = DEFAULTS[room];
+  const row = (await getBaccaratRoomConfig(KEY(room))) ?? {};
+  return {
+    payouts: { ...d.payouts, ...(row.payouts || {}) },
+    minBet: row.minBet ?? d.minBet,
+    maxBet: row.maxBet ?? d.maxBet,
+    durationSeconds: row.durationSeconds ?? d.durationSeconds,
+    lockBeforeRevealSec: row.lockBeforeRevealSec ?? d.lockBeforeRevealSec,
+    enabled: row.enabled ?? d.enabled,
   };
 }
 
-export async function setRoomConfig(room: RoomCode, cfg: Partial<BaccaratRoomConfig>) {
+export async function setRoomConfig(room: RoomCode, patch: Partial<Awaited<ReturnType<typeof getRoomConfig>>>) {
   const cur = await getRoomConfig(room);
-  const merged: BaccaratRoomConfig = {
-    payouts: { ...cur.payouts, ...(cfg.payouts ?? {}) },
-    minBet: cfg.minBet ?? cur.minBet,
-    maxBet: cfg.maxBet ?? cur.maxBet,
-    durationSeconds: cfg.durationSeconds ?? cur.durationSeconds,
-    lockBeforeRevealSec: cfg.lockBeforeRevealSec ?? cur.lockBeforeRevealSec,
+  const merged = {
+    ...cur,
+    payouts: { ...cur.payouts, ...(patch.payouts || {}) },
+    minBet: patch.minBet ?? cur.minBet,
+    maxBet: patch.maxBet ?? cur.maxBet,
+    durationSeconds: patch.durationSeconds ?? cur.durationSeconds,
+    lockBeforeRevealSec: patch.lockBeforeRevealSec ?? cur.lockBeforeRevealSec,
+    enabled: patch.enabled ?? cur.enabled,
   };
-  await setGameConfig(KEY(room), merged);
-  if (cfg.durationSeconds != null) {
-    await prisma.room.update({ where: { code: room }, data: { durationSeconds: merged.durationSeconds } }).catch(()=>{});
-  }
+  await setBaccaratRoomConfig(KEY(room), merged);
   return merged;
 }
 
-/** 確保房間存在 */
-export async function ensureRoom(code: RoomCode): Promise<Room> {
-  const r = await prisma.room.findUnique({ where: { code } });
-  if (r) return r;
-  const cfg = await getRoomConfig(code);
-  return prisma.room.create({ data: { code, name: roomName(code), durationSeconds: cfg.durationSeconds, enabled: true } });
-}
-function roomName(c: RoomCode) { return c==="R30"?"快速 30 秒":c==="R60"?"標準 60 秒":"慢速 90 秒"; }
-
-/** 計時：每日重置（台北 00:00），依時長算回合序並產生鎖單/揭牌點 */
-export function calcTiming(code: RoomCode, durationSeconds: number, lockBeforeRevealSec: number, now = new Date()) {
+/** 依時間計算當日 round 索引與封盤/揭牌時點 */
+export function calcTiming(room: RoomCode, durationSeconds: number, lockBeforeRevealSec: number, now = new Date()) {
   const day = taipeiDayStartUTC(now);
-  const sinceSec = Math.floor((now.getTime() - day.getTime())/1000);
-  const roundSeq = Math.floor(sinceSec/durationSeconds);
-  const startMs = day.getTime() + roundSeq*durationSeconds*1000;
+  const since = Math.floor((now.getTime() - day.getTime()) / 1000);
+  const roundSeq = Math.floor(since / durationSeconds);
+  const startMs = day.getTime() + roundSeq * durationSeconds * 1000;
   const startedAt = new Date(startMs);
-  const revealAt = new Date(startMs + durationSeconds*1000);
-  const lockAt = new Date(revealAt.getTime() - lockBeforeRevealSec*1000);
+  const revealAt = new Date(startMs + durationSeconds * 1000);
+  const lockAt = new Date(revealAt.getTime() - lockBeforeRevealSec * 1000);
   const locked = now >= lockAt;
   const shouldReveal = now >= revealAt;
-  return { day, roundSeq, startedAt, revealAt, lockAt, locked, shouldReveal };
+  return { day, roundSeq, startedAt, lockAt, revealAt, locked, shouldReveal };
 }
 
-/** 發牌（內含補牌規則/對子/超級6） */
-type Suit = "S"|"H"|"D"|"C"; type Card = { rank:number; suit:Suit };
-function freshDeck(): Card[] { const d:Card[]=[]; (["S","H","D","C"] as Suit[]).forEach(s=>{ for(let r=1;r<=13;r++) d.push({rank:r,suit:s});}); return d; }
-function shuffle<T>(a:T[]){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
-const val=(r:number)=>r>=10?0:r, total=(cs:Card[])=>cs.reduce((a,c)=>a+val(c.rank),0)%10;
-const pair=(a?:Card,b?:Card)=>!!(a&&b&&a.rank===b.rank);
-const perfect=(a?:Card,b?:Card)=>!!(a&&b&&a.rank===b.rank&&a.suit===b.suit);
+/** 以種子決定當局牌面與結果，可重現（無需存 DB） */
+type Suit = "S"|"H"|"D"|"C";
+type Card = { rank:number; suit:Suit };
+const suits: Suit[] = ["S","H","D","C"];
 
-export function dealRound(){
-  const deck=shuffle(freshDeck()); const draw=()=>deck.pop()!;
-  const p:[Card,Card,Card?]=[draw(),draw(),undefined]; const b:[Card,Card,Card?]=[draw(),draw(),undefined];
+function deck(seedStr: string): Card[] {
+  const s = seeded(seedStr);
+  const d: Card[] = [];
+  for (const suit of suits) for (let r = 1; r <= 13; r++) d.push({ rank: r, suit });
+  // Fisher-Yates with seeded rnd
+  for (let i = d.length - 1; i > 0; i--) {
+    const j = Math.floor(s.next() * (i + 1));
+    [d[i], d[j]] = [d[j], d[i]];
+  }
+  return d;
+}
+const val = (r:number)=> (r>=10?0:r);
+const total = (cs:Card[]) => cs.reduce((a,c)=>a+val(c.rank),0)%10;
+const pair = (a?:Card,b?:Card)=> !!(a&&b&&a.rank===b.rank);
+const perfect = (a?:Card,b?:Card)=> !!(a&&b&&a.rank===b.rank&&a.suit===b.suit);
+
+export function dealBySeed(seedStr: string){
+  const d = deck(seedStr);
+  const draw = () => d.pop()!;
+  const p:[Card,Card,Card?]=[draw(),draw(),undefined], b:[Card,Card,Card?]=[draw(),draw(),undefined];
   const pt0=total(p.filter(Boolean) as Card[]), bt0=total(b.filter(Boolean) as Card[]);
-  if(!(pt0>=8||bt0>=8)){ if(pt0<=5) p[2]=draw();
+  if(!(pt0>=8||bt0>=8)){
+    if(pt0<=5) p[2]=draw();
     const p3=p[2]; const bt=total(b.filter(Boolean) as Card[]);
-    if(!p3){ if(bt<=5) b[2]=draw(); } else {
+    if(!p3){ if(bt<=5) b[2]=draw(); }
+    else{
       const v=val(p3.rank);
-      if(bt<=2) b[2]=draw(); else if(bt===3 && v!==8) b[2]=draw();
+      if(bt<=2) b[2]=draw();
+      else if(bt===3 && v!==8) b[2]=draw();
       else if(bt===4 && v>=2 && v<=7) b[2]=draw();
       else if(bt===5 && v>=4 && v<=7) b[2]=draw();
       else if(bt===6 && (v===6||v===7)) b[2]=draw();
     }
   }
-  const playerCards = p.filter(Boolean) as Card[], bankerCards=b.filter(Boolean) as Card[];
-  const playerTotal = total(playerCards), bankerTotal= total(bankerCards);
-  const outcome = playerTotal>bankerTotal?"PLAYER":playerTotal<bankerTotal?"BANKER":"TIE";
+  const pc = p.filter(Boolean) as Card[], bc=b.filter(Boolean) as Card[];
+  const pt = total(pc), bt= total(bc);
+  const outcome: RoundOutcome = pt>bt?"PLAYER":pt<bt?"BANKER":"TIE";
+  const usedNoCommission = outcome==="BANKER" && bt===6;
   return {
-    playerCards, bankerCards, playerTotal, bankerTotal, outcome,
+    playerCards: pc, bankerCards: bc,
+    playerTotal: pt, bankerTotal: bt,
+    outcome, usedNoCommission,
     playerPair: pair(p[0],p[1]), bankerPair: pair(b[0],b[1]),
-    anyPair: pair(p[0],p[1])||pair(b[0],b[1]),
-    perfectPair: perfect(p[0],p[1])||perfect(b[0],b[1]),
-    usedNoCommission: outcome==="BANKER" && bankerTotal===6,
+    anyPair: pair(p[0],p[1]) || pair(b[0],b[1]),
+    perfectPair: perfect(p[0],p[1]) || perfect(b[0],b[1]),
   };
 }
 
-/** 根據注單計算派彩（含和退本金、對子 11、超級6 半賠） */
-export function payoutAmount(side: BetSide, amount:number, outcome:"PLAYER"|"BANKER"|"TIE", flags: { playerPair?:boolean; bankerPair?:boolean; usedNoCommission?:boolean }, payouts: Payouts){
-  if(side==="PLAYER") {
-    if(outcome==="PLAYER") return amount + amount*payouts.PLAYER;
-    if(outcome==="TIE") return amount; return 0;
-  }
-  if(side==="BANKER") {
-    if(outcome==="BANKER"){
-      const bonus = flags.usedNoCommission ? Math.floor(amount*0.5) : amount*payouts.BANKER;
-      return amount + bonus;
+/** 建/取 當前回合（依 startedAt 視窗） */
+export async function ensureCurrentRound(room: RoomCode, startedAt: Date) {
+  const end = new Date(startedAt.getTime() + 1000 * 120); // 搜索視窗（兩分鐘緩衝）
+  let r = await prisma.round.findFirst({ where: { room, startedAt: { gte: startedAt, lt: end } }, orderBy:{ startedAt:"asc" } });
+  if (r) return r;
+  return prisma.round.create({ data: { room, phase: "BETTING", startedAt } });
+}
+
+/** 下注派彩計算 */
+export function calcPayout(side: BetSide, amt: number, outcome: RoundOutcome, flags: { playerPair:boolean; bankerPair:boolean; anyPair:boolean; perfectPair:boolean; super6:boolean }, payouts: Record<BetSide, number>) {
+  if (side==="PLAYER") return outcome==="PLAYER" ? (amt + amt*payouts.PLAYER) : outcome==="TIE" ? amt : 0;
+  if (side==="BANKER"){
+    if (outcome==="BANKER"){
+      // 超級六：可同時有兩種玩法：1) BANKER 一般 1:1 + 6點半賠、2) 獨立投注 BANKER_SUPER_SIX
+      const bonus = flags.super6 ? Math.floor(amt*0.5) : amt*payouts.BANKER;
+      return amt + bonus;
     }
-    if(outcome==="TIE") return amount; return 0;
+    return outcome==="TIE" ? amt : 0;
   }
-  if(side==="TIE") return outcome==="TIE" ? amount + amount*payouts.TIE : 0;
-  if(side==="PLAYER_PAIR") return flags.playerPair ? amount + amount*payouts.PLAYER_PAIR : 0;
-  if(side==="BANKER_PAIR") return flags.bankerPair ? amount + amount*payouts.BANKER_PAIR : 0;
+  if (side==="TIE") return outcome==="TIE" ? (amt + amt*payouts.TIE) : 0;
+  if (side==="PLAYER_PAIR") return flags.playerPair ? (amt + amt*payouts.PLAYER_PAIR) : 0;
+  if (side==="BANKER_PAIR") return flags.bankerPair ? (amt + amt*payouts.BANKER_PAIR) : 0;
+  if (side==="ANY_PAIR") return flags.anyPair ? (amt + amt*payouts.ANY_PAIR) : 0;
+  if (side==="PERFECT_PAIR") return flags.perfectPair ? (amt + amt*payouts.PERFECT_PAIR) : 0;
+  if (side==="BANKER_SUPER_SIX") return flags.super6 ? (amt + amt*payouts.BANKER_SUPER_SIX) : 0;
   return 0;
 }
