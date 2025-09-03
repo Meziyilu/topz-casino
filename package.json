@@ -5,12 +5,22 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
-    "start": "prisma migrate deploy && next start",
+    "start": "next start",
+
+    "render:build": "prisma generate && prisma db push && prisma db seed && next build",
+    "render:start": "next start",
+
     "lint": "next lint",
+
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
+
+    "db:push": "prisma db push",
+    "db:seed": "prisma db seed",
+    "db:reset": "prisma migrate reset --force",
+
     "validate:structure": "ts-node --transpile-only scripts/validate-structure.ts"
   },
   "dependencies": {
@@ -44,6 +54,9 @@
     "tailwindcss": "^3.4.7",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.2"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
   },
   "engines": {
     "node": ">=18.17.0"
