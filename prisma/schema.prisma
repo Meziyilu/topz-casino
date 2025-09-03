@@ -1,4 +1,4 @@
-// Topzcasino v1.1.2 — Full Schema Baseline (Validated)
+// Topzcasino v1.1.2 — Full Schema Baseline (Validated + Auth Augmented)
 
 generator client {
   provider = "prisma-client-js"
@@ -192,6 +192,23 @@ model User {
   netProfit       BigInt  @default(0)
   weeklyNetProfit BigInt  @default(0)
   favoriteGame    String?
+
+  // ===== Auth 增量（非破壞式） =====
+  displayName     String    @unique
+  isBanned        Boolean   @default(false)
+  isMuted         Boolean   @default(false)
+  emailVerifiedAt DateTime?
+  registeredIp    String?
+  lastLoginAt     DateTime?
+  lastLoginIp     String?
+  referralCode    String?   @unique
+  inviterId       String?
+  inviter         User?     @relation("InviteRelation", fields: [inviterId], references: [id])
+  invitees        User[]    @relation("InviteRelation")
+
+  // 反向關聯（Token）
+  emailVerifyToken   EmailVerifyToken?
+  passwordResetToken PasswordResetToken?
 
   // 關聯
   ledgers             Ledger[]
@@ -699,4 +716,25 @@ model ChatMessage {
 
   @@index([room, createdAt])
   @@index([userId, createdAt])
+}
+
+// ======================== Auth Tokens（新增） ========================
+model EmailVerifyToken {
+  id        String    @id @default(cuid())
+  userId    String    @unique
+  token     String    @unique
+  expiredAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String    @unique
+  token     String    @unique
+  expiredAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
