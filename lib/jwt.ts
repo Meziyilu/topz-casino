@@ -1,37 +1,56 @@
-import jwt from "jsonwebtoken";
-
-const ACCESS_TTL_SEC = 15 * 60;          // 15m
-const REFRESH_TTL_SEC = 7 * 24 * 60 * 60; // 7d
-
-type BaseClaims = { sub: string; isAdmin: boolean; displayName?: string };
-const iss = process.env.JWT_ISS || "topzcasino";
-const aud = process.env.JWT_AUD || "webapp";
-
-export function signAccessToken(payload: BaseClaims) {
-  return jwt.sign(payload, process.env.JWT_ACCESS_SECRET!, {
-    expiresIn: ACCESS_TTL_SEC, issuer: iss, audience: aud,
-  });
+// ==============================
+export function signJWT(payload: SessionPayload, expiresInSec = 60 * 60 * 24 * 7): string {
+return jwt.sign(payload, JWT_SECRET, { algorithm: "HS256", expiresIn: expiresInSec });
 }
 
-export function signRefreshToken(payload: BaseClaims & { jti?: string }) {
-  return jwt.sign(payload, process.env.JWT_REFRESH_SECRET!, {
-    expiresIn: REFRESH_TTL_SEC, issuer: iss, audience: aud, jwtid: payload.jti,
-  });
+
+export function verifyJWT(token: string): SessionPayload {
+const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
+// jsonwebtoken returns `string | jwt.JwtPayload`; normalize to SessionPayload
+if (typeof decoded === "string") throw new Error("Invalid JWT payload");
+return {
+sub: String(decoded.sub),
+email: typeof decoded.email === "string" ? decoded.email : undefined,
+name: typeof decoded.name === "string" ? decoded.name : undefined,
+isAdmin: Boolean((decoded as any).isAdmin),
+};
 }
 
-export function verifyAccessToken(token: string) {
-  return jwt.verify(token, process.env.JWT_ACCESS_SECRET!, {
-    issuer: iss, audience: aud,
-  }) as BaseClaims & jwt.JwtPayload;
+
+export function readTokenFromHeaders(req: Request | NextRequest): string | null {
+const auth = req.headers.get("authorization") || req.headers.get("Authorization");
+if (auth && auth.startsWith("Bearer ")) return auth.slice("Bearer ".length).trim();
+const cookie = (req.headers.get("cookie") || req.headers.get("Cookie") || "");
+const m = cookie.match(/(?:^|; )token=([^;]+)/);
+return m ? decodeURIComponent(m[1]) : null;
 }
 
-export function verifyRefreshToken(token: string) {
-  return jwt.verify(token, process.env.JWT_REFRESH_SECRET!, {
-    issuer: iss, audience: aud,
-  }) as BaseClaims & jwt.JwtPayload;
+
+export function readTokenFromCookies(): string | null {
+try {
+const c = cookies();
+const token = c.get("token")?.value;
+return token ?? null;
+} catch {
+return null;
+}
 }
 
-export function cookieOptions(maxAgeSec: number) {
-  const prod = process.env.NODE_ENV === "production";
-  return { httpOnly: true, secure: prod, sameSite: "lax" as const, path: "/", maxAge: maxAgeSec };
+
+export type VerifiedRequest = (SessionPayload & { token: string }) | null;
+
+
+/**
+* verifyRequest: extract JWT from Authorization: Bearer or cookie `token`.
+* Returns `null` if missing/invalid.
+*/
+export function verifyRequest(req: Request | NextRequest): VerifiedRequest {
+const token = readTokenFromHeaders(req);
+if (!token) return null;
+try {
+const payload = verifyJWT(token);
+return { ...payload, token };
+} catch {
+return null;
+}
 }

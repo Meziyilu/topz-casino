@@ -1,0 +1,8 @@
+/* app/globals.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 你自己的全域樣式可以放下面 */
+:root { color-scheme: light dark; }
+html, body { min-height: 100%; }
