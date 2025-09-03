@@ -1,30 +1,17 @@
 // app/(public)/layout.tsx
-import '@/app/(public)/auth-theme.css';
-import Link from 'next/link';
-
 export default function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="auth-shell">
-      {/* 背景動畫層（低調） */}
-      <div className="auth-bg" aria-hidden>
-        <div className="auth-blob b1" />
-        <div className="auth-blob b2" />
-      </div>
-      <div className="auth-grain" aria-hidden />
-
-      {/* Header（極簡，純文字 LOGO） */}
-      <header className="auth-header">
-        <Link href="/" className="auth-brand" aria-label="Topzcasino Home">
-          TOPZCASINO
-        </Link>
-        <nav>
-          <Link href="/login" className="link">登入</Link>
-          <span style={{ margin: '0 8px', opacity: .35 }}>·</span>
-          <Link href="/register" className="link">註冊</Link>
-        </nav>
+    <main className="auth-wrap">
+      {/* 背景層：純 CSS，不產生動態 id/節點 */}
+      <div className="auth-bg" aria-hidden="true" />
+      {/* LOGO 列：固定字樣，不用圖片/外部字型 */}
+      <header className="auth-brand">
+        <div className="brand">
+          <span className="brand-crest">◆</span>
+          <span className="brand-text">TOPZCASINO</span>
+        </div>
       </header>
-
-      <main className="auth-main">{children}</main>
-    </div>
+      {children}
+    </main>
   );
 }

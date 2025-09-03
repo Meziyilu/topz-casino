@@ -1,37 +1,76 @@
-// app/(public)/login/page.tsx
-export const metadata = { title: '登入 | Topzcasino' };
+'use client';
+
+import Link from 'next/link';
+import { useState } from 'react';
 
 export default function LoginPage() {
+  const [email, setEmail] = useState('');
+  const [pwd, setPwd] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr(null);
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email, password: pwd }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      // 登入成功 → 導回大廳
+      window.location.href = '/';
+    } catch (e: any) {
+      setErr(e?.message || 'Login failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <section className="glass-card" aria-label="登入">
-      <div className="head">
-        <h1 className="title">登入</h1>
-        <p className="sub">使用你的 Email 與密碼</p>
-      </div>
-      <div className="body">
-        <form action="/api/auth/login" method="POST" noValidate>
-          <div className="auth-field">
-            <label htmlFor="email" className="auth-label">Email</label>
-            <input id="email" name="email" type="email" required placeholder="you@example.com" className="auth-input" />
-          </div>
+    <section className="auth-center">
+      <div className="auth-card">
+        <h1 className="auth-title">登入</h1>
+        <p className="auth-sub">歡迎回來</p>
 
-          <div className="auth-field">
-            <label htmlFor="password" className="auth-label">密碼</label>
-            <input id="password" name="password" type="password" required minLength={8} className="auth-input" />
-            <div className="alt-row">
-              <a className="link-muted" href="/forgot">忘記密碼</a>
-            </div>
-          </div>
+        <form onSubmit={onSubmit} className="auth-form">
+          <label className="auth-label">
+            <span>電子郵件</span>
+            <input
+              className="auth-input"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              required
+            />
+          </label>
 
-          <button className="auth-btn" type="submit">登入</button>
+          <label className="auth-label">
+            <span>密碼</span>
+            <input
+              className="auth-input"
+              type="password"
+              value={pwd}
+              onChange={(e) => setPwd(e.target.value)}
+              autoComplete="current-password"
+              required
+            />
+          </label>
 
-          <div className="hr" />
+          {err && <div className="auth-error">{err}</div>}
 
-          <div className="alt-row">
-            <span className="auth-help">還沒有帳號？</span>
-            <a className="link-muted" href="/register">前往註冊</a>
-          </div>
+          <button className="auth-btn" disabled={loading}>
+            {loading ? '登入中…' : '登入'}
+          </button>
         </form>
+
+        <div className="auth-footer">
+          <Link href="/register" className="auth-link">沒有帳號？前往註冊</Link>
+          <Link href="/forgot" className="auth-link">忘記密碼</Link>
+        </div>
       </div>
     </section>
   );

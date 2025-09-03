@@ -1,54 +1,98 @@
-// app/(public)/register/page.tsx
-export const metadata = { title: '註冊 | Topzcasino' };
+'use client';
+
+import Link from 'next/link';
+import { useState } from 'react';
 
 export default function RegisterPage() {
+  const [email, setEmail] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [pwd, setPwd] = useState('');
+  const [agree, setAgree] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr(null);
+    setOk(null);
+    if (!agree) return setErr('請勾選同意服務條款');
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email, password: pwd, displayName, isOver18: true, acceptTOS: true }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setOk('註冊成功，請至信箱點擊驗證連結後再登入。');
+    } catch (e: any) {
+      setErr(e?.message || 'Register failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <section className="glass-card" aria-label="註冊">
-      <div className="head">
-        <h1 className="title">建立帳號</h1>
-        <p className="sub">Email 驗證後即可遊玩</p>
-      </div>
-      <div className="body">
-        <form action="/api/auth/register" method="POST" noValidate>
-          <div className="auth-field">
-            <label htmlFor="displayName" className="auth-label">玩家暱稱</label>
-            <input id="displayName" name="displayName" type="text" required minLength={2} maxLength={20}
-                   placeholder="玩家_001" className="auth-input" />
-            <p className="auth-help">中文 / 英數 / 底線，2–20 字</p>
-          </div>
+    <section className="auth-center">
+      <div className="auth-card">
+        <h1 className="auth-title">註冊</h1>
+        <p className="auth-sub">建立你的 TOPZCASINO 帳號</p>
 
-          <div className="auth-field">
-            <label htmlFor="email" className="auth-label">Email</label>
-            <input id="email" name="email" type="email" required placeholder="you@example.com" className="auth-input" />
-          </div>
+        <form onSubmit={onSubmit} className="auth-form">
+          <label className="auth-label">
+            <span>暱稱（2–20字）</span>
+            <input
+              className="auth-input"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              minLength={2}
+              maxLength={20}
+              required
+            />
+          </label>
 
-          <div className="auth-field">
-            <label htmlFor="password" className="auth-label">密碼</label>
-            <input id="password" name="password" type="password" required minLength={8} className="auth-input" />
-            <p className="auth-help">至少 8 碼，建議包含大小寫與符號</p>
-          </div>
+          <label className="auth-label">
+            <span>電子郵件</span>
+            <input
+              className="auth-input"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              required
+            />
+          </label>
 
-          <div className="auth-field">
-            <label htmlFor="referralCode" className="auth-label">邀請碼（選填）</label>
-            <input id="referralCode" name="referralCode" type="text" placeholder="ABCDEFGH" className="auth-input" />
-          </div>
+          <label className="auth-label">
+            <span>密碼</span>
+            <input
+              className="auth-input"
+              type="password"
+              value={pwd}
+              onChange={(e) => setPwd(e.target.value)}
+              autoComplete="new-password"
+              minLength={8}
+              required
+            />
+          </label>
 
-          <div className="auth-field" style={{ alignItems: 'start' }}>
-            <label className="auth-label" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-              <input type="checkbox" name="acceptTOS" required />
-              我已閱讀並同意服務條款
-            </label>
-          </div>
+          <label className="auth-check">
+            <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
+            <span>我已年滿 18 歲並同意服務條款</span>
+          </label>
 
-          <button className="auth-btn" type="submit">建立帳號</button>
+          {err && <div className="auth-error">{err}</div>}
+          {ok && <div className="auth-ok">{ok}</div>}
 
-          <div className="hr" />
-
-          <div className="alt-row">
-            <span className="auth-help">已經有帳號？</span>
-            <a className="link-muted" href="/login">前往登入</a>
-          </div>
+          <button className="auth-btn" disabled={loading}>
+            {loading ? '建立中…' : '建立帳號'}
+          </button>
         </form>
+
+        <div className="auth-footer">
+          <Link href="/login" className="auth-link">已有帳號？前往登入</Link>
+        </div>
       </div>
     </section>
   );

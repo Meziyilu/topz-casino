@@ -1,162 +1,201 @@
-/* app/(public)/auth-theme.css — Minimal Dark Glass */
+/* styles/auth-theme.css */
 
-:root {
-  --bg: #0a0d12;
-  --fg: #e7eaf0;
-  --fg-dim: #acb2bf;
-  --primary: #6ea8ff;
-  --primary-2: #8f7cff;
-
-  --glass-bg: rgba(18, 22, 30, 0.55);
-  --glass-bd: rgba(255, 255, 255, 0.08);
-  --glass-hl: rgba(255, 255, 255, 0.18);
-
-  --radius: 14px;
-  --shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
-
-  --ring: 0 0 0 3px rgba(110, 168, 255, 0.25);
-}
-
-/* ===== 背景：素面 + 淡光暈動畫 ===== */
-auth-shell, .auth-shell {
-  min-height: 100dvh;
-  background:
-    radial-gradient(900px 500px at 85% 15%, #111827 0%, transparent 70%),
-    radial-gradient(800px 500px at 0% 100%, #0c1321 0%, transparent 70%),
-    linear-gradient(180deg, #070a10, var(--bg));
-  color: var(--fg);
+/* 版面：全螢幕容器 */
+.auth-wrap {
   position: relative;
-  overflow: hidden;
+  min-height: 100vh;
   isolation: isolate;
+  overflow: hidden;
 }
 
-/* 柔和移動的光團（低調、低飽和） */
-.auth-bg { position: absolute; inset: -20%; z-index: -1; filter: blur(36px); }
-.auth-blob {
-  position: absolute; width: 55vmin; height: 55vmin; border-radius: 50%;
-  opacity: 0.28;
+/* 霧面動態背景（純 CSS keyframes，不插入額外節點） */
+.auth-bg {
+  position: absolute;
+  inset: 0;
   background:
-    radial-gradient(circle at 30% 30%, var(--primary) 0%, transparent 60%),
-    radial-gradient(circle at 70% 70%, var(--primary-2) 0%, transparent 60%);
-  animation: floaty 40s ease-in-out infinite alternate;
-  mix-blend-mode: screen;
+    radial-gradient(60vmax 60vmax at 10% 10%, rgba(120, 119, 198, 0.12), transparent 60%),
+    radial-gradient(50vmax 50vmax at 90% 20%, rgba(56, 189, 248, 0.10), transparent 60%),
+    radial-gradient(40vmax 40vmax at 20% 80%, rgba(34, 197, 94, 0.08), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.2));
+  filter: blur(40px) saturate(120%);
+  animation: bgfloat 22s ease-in-out infinite alternate;
+  z-index: -2;
 }
-.auth-blob.b1 { right: -8%; top: -6%; transform: scale(.95); }
-.auth-blob.b2 { left: -12%; bottom: -10%; animation-delay: -12s; transform: scale(.9) rotate(8deg); }
 
-@keyframes floaty {
+@keyframes bgfloat {
   0%   { transform: translate3d(0, 0, 0) scale(1); }
-  50%  { transform: translate3d(2%, -2%, 0) scale(1.03); }
-  100% { transform: translate3d(-2%, 2%, 0) scale(0.98); }
+  100% { transform: translate3d(-2%, -1%, 0) scale(1.02); }
 }
 
-/* 細微噪點，增加質感（很淡） */
-.auth-grain {
-  position: absolute; inset: 0; z-index: 0; pointer-events: none;
-  background-image: radial-gradient(rgba(255,255,255,0.02) 1px, transparent 1px);
-  background-size: 3px 3px; opacity: .7;
-}
-
-/* ===== Header（品牌列，極簡） ===== */
-.auth-header {
-  position: relative; z-index: 2;
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 18px 22px;
-}
+/* 品牌列（固定字樣 TOPZCASINO） */
 .auth-brand {
-  display: flex; align-items: center; gap: 10px;
-  color: var(--fg); text-decoration: none; font-weight: 800;
-  font-size: 16px; letter-spacing: .28em; opacity: .95;
-}
-.auth-header .link { color: var(--fg-dim); text-decoration: none; font-size: 13px; }
-.auth-header .link:hover { color: var(--fg); }
-
-/* ===== 內容容器 ===== */
-.auth-main {
-  position: relative; z-index: 2;
-  min-height: calc(100dvh - 64px);
-  display: grid; place-items: center;
-  padding: 32px 16px 48px;
+  position: fixed;
+  top: 20px;
+  left: 0;
+  right: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  z-index: 10;
 }
 
-/* ===== 玻璃卡片（小尺寸、素） ===== */
-.glass-card {
-  width: min(380px, 92vw);
-  border-radius: var(--radius);
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-bd);
-  backdrop-filter: blur(22px) saturate(125%);
-  -webkit-backdrop-filter: blur(22px) saturate(125%);
-  box-shadow: var(--shadow);
-  overflow: clip;
-  transform: translateZ(0);
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  color: #e5e7eb;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+  user-select: none;
 }
 
-.glass-card::before {
-  content: "";
-  position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.04)) border-box;
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor; mask-composite: exclude;
-  padding: 1px; opacity: .6;
+.brand-crest {
+  font-size: 14px;
+  opacity: 0.8;
 }
 
-.glass-card .head { padding: 18px 18px 8px; }
-.glass-card .title { font-size: 20px; font-weight: 700; letter-spacing: .2px; }
-.glass-card .sub { margin-top: 4px; color: var(--fg-dim); font-size: 13px; }
-.glass-card .body { padding: 14px 18px 18px; }
+.brand-text {
+  font-size: 13px;
+}
 
-/* ===== 表單 ===== */
-.auth-field { display: grid; gap: 6px; margin: 10px 0; }
-.auth-label { font-size: 12px; color: var(--fg); letter-spacing: .2px; opacity: .95; }
+/* 置中容器 */
+.auth-center {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+/* 玻璃卡片 */
+.auth-card {
+  width: 100%;
+  max-width: 380px;               /* 卡片更小、更精緻 */
+  border-radius: 16px;
+  padding: 22px 22px 18px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+  border: 1px solid rgba(255,255,255,0.14);
+  box-shadow:
+    0 10px 30px rgba(0,0,0,0.40),
+    inset 0 1px 0 rgba(255,255,255,0.08);
+  backdrop-filter: blur(14px);
+  transform: translateY(0);
+  animation: cardpop 380ms cubic-bezier(.21,.87,.35,1.02);
+}
+
+@keyframes cardpop {
+  from { transform: translateY(10px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+/* 標題/副標 */
+.auth-title {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  margin: 2px 0 4px;
+}
+
+.auth-sub {
+  font-size: 12px;
+  color: #a3a3a3;
+  margin-bottom: 14px;
+}
+
+/* 表單 */
+.auth-form {
+  display: grid;
+  gap: 12px;
+}
+
+.auth-label > span {
+  display: block;
+  font-size: 12px;
+  color: #c4c4c4;
+  margin-bottom: 6px;
+}
+
 .auth-input {
-  height: 42px; padding: 0 12px; border-radius: 11px; font-size: 14px;
-  color: var(--fg); background: rgba(255,255,255,0.035);
-  border: 1px solid rgba(255,255,255,0.12);
-  outline: none; transition: box-shadow .18s, border-color .18s, background .18s;
+  width: 100%;
+  height: 40px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(12,12,12,0.45);
+  color: #f5f5f5;
+  outline: none;
+  transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
 }
-.auth-input::placeholder { color: #8b93a3; }
-.auth-input:focus {
-  border-color: rgba(110,168,255,0.5); box-shadow: var(--ring);
-  background: rgba(255,255,255,0.055);
-}
-.auth-help { font-size: 12px; color: var(--fg-dim); }
 
-.auth-btn {
-  height: 42px; border-radius: 11px; width: 100%;
-  color: #0b0f16; font-weight: 700; letter-spacing: .2px; border: 0; cursor: pointer;
-  background:
-    radial-gradient(120% 120% at 10% 10%, rgba(255,255,255,0.3) 0%, transparent 30%),
-    linear-gradient(90deg, var(--primary), var(--primary-2));
-  transition: transform .06s ease, filter .18s ease;
+.auth-input::placeholder { color: #7c7c7c; }
+
+.auth-input:focus {
+  border-color: rgba(99, 102, 241, 0.75);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+  background: rgba(18,18,18,0.6);
 }
-.auth-btn:hover { filter: brightness(1.04); }
-.auth-btn:active { transform: translateY(1px) scale(0.996); }
+
+/* 勾選框 */
+.auth-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #cfcfcf;
+  margin-top: 2px;
+}
+
+/* 按鈕 */
+.auth-btn {
+  width: 100%;
+  height: 42px;
+  border: none;
+  border-radius: 12px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: #0b0b0b;
+  background: linear-gradient(180deg, #c7d2fe, #a5b4fc);
+  cursor: pointer;
+  transition: transform 80ms ease, box-shadow 120ms ease, filter 120ms ease;
+  box-shadow: 0 6px 18px rgba(99,102,241,0.35);
+}
+
+.auth-btn:hover { filter: brightness(1.03); }
+.auth-btn:active { transform: translateY(1px); }
 .auth-btn:disabled { opacity: .6; cursor: not-allowed; }
 
-.alt-row {
-  display: flex; justify-content: space-between; align-items: center; gap: 14px;
-  margin-top: 10px;
-}
-.link-muted { color: var(--fg-dim); text-decoration: none; font-size: 12px; }
-.link-muted:hover { color: var(--fg); }
-
-/* 素面分隔線 */
-.hr {
-  height: 1px; width: 100%; margin: 14px 0;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+/* 訊息 */
+.auth-error, .auth-ok {
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  margin-top: 2px;
+  line-height: 1.3;
 }
 
-/* 可及性：清楚 focus 樣式 */
-a:focus-visible, button:focus-visible, input:focus-visible {
-  outline: none; box-shadow: var(--ring); border-radius: 10px;
+.auth-error {
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.10);
+  border: 1px solid rgba(239,68,68,0.25);
 }
 
-/* 行動端間距微調 */
-@media (max-width: 390px) {
-  .glass-card { width: 92vw; }
-  .glass-card .head { padding: 16px 14px 6px; }
-  .glass-card .body { padding: 12px 14px 16px; }
+.auth-ok {
+  color: #bbf7d0;
+  background: rgba(34, 197, 94, 0.10);
+  border: 1px solid rgba(34,197,94,0.25);
 }
+
+/* 底部連結 */
+.auth-footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 14px;
+}
+
+.auth-link {
+  color: #c7d2fe;
+  font-size: 12px;
+  text-decoration: none;
+  opacity: .9;
+}
+.auth-link:hover { text-decoration: underline; }
