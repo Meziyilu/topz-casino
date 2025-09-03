@@ -1,110 +1,101 @@
-import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
+import { NextRequest, NextResponse } from 'next/server';
+import bcrypt from 'bcryptjs';
+import jwt, { type SignOptions } from 'jsonwebtoken';
+import { prisma } from '@/lib/prisma';
+import { parseFormData } from '@/lib/form';
 
-// ===== 環境變數 =====
-const ACCESS_TTL: jwt.SignOptions["expiresIn"] =
-  (process.env.JWT_ACCESS_TTL as jwt.SignOptions["expiresIn"]) || "15m";
-const REFRESH_TTL: jwt.SignOptions["expiresIn"] =
-  (process.env.JWT_REFRESH_TTL as jwt.SignOptions["expiresIn"]) || "7d";
-const JWT_SECRET = (process.env.JWT_SECRET || "") as jwt.Secret;
-const REFRESH_SECRET = (process.env.JWT_REFRESH_SECRET || "") as jwt.Secret;
+const ACCESS_TTL: SignOptions['expiresIn'] = (process.env.JWT_ACCESS_TTL as any) || '15m';
+const REFRESH_TTL: SignOptions['expiresIn'] = (process.env.JWT_REFRESH_TTL as any) || '7d';
+const JWT_SECRET = (process.env.JWT_SECRET || '') as jwt.Secret;
+const REFRESH_SECRET = (process.env.JWT_REFRESH_SECRET || '') as jwt.Secret;
 
-// ===== 解析 Request Body（支援 JSON / FormData）=====
-async function readBody(req: NextRequest) {
-  const isJson = req.headers.get("content-type")?.includes("application/json");
-  if (isJson) return await req.json();
-
-  const fd = await req.formData();
-  const map: Record<string, string> = {};
-  // ✅ 用 forEach 取代 entries()，避免 TS 報錯
-  fd.forEach((value, key) => {
-    if (typeof value === "string") {
-      map[key] = value;
-    } else {
-      map[key] = value.name ?? "blob";
-    }
-  });
-  return map;
+function getIp(req: NextRequest) {
+  return (
+    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    req.headers.get('x-real-ip') ||
+    '0.0.0.0'
+  );
 }
 
-// ===== POST: 登入 =====
 export async function POST(req: NextRequest) {
   try {
-    const body = await readBody(req);
-    const { email, password } = body;
+    const isJson = req.headers.get('content-type')?.includes('application/json');
+    const body = isJson ? await req.json() : await parseFormData(req);
+    const email = String(body.email || '').trim().toLowerCase();
+    const password = String(body.password || '');
 
     if (!email || !password) {
-      return NextResponse.json({ ok: false, error: "缺少必要欄位" }, { status: 400 });
+      return NextResponse.json({ ok: false, error: 'MISSING_CREDENTIALS' }, { status: 400 });
+    }
+    if (!JWT_SECRET || !REFRESH_SECRET) {
+      return NextResponse.json({ ok: false, error: 'SERVER_MISCONFIGURED' }, { status: 500 });
     }
 
-    // 查詢使用者
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        password: true,
+        displayName: true,
+        isAdmin: true,
+        isBanned: true,
+        emailVerifiedAt: true,
+      },
+    });
+
     if (!user) {
-      return NextResponse.json({ ok: false, error: "帳號或密碼錯誤" }, { status: 401 });
+      return NextResponse.json({ ok: false, error: 'INVALID_LOGIN' }, { status: 401 });
     }
-
-    // 驗證狀態
     if (user.isBanned) {
-      return NextResponse.json({ ok: false, error: "帳號已被封禁" }, { status: 403 });
+      return NextResponse.json({ ok: false, error: 'ACCOUNT_BANNED' }, { status: 403 });
     }
-    if (!user.emailVerifiedAt) {
-      return NextResponse.json({ ok: false, error: "Email 尚未驗證" }, { status: 403 });
+    // 若你目前還未開啟 Email 驗證，可先註解此段
+    // if (!user.emailVerifiedAt) {
+    //   return NextResponse.json({ ok: false, error: 'EMAIL_NOT_VERIFIED' }, { status: 403 });
+    // }
+
+    const ok = await bcrypt.compare(password, user.password);
+    if (!ok) {
+      return NextResponse.json({ ok: false, error: 'INVALID_LOGIN' }, { status: 401 });
     }
 
-    // 驗證密碼
-    const valid = await bcrypt.compare(password, user.password);
-    if (!valid) {
-      return NextResponse.json({ ok: false, error: "帳號或密碼錯誤" }, { status: 401 });
-    }
+    const ip = getIp(req);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date(), lastLoginIp: ip },
+    });
 
-    // Payload
-    const accessPayload = { uid: user.id, typ: "access" as const };
-    const refreshPayload = { uid: user.id, typ: "refresh" as const };
+    const accessPayload = { uid: user.id, typ: 'access' as const };
+    const refreshPayload = { uid: user.id, typ: 'refresh' as const };
 
-    // 簽發 JWT
     const accessToken = jwt.sign(accessPayload, JWT_SECRET, { expiresIn: ACCESS_TTL });
     const refreshToken = jwt.sign(refreshPayload, REFRESH_SECRET, { expiresIn: REFRESH_TTL });
 
-    // 更新登入資訊
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        lastLoginAt: new Date(),
-        lastLoginIp: req.ip ?? "unknown",
-      },
-    });
-
-    // 回應
     const res = NextResponse.json({
       ok: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        displayName: user.displayName,
-      },
+      user: { id: user.id, email: user.email, displayName: user.displayName, isAdmin: user.isAdmin },
     });
 
-    // 設定 HttpOnly Cookie
-    res.cookies.set("token", accessToken, {
+    const isProd = process.env.NODE_ENV === 'production';
+    res.cookies.set('token', accessToken, {
       httpOnly: true,
-      secure: true,
-      sameSite: "lax",
-      maxAge: 60 * 15, // 15 分鐘
-      path: "/",
+      sameSite: 'lax',
+      secure: isProd,
+      path: '/',
+      maxAge: 60 * 60, // 1h（與 15m access token 壽命不完全一致沒關係，下次請求會 refresh）
     });
-    res.cookies.set("refresh_token", refreshToken, {
+    res.cookies.set('refresh_token', refreshToken, {
       httpOnly: true,
-      secure: true,
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7, // 7 天
-      path: "/",
+      sameSite: 'lax',
+      secure: isProd,
+      path: '/',
+      maxAge: 60 * 60 * 24 * 7, // 7d
     });
 
     return res;
   } catch (err) {
-    console.error("Login error:", err);
-    return NextResponse.json({ ok: false, error: "伺服器錯誤" }, { status: 500 });
+    console.error('LOGIN_ERROR', err);
+    return NextResponse.json({ ok: false, error: 'INTERNAL_ERROR' }, { status: 500 });
   }
 }
