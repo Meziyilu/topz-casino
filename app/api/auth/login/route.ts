@@ -4,13 +4,16 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { parseFormData } from '@/lib/form';
 
-// TTL / Secret 正規化
+// 可選：快速放行測試（設 DEV_BYPASS_LOGIN=1 時，密碼不檢查，帳號不存在會報 401）
+const DEV_BYPASS = process.env.DEV_BYPASS_LOGIN === '1';
+
+// TTL / Secret 正規化（把 || 補回來）
 const RAW_ACCESS_TTL = process.env.JWT_ACCESS_TTL ?? '15m';
 const RAW_REFRESH_TTL = process.env.JWT_REFRESH_TTL ?? '7d';
 const ACCESS_TTL: SignOptions['expiresIn'] = RAW_ACCESS_TTL as unknown as SignOptions['expiresIn'];
 const REFRESH_TTL: SignOptions['expiresIn'] = RAW_REFRESH_TTL as unknown as SignOptions['expiresIn'];
-const JWT_SECRET = (process.env.JWT_SECRET || '') as jwt.Secret;
-const REFRESH_SECRET = (process.env.JWT_REFRESH_SECRET || '') as jwt.Secret;
+const JWT_SECRET = (process.env.JWT_SECRET || 'dev_secret') as jwt.Secret;
+const REFRESH_SECRET = (process.env.JWT_REFRESH_SECRET || 'dev_refresh') as jwt.Secret;
 
 function ttlToSeconds(ttl: SignOptions['expiresIn']): number {
   if (typeof ttl === 'number') return ttl;
@@ -46,10 +49,11 @@ export async function POST(req: NextRequest) {
     if (!user) return NextResponse.json({ ok: false, error: 'INVALID_CREDENTIALS' }, { status: 401 });
     if (user.isBanned) return NextResponse.json({ ok: false, error: 'ACCOUNT_BANNED' }, { status: 403 });
 
-    // 這裡不再檢查 emailVerifiedAt
-
-    const ok = await bcrypt.compare(password, user.password);
-    if (!ok) return NextResponse.json({ ok: false, error: 'INVALID_CREDENTIALS' }, { status: 401 });
+    // 密碼驗證（若開 DEV_BYPASS_LOGIN=1 就跳過密碼檢查以快速放行）
+    if (!DEV_BYPASS) {
+      const ok = await bcrypt.compare(password, user.password);
+      if (!ok) return NextResponse.json({ ok: false, error: 'INVALID_CREDENTIALS' }, { status: 401 });
+    }
 
     const accessPayload = { uid: user.id, isAdmin: user.isAdmin, typ: 'access' as const };
     const refreshPayload = { uid: user.id, typ: 'refresh' as const };
@@ -64,10 +68,18 @@ export async function POST(req: NextRequest) {
     const res = NextResponse.json({ ok: true });
     const isProd = process.env.NODE_ENV === 'production';
     res.cookies.set('token', accessToken, {
-      httpOnly: true, sameSite: 'lax', secure: isProd, path: '/', maxAge: ttlToSeconds(ACCESS_TTL),
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: isProd,
+      path: '/',
+      maxAge: ttlToSeconds(ACCESS_TTL),
     });
     res.cookies.set('refresh_token', refreshToken, {
-      httpOnly: true, sameSite: 'lax', secure: isProd, path: '/', maxAge: ttlToSeconds(REFRESH_TTL),
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: isProd,
+      path: '/',
+      maxAge: ttlToSeconds(REFRESH_TTL),
     });
 
     return res;
