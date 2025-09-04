@@ -8,7 +8,7 @@ export default function GameCard({
       <div className="title">{title}</div>
       <div className="meta">
         {typeof online === "number" && <span>在線 {online}人</span>}
-        {typeof countdown === "number" && <span style={{marginLeft:10}}>倒數 {countdown}s</span>}
+        {typeof countdown === "number" && <span style={{ marginLeft: 10 }}>倒數 {countdown}s</span>}
       </div>
       {!disabled && <div className="badge">立即進入</div>}
       {disabled && <div className="badge">COMING SOON</div>}

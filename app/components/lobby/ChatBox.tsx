@@ -10,8 +10,7 @@ export default function ChatBox({ room }: { room: string }) {
   const [text, setText] = useState("");
   const box = useRef<HTMLDivElement>(null);
 
-  useEffect(()=> {
-    // 自動捲到底
+  useEffect(() => {
     if (!box.current) return;
     box.current.scrollTop = box.current.scrollHeight;
   }, [list.length]);
@@ -21,16 +20,14 @@ export default function ChatBox({ room }: { room: string }) {
     const m: Msg = { id: crypto.randomUUID(), user: "你", body: text.trim(), ts: Date.now() };
     setList(l => [...l, m]);
     setText("");
-
-    // TODO: 之後串 /api/chat/send
-    // await fetch('/api/chat/send', { method:'POST', body: JSON.stringify({ room, body: m.body }) })
+    // TODO: 串 /api/chat/send
   }
 
   return (
     <div className="lb-card chat-box">
       <div className="chat-head">
         <div className="lb-card-title">大廳聊天室</div>
-        <div className="lb-muted" style={{fontSize:12}}>房間：{room}</div>
+        <div className="lb-muted" style={{ fontSize: 12 }}>房間：{room}</div>
       </div>
       <div ref={box} className="chat-body">
         {list.map(m =>
@@ -38,7 +35,7 @@ export default function ChatBox({ room }: { room: string }) {
         )}
       </div>
       <div className="chat-foot">
-        <input value={text} onChange={e=>setText(e.target.value)} placeholder="輸入訊息…" />
+        <input value={text} onChange={e => setText(e.target.value)} placeholder="輸入訊息…" />
         <button onClick={send}>送出</button>
       </div>
     </div>

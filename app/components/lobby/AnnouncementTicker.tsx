@@ -4,10 +4,11 @@ import { useEffect, useRef, useState } from "react";
 export default function AnnouncementTicker({ items }: { items: string[] }) {
   const [i, setI] = useState(0);
   const timer = useRef<number | null>(null);
-  useEffect(()=>{
-    timer.current = window.setInterval(()=> setI(v => (v+1)%items.length), 3000);
-    return ()=> { if (timer.current) clearInterval(timer.current); };
-  },[items.length]);
+  useEffect(() => {
+    if (items.length <= 1) return;
+    timer.current = window.setInterval(() => setI(v => (v + 1) % items.length), 3000);
+    return () => { if (timer.current) clearInterval(timer.current); };
+  }, [items.length]);
   return (
     <div style={{
       minWidth: 0, maxWidth: 720,
@@ -16,7 +17,7 @@ export default function AnnouncementTicker({ items }: { items: string[] }) {
       background: "linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02))",
       color: "#eaf6ff", overflow: "hidden", whiteSpace: "nowrap"
     }}>
-      {items[i]}
+      {items[i] ?? ""}
     </div>
   );
 }
