@@ -1,6 +1,6 @@
 // lib/auth.ts
 import jwt, { type JwtPayload, type SignOptions } from 'jsonwebtoken';
-import { NextRequest, NextResponse, type RequestCookies } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from './prisma';
 
 const JWT_SECRET = (process.env.JWT_SECRET || 'dev_secret') as jwt.Secret;
@@ -20,7 +20,7 @@ export function signRefresh(uid: string) {
 
 export function setAuthCookies(res: NextResponse, access: string, refresh: string) {
   const isProd = process.env.NODE_ENV === 'production';
-  const accMaxAge = 15 * 60; // 15m（足夠）
+  const accMaxAge = 15 * 60; // 15m
   const refMaxAge = 7 * 24 * 60 * 60; // 7d
   res.cookies.set('token', access, { httpOnly: true, sameSite: 'lax', secure: isProd, path: '/', maxAge: accMaxAge });
   res.cookies.set('refresh_token', refresh, { httpOnly: true, sameSite: 'lax', secure: isProd, path: '/', maxAge: refMaxAge });
@@ -32,8 +32,12 @@ export function clearAuth(res: NextResponse) {
   res.cookies.set('refresh_token', '', { httpOnly: true, sameSite: 'lax', secure: isProd, path: '/', maxAge: 0 });
 }
 
-export function readAccessFromCookies(cookies: RequestCookies) {
-  const token = cookies.get('token')?.value;
+/**
+ * 用寬鬆型別來讀 cookie，避免引入 Next 私有型別。
+ * 任何具備 get(name) => { value?: string } 的物件都可用（如 NextRequest.cookies）
+ */
+export function readAccessFromCookies(cookies: { get: (name: string) => { value?: string } | undefined } | undefined) {
+  const token = cookies?.get('token')?.value;
   if (!token) return null;
   try {
     const payload = jwt.verify(token, JWT_SECRET) as JwtPayload & { uid: string; isAdmin: boolean; typ: 'access' };
