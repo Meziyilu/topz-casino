@@ -1,184 +1,284 @@
-/* app/(public)/auth-theme.css */
-
-/* ===== 全域（僅套用在 (public) 分區） ===== */
+/* app/(public)/auth-pro.css */
+/* ============ 設定：只在 (public) 使用，避免全域污染 ============ */
 :root {
-  --bg0: #0a0b0f;
-  --bg1: #0f1117;
-  --glass: rgba(255, 255, 255, 0.06);
-  --glass-border: rgba(255, 255, 255, 0.12);
-  --txt: #e6e9ef;
-  --txt-dim: #aab1bd;
-  --brand: #9b8cff;    /* 紫色霓虹 */
-  --acc: #66d9ff;      /* 藍色點綴 */
+  --tc-bg0: #07080b;
+  --tc-bg1: #0b0d13;
+  --tc-fg: #e9ecf2;
+  --tc-fg-dim: #a8b0be;
+
+  --tc-glass-1: rgba(255,255,255,0.08);
+  --tc-glass-2: rgba(255,255,255,0.04);
+  --tc-border-1: rgba(255,255,255,0.18);
+  --tc-border-2: rgba(255,255,255,0.10);
+
+  --tc-brand: #a38dff; /* 紫霓虹 */
+  --tc-accent: #65ddff; /* 藍點綴 */
+  --tc-danger: #ff8f8f;
+
+  --tc-radius: 18px;
+  --tc-card-w: 430px;
+
+  /* 卡片 3D 跟隨：JS 可動態寫入 [-6,6] 度 */
+  --rx: 0deg;
+  --ry: 0deg;
 }
 
-/* 霧面漸層背景 + 噪點 */
-.auth-bg {
-  margin: 0;
+/* ============ 整體背景：深色層次 + 懸浮光暈 + 粒子 ============ */
+.tc-auth-wrap {
   min-height: 100dvh;
-  color: var(--txt);
+  color: var(--tc-fg);
   background:
-    radial-gradient(1200px 600px at 80% -10%, rgba(153, 102, 255, 0.18), transparent 60%),
-    radial-gradient(900px 600px at 0% 100%, rgba(102, 217, 255, 0.14), transparent 60%),
-    linear-gradient(180deg, var(--bg0), var(--bg1));
+    radial-gradient(1200px 600px at 85% -10%, rgba(163,141,255,0.22), transparent 60%),
+    radial-gradient(1000px 700px at -10% 110%, rgba(101,221,255,0.16), transparent 60%),
+    linear-gradient(180deg, var(--tc-bg0), var(--tc-bg1));
   position: relative;
   overflow: hidden;
-  font-synthesis-weight: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* 漂浮光暈動畫 */
-.auth-bg::before,
-.auth-bg::after {
+/* 噪點讓霧面更有質感 */
+.tc-auth-wrap::before {
   content: '';
-  position: absolute;
-  width: 48rem;
-  height: 48rem;
-  border-radius: 50%;
-  filter: blur(60px);
-  opacity: 0.28;
-  animation: float 18s ease-in-out infinite;
+  position: absolute; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' opacity='0.06' width='160' height='160' viewBox='0 0 160 160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .8 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   pointer-events: none;
 }
-.auth-bg::before {
-  background: radial-gradient(circle at 30% 30%, var(--brand), transparent 60%);
-  top: -20rem; left: -10rem;
+
+/* 兩個緩動光暈（紫/藍） */
+.tc-glow, .tc-glow-2 {
+  position: absolute; border-radius: 50%;
+  width: 48rem; height: 48rem; filter: blur(60px);
+  opacity: .28; pointer-events: none; animation: tc-float 18s ease-in-out infinite;
 }
-.auth-bg::after {
-  background: radial-gradient(circle at 70% 70%, var(--acc), transparent 60%);
-  bottom: -22rem; right: -12rem;
-  animation-delay: -9s;
-}
-@keyframes float {
+.tc-glow   { top: -22rem; left: -12rem; background: radial-gradient(circle at 30% 30%, var(--tc-brand), transparent 60%); }
+.tc-glow-2 { bottom: -24rem; right: -14rem; background: radial-gradient(circle at 70% 70%, var(--tc-accent), transparent 60%); animation-delay: -9s; }
+
+@keyframes tc-float {
   0%,100% { transform: translate3d(0,0,0) scale(1); }
-  50%     { transform: translate3d(0,-12px,0) scale(1.03); }
+  50%     { transform: translate3d(0,-10px,0) scale(1.02); }
 }
 
-/* 頁面骨架 */
-.auth-header,
-.auth-footer {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 18px 16px;
+/* 動態粒子（純 CSS 跳動），JS 也可改成 canvas 粒子 */
+.tc-particles {
+  position: absolute; inset: 0; pointer-events: none; opacity: .25;
+  background:
+    radial-gradient(2px 2px at 20% 30%, #fff, transparent 40%) 0 0 / 120px 120px,
+    radial-gradient(2px 2px at 60% 70%, #fff, transparent 40%) 40px 60px / 140px 140px,
+    radial-gradient(1.5px 1.5px at 80% 20%, #fff, transparent 40%) 100px 10px / 160px 160px;
+  animation: tc-stars 20s linear infinite;
+}
+@keyframes tc-stars {
+  from { background-position: 0 0, 40px 60px, 100px 10px; }
+  to   { background-position: 0 -200px, 40px -140px, 100px -260px; }
 }
 
-.brand {
-  font-size: clamp(28px, 4vw, 40px);
-  font-weight: 800;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--txt);
-  text-shadow:
-    0 0 12px rgba(155, 140, 255, 0.35),
-    0 0 22px rgba(102, 217, 255, 0.25);
-  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.45));
+/* ============ 頁頭/頁尾/主區 ============ */
+.tc-auth-header,
+.tc-auth-footer { display: flex; justify-content: center; align-items: center; padding: 20px 16px; }
+
+.tc-brand {
+  font-size: clamp(32px, 4.4vw, 48px);
+  font-weight: 800; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--tc-fg);
+  text-shadow: 0 0 14px rgba(163,141,255,.35), 0 0 24px rgba(101,221,255,.25);
+  filter: drop-shadow(0 4px 10px rgba(0,0,0,.45));
+  text-align: center;
 }
 
-/* 內容置中 */
-.auth-main {
-  min-height: calc(100dvh - 120px);
-  display: grid;
-  place-items: center;
-  padding: 24px 16px 32px;
+.tc-auth-main {
+  min-height: calc(100dvh - 140px);
+  display: grid; place-items: center;
+  padding: 24px 16px 36px;
+  perspective: 1000px; /* 卡片 3D */
 }
 
-/* ===== 玻璃卡片（供 login/register 頁使用） ===== */
-.auth-card {
-  width: min(420px, 92vw);
-  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
-  border: 1px solid var(--glass-border);
-  border-radius: 18px;
+/* ============ 玻璃擬態卡片 ============ */
+.tc-auth-card {
+  width: min(var(--tc-card-w), 92vw);
+  border-radius: var(--tc-radius);
   padding: 22px 20px;
+  background: linear-gradient(180deg, var(--tc-glass-1), var(--tc-glass-2));
+  border: 1px solid var(--tc-border-1);
   backdrop-filter: blur(14px) saturate(120%);
   box-shadow:
-    0 10px 30px rgba(0,0,0,0.45),
-    inset 0 1px 0 rgba(255,255,255,0.08);
-  transform: translate3d(0,6px,0);
-  animation: cardIn 600ms cubic-bezier(.21,1,.21,1) both;
-}
-@keyframes cardIn {
-  from { transform: translate3d(0,18px,0) scale(.98); opacity: 0; }
-  to   { transform: translate3d(0,0,0)  scale(1);     opacity: 1; }
-}
-
-.auth-card h1 {
-  margin: 0 0 6px;
-  font-size: 22px;
-  font-weight: 700;
-}
-.auth-card p.tip {
-  margin: 0 0 16px;
-  color: var(--txt-dim);
-  font-size: 13px;
+    0 40px 80px rgba(0,0,0,.50),
+    0 16px 32px rgba(0,0,0,.32),
+    inset 0 1px 0 rgba(255,255,255,.08);
+  position: relative;
+  transform: translate3d(0,14px,0) scale(.985) rotateX(.6deg) rotateY(0deg);
+  animation: tc-card-in 700ms cubic-bezier(.22,1,.22,1) both;
+  will-change: transform, box-shadow;
 }
 
-/* 表單 */
-.auth-field {
-  display: grid;
-  gap: 8px;
-  margin: 12px 0;
+/* 進場 */
+@keyframes tc-card-in {
+  from { transform: translate3d(0,26px,0) scale(.97) rotateX(2deg); opacity: 0; }
+  to   { transform: translate3d(0,14px,0) scale(.985) rotateX(.6deg); opacity: 1; }
 }
-.auth-label {
-  font-size: 12px;
-  color: var(--txt-dim);
+
+/* 漸層描邊（外發光輪廓） */
+.tc-auth-card::after {
+  content: ''; position: absolute; inset: -1px; border-radius: inherit;
+  padding: 1px; pointer-events: none;
+  background: linear-gradient(135deg, rgba(163,141,255,.45), rgba(101,221,255,.35));
+  -webkit-mask:
+     linear-gradient(#000 0 0) content-box,
+     linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  opacity: .45;
 }
-.auth-input {
-  height: 42px;
-  padding: 0 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(8,10,14,0.6);
-  color: var(--txt);
+
+/* 上方玻璃反射 */
+.tc-auth-card::before {
+  content:'';
+  position:absolute; inset: -1px -1px auto -1px; height: 42%;
+  background: linear-gradient(to bottom, rgba(255,255,255,.22), rgba(255,255,255,.06) 40%, rgba(255,255,255,0) 100%);
+  mix-blend-mode: overlay; opacity:.16; pointer-events:none;
+  border-top-left-radius: var(--tc-radius); border-top-right-radius: var(--tc-radius);
+}
+
+/* Hover 微傾斜（若無 JS 跟隨，至少有 hover） */
+.tc-auth-card:hover {
+  transform: translate3d(0,6px,0) scale(1) rotateX(.2deg) rotateY(0deg);
+  box-shadow:
+    0 50px 90px rgba(0,0,0,.55),
+    0 20px 40px rgba(0,0,0,.35),
+    0 0 0 1px rgba(163,141,255,.18),
+    0 0 22px rgba(163,141,255,.16),
+    inset 0 1px 0 rgba(255,255,255,.1);
+}
+
+/* 若有 JS 寫入 --rx/--ry，會自動使用跟隨角度 */
+.tc-auth-card.tc-follow {
+  transform:
+    translate3d(0,6px,0)
+    rotateX(var(--rx))
+    rotateY(var(--ry));
+}
+
+/* ============ 分頁切換（登入 / 註冊） ============ */
+.tc-tabs {
+  position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--tc-border-2);
+  border-radius: 12px; padding: 6px; margin-bottom: 16px;
+}
+.tc-tab {
+  position: relative; z-index: 1;
+  height: 40px; border: 0; border-radius: 10px; cursor: pointer;
+  color: var(--tc-fg); background: transparent; font-weight: 700;
+  letter-spacing: .02em;
+}
+.tc-indicator {
+  position: absolute; z-index: 0;
+  height: 40px; width: calc(50% - 6px);
+  background: linear-gradient(135deg, rgba(179,163,255,.22), rgba(107,224,255,.22));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.12), 0 10px 24px rgba(163,141,255,.20);
+  border-radius: 10px;
+  top: 6px; left: 6px;
+  transition: transform .34s cubic-bezier(.22,1,.22,1);
+}
+
+/* 兩種驅動方式：頁面加 wrapper class .is-register / .is-login */
+.tc-tabs.is-register .tc-indicator { transform: translateX(100%); }
+.tc-tabs.is-login    .tc-indicator { transform: translateX(0%); }
+
+/* ============ 標題與提示 ============ */
+.tc-auth-card h1 { margin: 2px 2px 6px; font-size: 22px; font-weight: 800; letter-spacing: .02em; }
+.tc-tip       { margin: 0 2px 16px; color: var(--tc-fg-dim); font-size: 13px; }
+
+/* ============ 浮動標籤輸入框 ============ */
+.tc-field { margin: 14px 0; }
+.tc-float { position: relative; }
+
+.tc-input {
+  width: 100%; height: 48px; border-radius: 12px; padding: 14px 44px 0 14px;
+  border: 1px solid var(--tc-border-1);
+  background: rgba(9,11,16,.65);
+  color: var(--tc-fg);
   outline: none;
   transition: border-color .18s ease, box-shadow .18s ease, transform .06s ease;
 }
-.auth-input:focus {
-  border-color: rgba(155,140,255,0.6);
-  box-shadow: 0 0 0 4px rgba(155,140,255,0.18);
+.tc-input::placeholder { color: transparent; } /* 用浮動標籤，不顯示 placeholder 文字 */
+.tc-input:focus {
+  border-color: rgba(163,141,255,.65);
+  box-shadow: 0 0 0 4px rgba(163,141,255,.18);
 }
 
-/* 主要按鈕（帶微亮動畫） */
-.auth-btn {
-  height: 44px;
-  border: 0;
-  border-radius: 12px;
-  color: #0b0c10;
-  font-weight: 700;
-  letter-spacing: .02em;
-  background: linear-gradient(135deg, #a08bff, #6ad7ff);
-  cursor: pointer;
-  transition: transform .06s ease, filter .2s ease, box-shadow .2s ease;
-  box-shadow:
-    0 8px 24px rgba(160,139,255,.25),
-    0 4px 12px rgba(106,215,255,.2);
-}
-.auth-btn:hover { filter: brightness(1.05); }
-.auth-btn:active { transform: translateY(1px); }
-
-/* 次要文字鏈結 */
-.auth-actions {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  margin-top: 10px;
-  font-size: 13px;
-}
-.auth-link {
-  color: var(--acc);
-  text-decoration: none;
-  transition: color .15s ease;
-}
-.auth-link:hover { color: #9ee5ff; }
-
-/* 錯誤訊息 */
-.auth-error {
-  margin-top: 10px;
-  font-size: 13px;
-  color: #ff8e8e;
+.tc-label {
+  position: absolute; left: 12px; top: 50%; translate: 0 -50%;
+  color: #8a90a0; font-size: 14px; pointer-events: none;
+  transition: transform .18s ease, color .18s ease, font-size .18s ease, top .18s ease;
+  padding: 0 4px; background: linear-gradient(180deg, rgba(11,13,19,.9), rgba(11,13,19,.4));
+  border-radius: 6px;
 }
 
-/* Footer */
-.auth-footer {
-  opacity: .7;
-  font-size: 12px;
+/* 浮起條件：focus 或有內容（:placeholder-shown 為 false） */
+.tc-input:focus + .tc-label,
+.tc-input:not(:placeholder-shown) + .tc-label {
+  top: 8px; translate: 0 0; font-size: 11px; color: var(--tc-fg-dim);
+}
+
+/* 密碼顯示切換按鈕（需少量 JS 真正切換 type） */
+.tc-eye {
+  position: absolute; right: 10px; top: 50%; translate: 0 -50%;
+  width: 30px; height: 30px; border-radius: 8px;
+  border: 1px solid var(--tc-border-2);
+  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+  display: grid; place-items: center; cursor: pointer;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.tc-eye:hover { border-color: rgba(163,141,255,.45); box-shadow: 0 0 0 3px rgba(163,141,255,.14); }
+
+/* 眼睛 icon（mask SVG） */
+.tc-eye::before {
+  content: ''; width: 18px; height: 18px; display: block;
+  background: var(--tc-fg);
+  -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="%23fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>') center/contain no-repeat;
+          mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="%23fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>') center/contain no-repeat;
+}
+
+/* 驗證錯誤訊息 */
+.tc-error { margin-top: 8px; font-size: 13px; color: var(--tc-danger); }
+
+/* ============ 主要按鈕（霓虹玻璃） ============ */
+.tc-btn {
+  width: 100%; height: 46px; border: 0; border-radius: 12px; cursor: pointer;
+  color: #0b0c10; font-weight: 800; letter-spacing: .02em;
+  background: linear-gradient(135deg, #b3a3ff, #6be0ff);
+  box-shadow: 0 12px 28px rgba(163,141,255,.28), 0 6px 16px rgba(107,224,255,.20);
+  transition: transform .06s ease, filter .18s ease, box-shadow .25s ease;
+}
+.tc-btn:hover  { filter: brightness(1.05); }
+.tc-btn:active { transform: translateY(1px); }
+
+/* 次動作 */
+.tc-actions {
+  display: flex; justify-content: space-between; gap: 10px;
+  margin-top: 12px; font-size: 13px;
+}
+.tc-link { color: var(--tc-accent); text-decoration: none; transition: color .15s ease; }
+.tc-link:hover { color: #a6eeff; }
+
+/* ============ 轉場容器（登入/註冊 面板切換） ============ */
+.tc-panels {
+  position: relative; overflow: hidden; border-radius: 14px; margin-top: 8px;
+}
+.tc-panel {
+  transform-origin: 50% 50%;
+  transition: opacity .35s ease, transform .35s ease;
+}
+.tc-panel[hidden] { display: block !important; opacity: 0; height: 0; overflow: hidden; transform: translateY(6px) scale(.98); }
+
+/* ============ 響應式 ============ */
+@media (max-width: 480px) {
+  .tc-auth-card { padding: 18px 16px; }
+  .tc-brand { letter-spacing: .14em; }
+}
+
+/* 動畫減少支援 */
+@media (prefers-reduced-motion: reduce) {
+  .tc-glow, .tc-glow-2, .tc-particles, .tc-auth-card { animation: none !important; }
+  .tc-indicator { transition: none !important; }
 }
