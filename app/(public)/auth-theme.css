@@ -1,0 +1,184 @@
+/* app/(public)/auth-theme.css */
+
+/* ===== 全域（僅套用在 (public) 分區） ===== */
+:root {
+  --bg0: #0a0b0f;
+  --bg1: #0f1117;
+  --glass: rgba(255, 255, 255, 0.06);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --txt: #e6e9ef;
+  --txt-dim: #aab1bd;
+  --brand: #9b8cff;    /* 紫色霓虹 */
+  --acc: #66d9ff;      /* 藍色點綴 */
+}
+
+/* 霧面漸層背景 + 噪點 */
+.auth-bg {
+  margin: 0;
+  min-height: 100dvh;
+  color: var(--txt);
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(153, 102, 255, 0.18), transparent 60%),
+    radial-gradient(900px 600px at 0% 100%, rgba(102, 217, 255, 0.14), transparent 60%),
+    linear-gradient(180deg, var(--bg0), var(--bg1));
+  position: relative;
+  overflow: hidden;
+  font-synthesis-weight: none;
+}
+
+/* 漂浮光暈動畫 */
+.auth-bg::before,
+.auth-bg::after {
+  content: '';
+  position: absolute;
+  width: 48rem;
+  height: 48rem;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.28;
+  animation: float 18s ease-in-out infinite;
+  pointer-events: none;
+}
+.auth-bg::before {
+  background: radial-gradient(circle at 30% 30%, var(--brand), transparent 60%);
+  top: -20rem; left: -10rem;
+}
+.auth-bg::after {
+  background: radial-gradient(circle at 70% 70%, var(--acc), transparent 60%);
+  bottom: -22rem; right: -12rem;
+  animation-delay: -9s;
+}
+@keyframes float {
+  0%,100% { transform: translate3d(0,0,0) scale(1); }
+  50%     { transform: translate3d(0,-12px,0) scale(1.03); }
+}
+
+/* 頁面骨架 */
+.auth-header,
+.auth-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 16px;
+}
+
+.brand {
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--txt);
+  text-shadow:
+    0 0 12px rgba(155, 140, 255, 0.35),
+    0 0 22px rgba(102, 217, 255, 0.25);
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.45));
+}
+
+/* 內容置中 */
+.auth-main {
+  min-height: calc(100dvh - 120px);
+  display: grid;
+  place-items: center;
+  padding: 24px 16px 32px;
+}
+
+/* ===== 玻璃卡片（供 login/register 頁使用） ===== */
+.auth-card {
+  width: min(420px, 92vw);
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+  border: 1px solid var(--glass-border);
+  border-radius: 18px;
+  padding: 22px 20px;
+  backdrop-filter: blur(14px) saturate(120%);
+  box-shadow:
+    0 10px 30px rgba(0,0,0,0.45),
+    inset 0 1px 0 rgba(255,255,255,0.08);
+  transform: translate3d(0,6px,0);
+  animation: cardIn 600ms cubic-bezier(.21,1,.21,1) both;
+}
+@keyframes cardIn {
+  from { transform: translate3d(0,18px,0) scale(.98); opacity: 0; }
+  to   { transform: translate3d(0,0,0)  scale(1);     opacity: 1; }
+}
+
+.auth-card h1 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 700;
+}
+.auth-card p.tip {
+  margin: 0 0 16px;
+  color: var(--txt-dim);
+  font-size: 13px;
+}
+
+/* 表單 */
+.auth-field {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+.auth-label {
+  font-size: 12px;
+  color: var(--txt-dim);
+}
+.auth-input {
+  height: 42px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(8,10,14,0.6);
+  color: var(--txt);
+  outline: none;
+  transition: border-color .18s ease, box-shadow .18s ease, transform .06s ease;
+}
+.auth-input:focus {
+  border-color: rgba(155,140,255,0.6);
+  box-shadow: 0 0 0 4px rgba(155,140,255,0.18);
+}
+
+/* 主要按鈕（帶微亮動畫） */
+.auth-btn {
+  height: 44px;
+  border: 0;
+  border-radius: 12px;
+  color: #0b0c10;
+  font-weight: 700;
+  letter-spacing: .02em;
+  background: linear-gradient(135deg, #a08bff, #6ad7ff);
+  cursor: pointer;
+  transition: transform .06s ease, filter .2s ease, box-shadow .2s ease;
+  box-shadow:
+    0 8px 24px rgba(160,139,255,.25),
+    0 4px 12px rgba(106,215,255,.2);
+}
+.auth-btn:hover { filter: brightness(1.05); }
+.auth-btn:active { transform: translateY(1px); }
+
+/* 次要文字鏈結 */
+.auth-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  font-size: 13px;
+}
+.auth-link {
+  color: var(--acc);
+  text-decoration: none;
+  transition: color .15s ease;
+}
+.auth-link:hover { color: #9ee5ff; }
+
+/* 錯誤訊息 */
+.auth-error {
+  margin-top: 10px;
+  font-size: 13px;
+  color: #ff8e8e;
+}
+
+/* Footer */
+.auth-footer {
+  opacity: .7;
+  font-size: 12px;
+}
