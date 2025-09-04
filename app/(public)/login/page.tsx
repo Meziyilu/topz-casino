@@ -1,19 +1,35 @@
 // app/(public)/login/page.tsx
 'use client';
-import { useState } from 'react';
+
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+
+// 讓此頁不要被預產生，避免 CSR hook 在 SSG 時報錯
+export const dynamic = 'force-dynamic';
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="tc-auth-card"><div className="tc-card-inner">Loading…</div></div>}>
+      <LoginCard />
+    </Suspense>
+  );
+}
+
+function LoginCard() {
+  const router = useRouter();
+  const search = useSearchParams(); // ← 這裡已經被 Suspense 包住了
+  const nextPath = search.get('next') || '/';
+
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
-  const sp = useSearchParams();
-  const next = sp.get('next') || '/';
+  const [err, setErr] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (loading) return;
+    setErr(null);
     setLoading(true);
+
     const fd = new FormData(e.currentTarget);
     const body: Record<string, string> = {};
     fd.forEach((v, k) => (body[k] = String(v)));
@@ -25,68 +41,71 @@ export default function LoginPage() {
     });
 
     setLoading(false);
-    if (res.ok) {
-      // 先用 replace，若 host 環境限制則 fallback
-      try {
-        router.replace(next);
-      } catch {
-        window.location.href = next;
-      }
-    } else {
+
+    if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      alert(`登入失敗：${data?.error ?? res.status}`);
+      setErr(data?.error ?? 'LOGIN_FAILED');
+      return;
     }
+
+    // 登入成功：以 replace() 進大廳（或 next 參數）
+    router.replace(nextPath);
   }
 
   return (
-    <main style={{ minHeight:'100svh', display:'grid', placeItems:'center', padding:24 }}>
-      <div style={{
-        width:'min(420px, 92vw)',
-        borderRadius:16,
-        padding:24,
-        background:'rgba(16,20,27,.5)',
-        border:'1px solid rgba(255,255,255,.12)',
-        boxShadow:'0 10px 30px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.08), 0 0 80px rgba(0,180,255,.12)',
-        backdropFilter:'blur(12px)', WebkitBackdropFilter:'blur(12px)'
-      }}>
-        <div style={{ textAlign:'center', fontWeight:900, letterSpacing:3, fontSize:22, marginBottom:16 }}>TOPZCASINO</div>
-        <div style={{ display:'flex', gap:12, marginBottom:12 }}>
-          <a href="/login" aria-current="page" style={{ color:'#dce3ea', textDecoration:'none', fontWeight:700 }}>登入</a>
-          <a href="/register" style={{ color:'#8ea2b5', textDecoration:'none' }}>註冊</a>
+    <main className="tc-auth-card tc-follow">
+      <div className="tc-card-inner">
+        {/* 置中大字 LOGO */}
+        <div className="tc-brand">TOPZCASINO</div>
+
+        {/* 分頁切換 */}
+        <div className="tc-tabs">
+          <Link href="/login" className="tc-tab active" aria-current="page">登入</Link>
+          <Link href="/register" className="tc-tab">註冊</Link>
         </div>
 
-        <form onSubmit={onSubmit}>
-          <div style={{ position:'relative', marginBottom:12 }}>
-            <input name="email" type="email" required placeholder="電子信箱"
-              style={{ width:'100%', padding:'12px 14px', borderRadius:10, background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.14)', color:'#dce3ea' }}/>
+        <form className="tc-grid" onSubmit={onSubmit} noValidate>
+          <div className="tc-input">
+            <input name="email" type="email" placeholder=" " required />
+            <span className="tc-label">電子信箱</span>
           </div>
-          <div style={{ position:'relative', marginBottom:16 }}>
-            <input name="password" type={showPwd ? 'text' : 'password'} required minLength={6} placeholder="密碼"
-              style={{ width:'100%', padding:'12px 44px 12px 14px', borderRadius:10, background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.14)', color:'#dce3ea' }}/>
-            <button type="button" onClick={() => setShowPwd(s => !s)}
-              style={{ position:'absolute', right:8, top:8, border:0, background:'transparent', color:'#a9b9c7', cursor:'pointer' }}>
-              {showPwd ? '隱藏' : '顯示'}
+
+          <div className="tc-input">
+            <input
+              name="password"
+              type={showPwd ? 'text' : 'password'}
+              placeholder=" "
+              required
+              minLength={6}
+            />
+            <span className="tc-label">密碼</span>
+            <button
+              type="button"
+              className="tc-eye"
+              aria-label="顯示/隱藏密碼"
+              onClick={() => setShowPwd((s) => !s)}
+            >
+              👁
             </button>
           </div>
 
-          <div style={{ display:'flex', justifyContent:'space-between', marginBottom:12 }}>
-            <label style={{ display:'flex', gap:8, alignItems:'center', color:'#a9b9c7' }}>
-              <input type="checkbox" name="remember" /> 記住我
+          <div className="tc-row" style={{ justifyContent: 'space-between' }}>
+            <label className="tc-row" style={{ gap: 8 }}>
+              <input type="checkbox" name="remember" />
+              記住我
             </label>
-            <a href="/forgot" style={{ color:'#89b5ff', textDecoration:'none' }}>忘記密碼？</a>
+            <Link href="/forgot" className="tc-link">忘記密碼？</Link>
           </div>
 
-          <button disabled={loading} style={{
-            width:'100%', padding:'12px 16px', borderRadius:10, border:'1px solid rgba(255,255,255,.18)',
-            background:'linear-gradient(180deg, rgba(0,156,255,.9), rgba(0,120,210,.9))', color:'#fff', fontWeight:800, letterSpacing:1.2,
-            boxShadow:'0 8px 24px rgba(0,150,255,.35)'
-          }}>
+          {err && <div className="tc-error">{err}</div>}
+
+          <button className="tc-btn" disabled={loading}>
             {loading ? '登入中…' : '登入'}
           </button>
 
-          <div style={{ height:1, background:'linear-gradient(90deg, transparent, rgba(255,255,255,.15), transparent)', margin:'16px 0' }} />
-          <div style={{ textAlign:'center', color:'#a9b9c7' }}>
-            還沒有帳號？ <a href="/register" style={{ color:'#89b5ff', textDecoration:'none' }}>前往註冊</a>
+          <div className="tc-sep"></div>
+          <div className="tc-hint">
+            還沒有帳號？<Link className="tc-link" href="/register">前往註冊</Link>
           </div>
         </form>
       </div>
