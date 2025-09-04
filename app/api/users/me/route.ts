@@ -1,21 +1,20 @@
 // app/api/users/me/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getMeFromReq } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
+import { getAuthFromRequest } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
-  const me = await getMeFromReq(req);
-  if (!me) return NextResponse.json({ ok: false }, { status: 401 });
-  return NextResponse.json({
-    ok: true,
-    user: {
-      id: me.id,
-      email: me.email,
-      displayName: me.displayName,
-      balance: me.balance,
-      bankBalance: me.bankBalance,
-      headframe: me.headframe,
-      panelStyle: me.panelStyle,
-      isAdmin: me.isAdmin,
-    },
-  });
+  try {
+    const auth = getAuthFromRequest(req);
+    if (!auth) return NextResponse.json({ ok: false }, { status: 401 });
+
+    const user = await prisma.user.findUnique({
+      where: { id: auth.uid },
+      select: { id: true, email: true, displayName: true, isAdmin: true, balance: true, bankBalance: true, headframe: true, panelStyle: true, avatarUrl: true },
+    });
+    if (!user) return NextResponse.json({ ok: false }, { status: 404 });
+    return NextResponse.json({ ok: true, user });
+  } catch (e) {
+    return NextResponse.json({ ok: false }, { status: 500 });
+  }
 }

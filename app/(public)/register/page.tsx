@@ -1,34 +1,50 @@
-// app/(public)/register/page.tsx
-"use client";
-import Link from "next/link";
-import { useState } from "react";
+'use client';
+import Link from 'next/link';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function RegisterPage() {
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const router = useRouter();
+
+  function onMouseMove(e: React.MouseEvent<HTMLDivElement>) {
+    const card = e.currentTarget;
+    const r = card.getBoundingClientRect();
+    const px = (e.clientX - r.left) / r.width;
+    const py = (e.clientY - r.top) / r.height;
+    card.style.setProperty('--mx', String(px));
+    card.style.setProperty('--my', String(py));
+  }
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setErr(null);
     setLoading(true);
     const fd = new FormData(e.currentTarget);
     const body: Record<string, string> = {};
     fd.forEach((v, k) => (body[k] = String(v)));
-    await fetch("/api/auth/register", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
+
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
     });
     setLoading(false);
-    window.location.href = "/login";
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      setErr(j?.error || 'REGISTER_FAILED');
+      return;
+    }
+    router.replace('/'); // 註冊成功直接進大廳
   }
 
   return (
-    <main className="tc-auth-card tc-follow">
+    <main className="tc-auth-card tc-follow" onMouseMove={onMouseMove}>
       <div className="tc-card-inner">
-        {/* 置中大字 LOGO */}
         <div className="tc-brand">TOPZCASINO</div>
 
-        {/* 分頁切換 */}
         <div className="tc-tabs">
           <Link href="/login" className="tc-tab">登入</Link>
           <Link href="/register" className="tc-tab active" aria-current="page">註冊</Link>
@@ -36,7 +52,7 @@ export default function RegisterPage() {
 
         <form className="tc-grid" onSubmit={onSubmit} noValidate>
           <div className="tc-input">
-            <input name="displayName" placeholder=" " required minLength={2} maxLength={20} />
+            <input name="displayName" type="text" placeholder=" " required minLength={2} maxLength={20} />
             <span className="tc-label">玩家暱稱</span>
           </div>
 
@@ -48,12 +64,12 @@ export default function RegisterPage() {
           <div className="tc-input">
             <input
               name="password"
-              type={showPwd ? "text" : "password"}
+              type={showPwd ? 'text' : 'password'}
               placeholder=" "
               required
               minLength={6}
             />
-            <span className="tc-label">密碼（至少 6 碼）</span>
+            <span className="tc-label">密碼</span>
             <button
               type="button"
               className="tc-eye"
@@ -65,32 +81,15 @@ export default function RegisterPage() {
           </div>
 
           <div className="tc-input">
-            <input name="referralCode" placeholder=" " />
+            <input name="referralCode" type="text" placeholder=" " />
             <span className="tc-label">邀請碼（選填）</span>
           </div>
 
-          <div className="tc-row">
-            <label className="tc-row" style={{ gap: 8 }}>
-              <input type="checkbox" name="isOver18" required />
-              我已年滿 18 歲
-            </label>
-          </div>
-
-          <div className="tc-row">
-            <label className="tc-row" style={{ gap: 8 }}>
-              <input type="checkbox" name="acceptTOS" required />
-              我同意服務條款
-            </label>
-          </div>
+          {err && <div className="tc-error">{err}</div>}
 
           <button className="tc-btn" disabled={loading}>
-            {loading ? "建立中…" : "建立帳號"}
+            {loading ? '註冊中…' : '創建帳號並進入大廳'}
           </button>
-
-          <div className="tc-sep"></div>
-          <div className="tc-hint">
-            已有帳號？<Link className="tc-link" href="/login">返回登入</Link>
-          </div>
         </form>
       </div>
     </main>

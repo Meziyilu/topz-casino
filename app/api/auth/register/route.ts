@@ -1,64 +1,64 @@
+// app/api/auth/register/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { parseFormData } from '@/lib/form';
+import { signAccess, signRefresh, setAuthCookies } from '@/lib/auth';
 
-function randomCode(len = 8) {
-  const dict = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let out = '';
-  for (let i = 0; i < len; i++) out += dict[Math.floor(Math.random() * dict.length)];
-  return out;
+const RegisterSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6).max(64),
+  displayName: z.string().min(2).max(20),
+  referralCode: z.string().optional(),
+  isOver18: z.coerce.boolean().optional(),
+  acceptTOS: z.coerce.boolean().optional(),
+});
+
+function makeReferralCode(len = 8) {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return Array.from({ length: len }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
 }
 
 export async function POST(req: NextRequest) {
   try {
     const isJson = req.headers.get('content-type')?.includes('application/json');
     const raw = isJson ? await req.json() : await parseFormData(req);
+    const parsed = RegisterSchema.safeParse(raw);
+    if (!parsed.success) return NextResponse.json({ ok: false, error: 'INVALID_INPUT' }, { status: 400 });
 
-    const email = String((raw as any).email || '').trim().toLowerCase();
-    const password = String((raw as any).password || '');
-    const displayName = String((raw as any).displayName || '').trim();
-    const referralCodeInput = String((raw as any).referralCode || '').trim();
-    const isOver18 = String((raw as any).isOver18 || '') === 'true';
-    const acceptTOS = String((raw as any).acceptTOS || '') === 'true';
+    const { email, password, displayName, referralCode } = parsed.data;
+    const lower = email.trim().toLowerCase();
 
-    if (!email || !password || !displayName) {
-      return NextResponse.json({ ok: false, error: 'MISSING_FIELDS' }, { status: 400 });
-    }
-    if (!isOver18 || !acceptTOS) {
-      return NextResponse.json({ ok: false, error: 'MUST_ACCEPT' }, { status: 400 });
-    }
+    const [existsEmail, existsName] = await Promise.all([
+      prisma.user.findUnique({ where: { email: lower } }),
+      prisma.user.findFirst({ where: { displayName } }),
+    ]);
+    if (existsEmail) return NextResponse.json({ ok: false, error: 'EMAIL_TAKEN' }, { status: 409 });
+    if (existsName) return NextResponse.json({ ok: false, error: 'DISPLAYNAME_TAKEN' }, { status: 409 });
 
-    const exists = await prisma.user.findFirst({
-      where: { OR: [{ email }, { displayName }] },
-      select: { id: true },
-    });
-    if (exists) {
-      return NextResponse.json({ ok: false, error: 'EMAIL_OR_NAME_TAKEN' }, { status: 409 });
-    }
+    const hash = await bcrypt.hash(password, 10);
+    const inviter = referralCode ? await prisma.user.findFirst({ where: { referralCode } }) : null;
 
-    const inviter = referralCodeInput
-      ? await prisma.user.findFirst({ where: { referralCode: referralCodeInput }, select: { id: true } })
-      : null;
-
-    const hashed = await bcrypt.hash(password, 10);
-    const selfReferral = randomCode(8);
-    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.ip || '';
-
-    await prisma.user.create({
+    const user = await prisma.user.create({
       data: {
-        email,
-        password: hashed,
+        email: lower,
+        password: hash,
         displayName,
-        referralCode: selfReferral,
+        name: displayName,
+        referralCode: makeReferralCode(),
         inviterId: inviter?.id ?? null,
-        registeredIp: ip,
-        emailVerifiedAt: new Date(), // ← 直接當作已驗證
+        // 你要求：不需要 email 驗證；可預設成已驗證或留空，這裡留空也不影響登入
       },
     });
 
-    // 不再建立 EmailVerifyToken
-    return NextResponse.json({ ok: true });
+    // 直接登入（發 token）
+    const access = signAccess({ uid: user.id, isAdmin: user.isAdmin, typ: 'access' as const });
+    const refresh = signRefresh({ uid: user.id, typ: 'refresh' as const });
+
+    const res = NextResponse.json({ ok: true });
+    setAuthCookies(res, access, refresh);
+    return res;
   } catch (e) {
     console.error('REGISTER_ERROR', e);
     return NextResponse.json({ ok: false, error: 'INTERNAL_ERROR' }, { status: 500 });

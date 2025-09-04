@@ -1,55 +1,61 @@
 // lib/auth.ts
 import jwt, { type JwtPayload, type SignOptions } from 'jsonwebtoken';
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from './prisma';
-
-const JWT_SECRET = (process.env.JWT_SECRET || 'dev_secret') as jwt.Secret;
-const REFRESH_SECRET = (process.env.JWT_REFRESH_SECRET || 'dev_refresh') as jwt.Secret;
 
 const RAW_ACCESS_TTL = process.env.JWT_ACCESS_TTL ?? '15m';
 const RAW_REFRESH_TTL = process.env.JWT_REFRESH_TTL ?? '7d';
-const ACCESS_TTL = RAW_ACCESS_TTL as SignOptions['expiresIn'];
-const REFRESH_TTL = RAW_REFRESH_TTL as SignOptions['expiresIn'];
+export const ACCESS_TTL: SignOptions['expiresIn'] = RAW_ACCESS_TTL as any;
+export const REFRESH_TTL: SignOptions['expiresIn'] = RAW_REFRESH_TTL as any;
 
-export function signAccess(uid: string, isAdmin: boolean) {
-  return jwt.sign({ uid, isAdmin, typ: 'access' as const }, JWT_SECRET, { expiresIn: ACCESS_TTL });
+export const JWT_SECRET = (process.env.JWT_SECRET || 'dev_secret') as jwt.Secret;
+export const REFRESH_SECRET = (process.env.JWT_REFRESH_SECRET || 'dev_refresh') as jwt.Secret;
+
+export function ttlToSeconds(ttl: SignOptions['expiresIn']): number {
+  if (typeof ttl === 'number') return ttl;
+  const s = String(ttl);
+  const m = s.match(/^(\d+)([smhd])$/);
+  if (!m) return 3600;
+  const n = parseInt(m[1], 10);
+  switch (m[2]) {
+    case 's': return n;
+    case 'm': return n * 60;
+    case 'h': return n * 3600;
+    case 'd': return n * 86400;
+    default: return 3600;
+  }
 }
-export function signRefresh(uid: string) {
-  return jwt.sign({ uid, typ: 'refresh' as const }, REFRESH_SECRET, { expiresIn: REFRESH_TTL });
+
+export function signAccess(payload: object) {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: ACCESS_TTL } as SignOptions);
+}
+export function signRefresh(payload: object) {
+  return jwt.sign(payload, REFRESH_SECRET, { expiresIn: REFRESH_TTL } as SignOptions);
 }
 
 export function setAuthCookies(res: NextResponse, access: string, refresh: string) {
   const isProd = process.env.NODE_ENV === 'production';
-  const accMaxAge = 15 * 60; // 15m
-  const refMaxAge = 7 * 24 * 60 * 60; // 7d
-  res.cookies.set('token', access, { httpOnly: true, sameSite: 'lax', secure: isProd, path: '/', maxAge: accMaxAge });
-  res.cookies.set('refresh_token', refresh, { httpOnly: true, sameSite: 'lax', secure: isProd, path: '/', maxAge: refMaxAge });
+  res.cookies.set('token', access, {
+    httpOnly: true, sameSite: 'lax', secure: isProd, path: '/', maxAge: ttlToSeconds(ACCESS_TTL),
+  });
+  res.cookies.set('refresh_token', refresh, {
+    httpOnly: true, sameSite: 'lax', secure: isProd, path: '/', maxAge: ttlToSeconds(REFRESH_TTL),
+  });
 }
 
-export function clearAuth(res: NextResponse) {
-  const isProd = process.env.NODE_ENV === 'production';
-  res.cookies.set('token', '', { httpOnly: true, sameSite: 'lax', secure: isProd, path: '/', maxAge: 0 });
-  res.cookies.set('refresh_token', '', { httpOnly: true, sameSite: 'lax', secure: isProd, path: '/', maxAge: 0 });
+export function clearAuthCookies(res: NextResponse) {
+  const past = new Date(0);
+  res.cookies.set('token', '', { httpOnly: true, sameSite: 'lax', secure: true, path: '/', expires: past });
+  res.cookies.set('refresh_token', '', { httpOnly: true, sameSite: 'lax', secure: true, path: '/', expires: past });
 }
 
-/**
- * 用寬鬆型別來讀 cookie，避免引入 Next 私有型別。
- * 任何具備 get(name) => { value?: string } 的物件都可用（如 NextRequest.cookies）
- */
-export function readAccessFromCookies(cookies: { get: (name: string) => { value?: string } | undefined } | undefined) {
-  const token = cookies?.get('token')?.value;
-  if (!token) return null;
+export function getAuthFromRequest(req: NextRequest): (JwtPayload & { uid: string; isAdmin?: boolean }) | null {
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as JwtPayload & { uid: string; isAdmin: boolean; typ: 'access' };
-    return payload;
+    const token = req.cookies.get('token')?.value;
+    if (!token) return null;
+    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload & { uid: string; isAdmin?: boolean };
+    if (!decoded?.uid) return null;
+    return decoded;
   } catch {
     return null;
   }
-}
-
-export async function getMeFromReq(req: NextRequest) {
-  const payload = readAccessFromCookies(req.cookies);
-  if (!payload) return null;
-  const user = await prisma.user.findUnique({ where: { id: payload.uid } });
-  return user ?? null;
 }
