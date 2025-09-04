@@ -1,56 +1,122 @@
-// app/page.tsx  (Server Component)
-import { headers, cookies } from 'next/headers';
-import Link from 'next/link';
+"use client";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import Clock from "@/components/lobby/Clock";
+import ThemeToggle from "@/components/lobby/ThemeToggle";
+import AnnouncementTicker from "@/components/lobby/AnnouncementTicker";
+import ProfileCard from "@/components/lobby/ProfileCard";
+import GameCard from "@/components/lobby/GameCard";
+import ChatBox from "@/components/lobby/ChatBox";
+import ServiceWidget from "@/components/lobby/ServiceWidget";
 
-async function fetchMe() {
-  const h = headers();
-  const proto = h.get('x-forwarded-proto') ?? 'http';
-  const host = h.get('x-forwarded-host') ?? h.get('host') ?? 'localhost:3000';
-  const base = `${proto}://${host}`;
+type Me = { id: string; displayName: string; balance: number; bankBalance: number; vipTier: number; avatarUrl?: string | null };
 
-  // 將登入 cookie 轉發給 API
-  const cookieHeader = (await cookies()).toString();
+export default function LobbyPage() {
+  const [me, setMe] = useState<Me | null>(null);
 
-  const res = await fetch(`${base}/api/users/me`, {
-    method: 'GET',
-    headers: { cookie: cookieHeader },
-    // 大廳要即時，避免快取
-    cache: 'no-store',
-    // 若你的平台（如 Render）需要 keepalive 可加上，否則可省略
-    // keepalive: true,
-  });
-
-  if (!res.ok) return null;
-  return res.json();
-}
-
-export default async function Lobby() {
-  const me = await fetchMe(); // <-- 這裡以前會炸，現在用絕對 URL + cookies OK
+  useEffect(() => {
+    fetch("/api/users/me", { credentials: "include" })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setMe(d.user ?? null))
+      .catch(() => setMe(null));
+  }, []);
 
   return (
-    <main style={{ padding: 24 }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <div style={{ fontWeight: 800, letterSpacing: 1 }}>TOPZCASINO</div>
-        <nav style={{ display: 'flex', gap: 12 }}>
-          <Link href="/profile">個人</Link>
-          <Link href="/wallet">錢包</Link>
-          <Link href="/casino/baccarat">百家樂</Link>
-          <Link href="/casino/sicbo">骰寶</Link>
-        </nav>
+    <main className="lb-wrap">
+      <div className="lb-bg" />
+      <div className="lb-particles" aria-hidden />
+
+      {/* Header */}
+      <header className="lb-header">
+        <div className="left">
+          <div className="lb-logo">TOPZCASINO</div>
+          <span className="lb-beta">LOBBY</span>
+        </div>
+
+        <div className="center">
+          <AnnouncementTicker
+            items={[
+              "🎉 新手禮包開放領取！",
+              "🔥 百家樂 R60 房間將於 21:00 開新局",
+              "💎 連續簽到 7 天可抽稀有徽章",
+            ]}
+          />
+        </div>
+
+        <div className="right">
+          <Clock />
+          <ThemeToggle />
+          <Link href="/profile" className="lb-user-mini">
+            <span className="name">{me?.displayName ?? "玩家"}</span>
+          </Link>
+        </div>
       </header>
 
-      <section>
-        {me ? (
-          <div>
-            <p>歡迎回來，{me.displayName || me.email}</p>
-            <p>錢包餘額：{me.balance}｜銀行餘額：{me.bankBalance}</p>
+      {/* 主板塊 */}
+      <div className="lb-grid">
+        {/* 左欄 */}
+        <aside className="lb-col">
+          <ProfileCard
+            displayName={me?.displayName ?? "玩家"}
+            avatarUrl={me?.avatarUrl ?? undefined}
+            vipTier={me?.vipTier ?? 0}
+            wallet={me?.balance ?? 0}
+            bank={me?.bankBalance ?? 0}
+          />
+
+          <div className="lb-card">
+            <div className="lb-card-title">功能入口</div>
+            <div className="lb-actions">
+              <Link href="/wallet" className="lb-btn">🏦 銀行</Link>
+              <Link href="/shop" className="lb-btn">🛍 商店</Link>
+              <Link href="/admin" className="lb-btn">⚙️ 管理</Link>
+            </div>
           </div>
-        ) : (
-          <div>
-            <p>尚未登入，<Link href="/login">前往登入</Link></p>
+
+          <div className="lb-card">
+            <div className="lb-card-title">排行榜（週）</div>
+            <ol className="lb-list">
+              <li>#1 王牌玩家 <span>+12,400</span></li>
+              <li>#2 LuckyStar <span>+8,210</span></li>
+              <li>#3 黑桃A <span>+6,420</span></li>
+              <li>#4 Neon <span>+4,900</span></li>
+              <li>#5 Nova <span>+3,110</span></li>
+            </ol>
           </div>
-        )}
-      </section>
+
+          <div className="lb-card">
+            <div className="lb-card-title">公告 / 活動</div>
+            <ul className="lb-list soft">
+              <li>🎁 回饋活動加碼至 120%</li>
+              <li>🧧 連續登入送紅包券</li>
+              <li>🛠️ 系統維護 02:00 - 03:00</li>
+            </ul>
+          </div>
+        </aside>
+
+        {/* 中欄：遊戲 / 聊天 */}
+        <section className="lb-main">
+          <div className="lb-games">
+            <GameCard title="百家樂" online={328} countdown={27} href="/casino/baccarat" />
+            <GameCard title="骰寶" online={152} countdown={41} href="/casino/sicbo" />
+            <GameCard title="樂透" online={93} href="/casino/lotto" />
+            <GameCard title="21點" online={0} disabled href="/casino/blackjack" />
+          </div>
+
+          <ChatBox room="LOBBY" />
+        </section>
+
+        {/* 右欄：保留空位（之後擴充） */}
+        <aside className="lb-col right-col">
+          <div className="lb-card tall center">
+            <div className="lb-card-title">客服中心</div>
+            <p className="lb-muted">任何問題？點擊右下角小幫手</p>
+          </div>
+        </aside>
+      </div>
+
+      <ServiceWidget />
+      <link rel="stylesheet" href="/styles/lobby.css" />
     </main>
   );
 }

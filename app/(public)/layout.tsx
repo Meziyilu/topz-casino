@@ -1,20 +1,12 @@
-// app/(public)/layout.tsx
-import './auth.css';
+export const metadata = { title: "TOPZCASINO - Auth" };
 
 export default function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh-Hant">
-      <body>
-        <div className="tc-bg">
-          {/* 漂浮光暈 */}
-          <div className="tc-glow tc-glow-1" />
-          <div className="tc-glow tc-glow-2" />
-          <div className="tc-glow tc-glow-3" />
-          {/* 背景粒子 */}
-          <div className="tc-stars" />
-          {children}
-        </div>
-      </body>
+      <head>
+        <link rel="stylesheet" href="/styles/auth-theme.css" />
+      </head>
+      <body>{children}</body>
     </html>
   );
 }
