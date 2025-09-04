@@ -1,81 +1,131 @@
-/* ========== Responsive Layout ========== */
+:root { color-scheme: dark; }
+.lb-wrap { min-height: 100dvh; background: #0b0f17; position: relative; }
+.lb-bg {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(1200px 700px at -10% -10%, rgba(88,0,255,.25), transparent 60%),
+    radial-gradient(900px 700px at 110% 30%, rgba(0,220,255,.20), transparent 60%),
+    #0b0f17;
+  filter: saturate(1.1);
+  pointer-events: none;
+}
+.lb-particles {
+  position: absolute; inset: 0; pointer-events:none;
+  background-image:
+    radial-gradient(1.5px 1.5px at 22% 28%, rgba(255,255,255,.22), transparent 55%),
+    radial-gradient(1.5px 1.5px at 72% 62%, rgba(255,255,255,.12), transparent 55%),
+    radial-gradient(1.5px 1.5px at 43% 84%, rgba(255,255,255,.12), transparent 55%);
+  animation: lb-par 12s ease-in-out infinite alternate;
+}
+@keyframes lb-par { from{opacity:.45; transform:translateY(-.6%)} to{opacity:.8; transform:translateY(.8%)} }
 
-/* 大桌機到一般桌機：稍微放寬間距 */
-@media (max-width: 1400px) {
-  .lb-grid {
-    grid-template-columns: 280px 1fr 280px;
-    gap: 20px;
-  }
-  .lb-card { padding: 16px; }
+.lb-header {
+  position: sticky; top: 0; z-index: 10;
+  display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 12px;
+  padding: 14px 18px; align-items: center;
+  background: linear-gradient(180deg, rgba(12,16,24,.75), rgba(12,16,24,.35));
+  backdrop-filter: blur(12px) saturate(1.2);
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.lb-logo { font-weight: 900; letter-spacing: .12em; color: #eaf6ff; text-shadow: 0 0 18px rgba(92,206,255,.55); }
+.lb-beta {
+  margin-left: 10px; padding: 2px 8px; font-size: 12px; border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
+  border: 1px solid rgba(255,255,255,.14); color:#cfeaff;
+}
+.lb-header .left, .lb-header .center, .lb-header .right { display: flex; align-items: center; gap: 12px; }
+.lb-header .center { justify-content: center; }
+.lb-header .right { justify-content: end; }
+.lb-user-mini { color:#d7e9ff; text-decoration:none; font-weight:700 }
+
+.lb-grid {
+  position: relative; z-index: 1;
+  display: grid; grid-template-columns: 320px 1fr 320px; gap: 16px;
+  padding: 18px;
+}
+@media (max-width: 1200px) {
+  .lb-grid { grid-template-columns: 320px 1fr; }
+  .right-col { display: none; }
+}
+@media (max-width: 880px) {
+  .lb-grid { grid-template-columns: 1fr; }
 }
 
-/* 平板直向 / 小桌機：右欄收起，主欄變寬，遊戲卡片改為兩欄 */
-@media (max-width: 1024px) {
-  .lb-grid {
-    grid-template-columns: 280px 1fr;
-  }
-  .lb-col.right-col { display: none; }       /* 隱藏右欄（客服改用右下角懸浮） */
-  .lb-games {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
-  }
-  .lb-header .center { max-width: 48vw; }
-  .lb-header .lb-logo { font-size: 18px; }
-  .lb-header .lb-beta { font-size: 11px; padding: 2px 6px; }
-  .lb-user-mini .name { font-size: 12px; }
-  .lb-card-title { font-size: 14px; }
-  .lb-list li { font-size: 13px; }
-  .lb-actions .lb-btn { padding: 10px 12px; font-size: 13px; }
-  .lb-main .lb-chat { height: 280px; }       /* 聊天室高度稍降 */
+.lb-card {
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+  border: 1px solid rgba(255,255,255,.14);
+  backdrop-filter: blur(12px) saturate(1.2);
+  box-shadow: 0 12px 32px rgba(0,0,0,.45), 0 0 36px rgba(87,207,255,.12);
+  padding: 14px;
 }
+.lb-card.tall { min-height: 220px; }
+.lb-card.center { display:grid; place-items:center; }
+.lb-card-title { color:#eaf6ff; font-weight:800; margin-bottom:10px; letter-spacing:.06em; }
+.lb-muted { color: rgba(210,230,255,.75); }
 
-/* 手機橫向 / 平板更窄：變成上下佈局，左欄先於主欄顯示 */
-@media (max-width: 820px) {
-  .lb-grid {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-  .lb-col { order: 1; }
-  .lb-main { order: 2; }
-  .lb-header { padding: 12px; gap: 12px; }
-  .lb-header .center { display: none; }      /* 跑馬燈在窄螢幕隱藏，節省空間 */
-  .lb-header .left { gap: 8px; }
-  .lb-logo { font-size: 18px; }
-  .lb-games {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
-  }
-  .lb-card { padding: 14px; }
-  .lb-main .lb-chat { height: 260px; }
-  .lb-bg::before { filter: blur(100px) opacity(.5); }
+.lb-actions { display:grid; grid-auto-flow: column; gap:10px; }
+.lb-btn {
+  text-align:center; text-decoration:none; color:#e8f4ff; font-weight:700;
+  padding: 10px 0; border-radius: 12px;
+  border:1px solid rgba(255,255,255,.16);
+  background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03));
 }
+.lb-list { list-style:none; margin:0; padding:0; display:grid; gap:8px; color:#e9f3ff; }
+.lb-list.soft li { color: rgba(215,235,255,.9); }
+.lb-list li span { color:#87dafc; font-weight:800; margin-left:8px }
 
-/* 手機直向：單欄、遊戲卡片一列一張、卡片邊距更緊湊、字級下修 */
-@media (max-width: 600px) {
-  .lb-wrap { padding: 12px; }
-  .lb-grid { gap: 12px; }
-  .lb-games {
-    grid-template-columns: 1fr; /* 一欄 */
-  }
-  .lb-card { padding: 12px; border-radius: 14px; }
-  .lb-card-title { font-size: 13px; }
-  .lb-list li { font-size: 12px; }
-  .lb-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-  .lb-actions .lb-btn { padding: 10px; font-size: 12px; }
-  .lb-main .lb-chat { height: 220px; }
-  .lb-user-mini { padding: 6px 10px; }
-  .lb-logo { font-size: 16px; }
-  .lb-beta { display: none; }                 /* 隱藏 LOBBY 小標 */
+.lb-games { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
+@media (max-width: 720px) { .lb-games { grid-template-columns: 1fr; } }
+
+.game-card {
+  position: relative; overflow: clip;
+  border-radius: 16px; padding: 16px;
+  border:1px solid rgba(255,255,255,.14);
+  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+  box-shadow: 0 10px 32px rgba(0,0,0,.45), 0 0 28px rgba(93,207,255,.14);
+  transform: translateZ(0);
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+  text-decoration: none; color:#eaf6ff;
 }
-
-/* 超小螢幕（iPhone SE 等）：更緊湊 */
-@media (max-width: 360px) {
-  .lb-wrap { padding: 8px; }
-  .lb-card { padding: 10px; }
-  .lb-main .lb-chat { height: 200px; }
-  .lb-actions { grid-template-columns: 1fr; } /* 動作按鈕改為單欄 */
+.game-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(93,207,255,.45);
+  box-shadow: 0 14px 40px rgba(0,0,0,.55), 0 0 36px rgba(93,207,255,.28);
 }
+.game-card .title { font-weight:900; letter-spacing:.06em; margin-bottom:4px; }
+.game-card .meta { color: rgba(210,230,255,.85); font-size: 14px; }
+.game-card .badge {
+  position:absolute; top:10px; right:10px;
+  padding: 4px 10px; border-radius:999px; font-size:12px; font-weight:800;
+  background: linear-gradient(180deg, rgba(255,255,255,.09), rgba(255,255,255,.03));
+  border: 1px solid rgba(255,255,255,.18);
+}
+.game-card.disabled { opacity:.55; pointer-events:none }
 
-/* 元件級微調：避免內容溢出 */
-.lb-card, .lb-games, .lb-chat, .lb-actions, .lb-list { min-width: 0; }
-.lb-card * { overflow-wrap: anywhere; }
+.chat-box { border-radius: 16px; padding: 0; overflow: clip; }
+.chat-head {
+  display:flex; justify-content: space-between; align-items:center;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255,255,255,.1);
+  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+}
+.chat-body { max-height: 240px; overflow:auto; padding: 12px; display:grid; gap:8px; }
+.chat-item { color:#e9f4ff; }
+.chat-foot { display:flex; gap:8px; padding: 10px; border-top: 1px solid rgba(255,255,255,.1); }
+.chat-foot input {
+  flex:1; min-width:0; padding:10px 12px; border-radius:10px;
+  border:1px solid rgba(255,255,255,.14); background: rgba(8,12,20,.35); color:#eaf6ff;
+}
+.chat-foot button { padding: 10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,.18); color:#eaf6ff;
+  background: linear-gradient(180deg, rgba(255,255,255,.09), rgba(255,255,255,.03)); }
+
+.service-fab {
+  position: fixed; right: 18px; bottom: 18px; z-index: 30;
+  width: 54px; height: 54px; border-radius: 50%;
+  display:grid; place-items:center;
+  color:#eaf6ff; text-decoration:none; font-size: 22px;
+  border:1px solid rgba(255,255,255,.22);
+  background: linear-gradient(180deg, rgba(255,255,255,.09), rgba(255,255,255,.03));
+  box-shadow: 0 10px 28px rgba(0,0,0,.5), 0 0 28px rgba(93,207,255,.28);
+}
