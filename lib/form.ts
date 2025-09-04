@@ -1,10 +1,9 @@
 // lib/form.ts
-export async function parseFormData(req: Request) {
-  const isJson = req.headers.get('content-type')?.includes('application/json');
-  if (isJson) return await req.json();
+import { NextRequest } from 'next/server';
 
+export async function parseFormData(req: NextRequest): Promise<Record<string, string>> {
   const fd = await req.formData();
   const map: Record<string, string> = {};
-  fd.forEach((v, k) => { map[k] = String(v); });
+  fd.forEach((v, k) => (map[k] = String(v)));
   return map;
 }

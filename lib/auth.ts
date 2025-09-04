@@ -1,93 +1,51 @@
 // lib/auth.ts
-import type { NextRequest } from 'next/server';
-import { NextResponse } from 'next/server';
-import jwt, { type JwtPayload } from 'jsonwebtoken';
+import jwt, { type JwtPayload, type SignOptions } from 'jsonwebtoken';
+import { NextRequest, NextResponse, type RequestCookies } from 'next/server';
+import { prisma } from './prisma';
 
-const JWT_SECRET = (process.env.JWT_SECRET || '') as jwt.Secret;
-const REFRESH_SECRET = (process.env.JWT_REFRESH_SECRET || '') as jwt.Secret;
+const JWT_SECRET = (process.env.JWT_SECRET || 'dev_secret') as jwt.Secret;
+const REFRESH_SECRET = (process.env.JWT_REFRESH_SECRET || 'dev_refresh') as jwt.Secret;
 
-export type AccessClaims = JwtPayload & {
-  uid: string;
-  isAdmin?: boolean;
-  typ?: 'access' | 'refresh';
-};
+const RAW_ACCESS_TTL = process.env.JWT_ACCESS_TTL ?? '15m';
+const RAW_REFRESH_TTL = process.env.JWT_REFRESH_TTL ?? '7d';
+const ACCESS_TTL = RAW_ACCESS_TTL as SignOptions['expiresIn'];
+const REFRESH_TTL = RAW_REFRESH_TTL as SignOptions['expiresIn'];
 
-export function getTokenFromRequest(req: NextRequest) {
-  const access = req.cookies.get('token')?.value || '';
-  const refresh = req.cookies.get('refresh_token')?.value || '';
-  return { access, refresh };
+export function signAccess(uid: string, isAdmin: boolean) {
+  return jwt.sign({ uid, isAdmin, typ: 'access' as const }, JWT_SECRET, { expiresIn: ACCESS_TTL });
+}
+export function signRefresh(uid: string) {
+  return jwt.sign({ uid, typ: 'refresh' as const }, REFRESH_SECRET, { expiresIn: REFRESH_TTL });
 }
 
-export function verifyAccessToken(token: string): { ok: true; claims: AccessClaims } | { ok: false; error: string } {
-  if (!JWT_SECRET) return { ok: false, error: 'SERVER_MISCONFIGURED' };
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as AccessClaims;
-    if (decoded.typ && decoded.typ !== 'access') return { ok: false, error: 'WRONG_TOKEN_TYPE' };
-    return { ok: true, claims: decoded };
-  } catch (e: any) {
-    return { ok: false, error: e?.message || 'INVALID_TOKEN' };
-  }
+export function setAuthCookies(res: NextResponse, access: string, refresh: string) {
+  const isProd = process.env.NODE_ENV === 'production';
+  const accMaxAge = 15 * 60; // 15m（足夠）
+  const refMaxAge = 7 * 24 * 60 * 60; // 7d
+  res.cookies.set('token', access, { httpOnly: true, sameSite: 'lax', secure: isProd, path: '/', maxAge: accMaxAge });
+  res.cookies.set('refresh_token', refresh, { httpOnly: true, sameSite: 'lax', secure: isProd, path: '/', maxAge: refMaxAge });
 }
 
-export function verifyRefreshToken(token: string): { ok: true; claims: AccessClaims } | { ok: false; error: string } {
-  if (!REFRESH_SECRET) return { ok: false, error: 'SERVER_MISCONFIGURED' };
-  try {
-    const decoded = jwt.verify(token, REFRESH_SECRET) as AccessClaims;
-    if (decoded.typ && decoded.typ !== 'refresh') return { ok: false, error: 'WRONG_TOKEN_TYPE' };
-    return { ok: true, claims: decoded };
-  } catch (e: any) {
-    return { ok: false, error: e?.message || 'INVALID_TOKEN' };
-  }
-}
-
-/**
- * 給 API 使用的一站式驗證：從 request 取 cookie -> 驗證 access token
- */
-export function getAuthFromRequest(req: NextRequest):
-  | { ok: true; uid: string; isAdmin: boolean }
-  | { ok: false; status: number; error: string } {
-  const { access } = getTokenFromRequest(req);
-  if (!access) return { ok: false, status: 401, error: 'NO_TOKEN' };
-
-  const verified = verifyAccessToken(access);
-  if (!verified.ok) return { ok: false, status: 401, error: verified.error };
-
-  const { uid, isAdmin = false } = verified.claims || {};
-  if (!uid) return { ok: false, status: 401, error: 'MALFORMED_TOKEN' };
-  return { ok: true, uid, isAdmin };
-}
-
-/**
- * 設定存取/更新 token 的 cookies（可在 login/refresh 使用）
- */
-export function setAuthCookies(res: NextResponse, accessToken: string, refreshToken: string, opts?: { prod?: boolean; accessMaxAge?: number; refreshMaxAge?: number; }) {
-  const isProd = typeof opts?.prod === 'boolean' ? opts.prod : process.env.NODE_ENV === 'production';
-  if (accessToken) {
-    res.cookies.set('token', accessToken, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: isProd,
-      path: '/',
-      maxAge: opts?.accessMaxAge ?? 60 * 15, // 預設 15 分
-    });
-  }
-  if (refreshToken) {
-    res.cookies.set('refresh_token', refreshToken, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: isProd,
-      path: '/',
-      maxAge: opts?.refreshMaxAge ?? 60 * 60 * 24 * 7, // 預設 7 天
-    });
-  }
-}
-
-/**
- * 登出/清除 cookies
- */
-export function clearAuthCookies(res: NextResponse) {
+export function clearAuth(res: NextResponse) {
   const isProd = process.env.NODE_ENV === 'production';
   res.cookies.set('token', '', { httpOnly: true, sameSite: 'lax', secure: isProd, path: '/', maxAge: 0 });
   res.cookies.set('refresh_token', '', { httpOnly: true, sameSite: 'lax', secure: isProd, path: '/', maxAge: 0 });
-  return res;
+}
+
+export function readAccessFromCookies(cookies: RequestCookies) {
+  const token = cookies.get('token')?.value;
+  if (!token) return null;
+  try {
+    const payload = jwt.verify(token, JWT_SECRET) as JwtPayload & { uid: string; isAdmin: boolean; typ: 'access' };
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+export async function getMeFromReq(req: NextRequest) {
+  const payload = readAccessFromCookies(req.cookies);
+  if (!payload) return null;
+  const user = await prisma.user.findUnique({ where: { id: payload.uid } });
+  return user ?? null;
 }
