@@ -1,61 +1,98 @@
 // app/(public)/register/page.tsx
 "use client";
-
 import Link from "next/link";
+import { useState } from "react";
 
 export default function RegisterPage() {
+  const [showPwd, setShowPwd] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setLoading(true);
+    const fd = new FormData(e.currentTarget);
+    const body: Record<string, string> = {};
+    fd.forEach((v, k) => (body[k] = String(v)));
+    await fetch("/api/auth/register", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    setLoading(false);
+    window.location.href = "/login";
+  }
+
   return (
-    <section className="tc-auth-card tc-follow">
+    <main className="tc-auth-card tc-follow">
       <div className="tc-card-inner">
-        {/* Tabs */}
-        <nav className="tc-tabs is-register">
-          <Link className="tc-tab" href="/login">登入</Link>
-          <Link className="tc-tab" href="/register">註冊</Link>
-        </nav>
+        {/* 置中大字 LOGO */}
+        <div className="tc-brand">TOPZCASINO</div>
 
-        <form method="POST" action="/api/auth/register" noValidate>
-          <div className="tc-grid">
-            <div className="tc-input">
-              <div className="tc-label">玩家暱稱（2–20字）</div>
-              <input name="displayName" type="text" minLength={2} maxLength={20} autoComplete="nickname" required />
-            </div>
+        {/* 分頁切換 */}
+        <div className="tc-tabs">
+          <Link href="/login" className="tc-tab">登入</Link>
+          <Link href="/register" className="tc-tab active" aria-current="page">註冊</Link>
+        </div>
 
-            <div className="tc-input">
-              <div className="tc-label">電子信箱</div>
-              <input name="email" type="email" inputMode="email" autoComplete="email" required />
-            </div>
-
-            <div className="tc-input" style={{ position: "relative" }}>
-              <div className="tc-label">密碼（至少 8 碼）</div>
-              <input name="password" type="password" minLength={8} autoComplete="new-password" required />
-              <button className="tc-eye" type="button" aria-label="顯示/隱藏密碼">👁</button>
-            </div>
-
-            <div className="tc-input">
-              <div className="tc-label">邀請碼（選填）</div>
-              <input name="referralCode" type="text" maxLength={24} />
-            </div>
+        <form className="tc-grid" onSubmit={onSubmit} noValidate>
+          <div className="tc-input">
+            <input name="displayName" placeholder=" " required minLength={2} maxLength={20} />
+            <span className="tc-label">玩家暱稱</span>
           </div>
 
-          <div className="tc-row" style={{ marginTop: 10 }}>
-            <label className="tc-hint" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-              <input name="isOver18" type="checkbox" required /> 我已年滿 18 歲
-            </label>
-            <label className="tc-hint" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-              <input name="acceptTOS" type="checkbox" required /> 我同意服務條款
+          <div className="tc-input">
+            <input name="email" type="email" placeholder=" " required />
+            <span className="tc-label">電子信箱</span>
+          </div>
+
+          <div className="tc-input">
+            <input
+              name="password"
+              type={showPwd ? "text" : "password"}
+              placeholder=" "
+              required
+              minLength={6}
+            />
+            <span className="tc-label">密碼（至少 6 碼）</span>
+            <button
+              type="button"
+              className="tc-eye"
+              aria-label="顯示/隱藏密碼"
+              onClick={() => setShowPwd((s) => !s)}
+            >
+              👁
+            </button>
+          </div>
+
+          <div className="tc-input">
+            <input name="referralCode" placeholder=" " />
+            <span className="tc-label">邀請碼（選填）</span>
+          </div>
+
+          <div className="tc-row">
+            <label className="tc-row" style={{ gap: 8 }}>
+              <input type="checkbox" name="isOver18" required />
+              我已年滿 18 歲
             </label>
           </div>
 
-          <div className="tc-sep" />
-          <button className="tc-btn" type="submit" style={{ marginTop: 10 }}>
-            建立帳號
+          <div className="tc-row">
+            <label className="tc-row" style={{ gap: 8 }}>
+              <input type="checkbox" name="acceptTOS" required />
+              我同意服務條款
+            </label>
+          </div>
+
+          <button className="tc-btn" disabled={loading}>
+            {loading ? "建立中…" : "建立帳號"}
           </button>
 
-          <p className="tc-hint" style={{ textAlign: "center", marginTop: 10 }}>
-            已經有帳號？<Link className="tc-link" href="/login">前往登入</Link>
-          </p>
+          <div className="tc-sep"></div>
+          <div className="tc-hint">
+            已有帳號？<Link className="tc-link" href="/login">返回登入</Link>
+          </div>
         </form>
       </div>
-    </section>
+    </main>
   );
 }

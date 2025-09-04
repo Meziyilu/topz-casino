@@ -1,50 +1,83 @@
 // app/(public)/login/page.tsx
 "use client";
-
 import Link from "next/link";
+import { useState } from "react";
 
 export default function LoginPage() {
+  const [showPwd, setShowPwd] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setLoading(true);
+    const fd = new FormData(e.currentTarget);
+    const body: Record<string, string> = {};
+    fd.forEach((v, k) => (body[k] = String(v)));
+    await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    setLoading(false);
+    // 成功後導向首頁或刷新
+    window.location.href = "/";
+  }
+
   return (
-    <section className="tc-auth-card tc-follow">
+    <main className="tc-auth-card tc-follow">
       <div className="tc-card-inner">
-        {/* Tabs */}
-        <nav className="tc-tabs is-login">
-          <Link className="tc-tab" href="/login">登入</Link>
-          <Link className="tc-tab" href="/register">註冊</Link>
-        </nav>
+        {/* 置中大字 LOGO */}
+        <div className="tc-brand">TOPZCASINO</div>
 
-        <form method="POST" action="/api/auth/login" noValidate>
-          <div className="tc-grid">
-            <div className="tc-input">
-              <div className="tc-label">電子信箱</div>
-              <input name="email" type="email" inputMode="email" autoComplete="email" required />
-            </div>
+        {/* 分頁切換 */}
+        <div className="tc-tabs">
+          <Link href="/login" className="tc-tab active" aria-current="page">登入</Link>
+          <Link href="/register" className="tc-tab">註冊</Link>
+        </div>
 
-            <div className="tc-input" style={{ position: "relative" }}>
-              <div className="tc-label">密碼</div>
-              <input name="password" type="password" autoComplete="current-password" required />
-              <button className="tc-eye" type="button" aria-label="顯示/隱藏密碼">👁</button>
-            </div>
+        <form className="tc-grid" onSubmit={onSubmit} noValidate>
+          <div className="tc-input">
+            <input name="email" type="email" placeholder=" " required />
+            <span className="tc-label">電子信箱</span>
           </div>
 
-          <div className="tc-row" style={{ marginTop: 10 }}>
-            <label className="tc-hint" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-              <input name="remember" type="checkbox" />
+          <div className="tc-input">
+            <input
+              name="password"
+              type={showPwd ? "text" : "password"}
+              placeholder=" "
+              required
+              minLength={6}
+            />
+            <span className="tc-label">密碼</span>
+            <button
+              type="button"
+              className="tc-eye"
+              aria-label="顯示/隱藏密碼"
+              onClick={() => setShowPwd((s) => !s)}
+            >
+              👁
+            </button>
+          </div>
+
+          <div className="tc-row" style={{ justifyContent: "space-between" }}>
+            <label className="tc-row" style={{ gap: 8 }}>
+              <input type="checkbox" name="remember" />
               記住我
             </label>
             <Link href="/forgot" className="tc-link">忘記密碼？</Link>
           </div>
 
-          <div className="tc-sep" />
-          <button className="tc-btn" type="submit" style={{ marginTop: 10 }}>
-            立即登入
+          <button className="tc-btn" disabled={loading}>
+            {loading ? "登入中…" : "登入"}
           </button>
 
-          <p className="tc-hint" style={{ textAlign: "center", marginTop: 10 }}>
+          <div className="tc-sep"></div>
+          <div className="tc-hint">
             還沒有帳號？<Link className="tc-link" href="/register">前往註冊</Link>
-          </p>
+          </div>
         </form>
       </div>
-    </section>
+    </main>
   );
 }

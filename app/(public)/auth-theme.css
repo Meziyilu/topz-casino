@@ -233,3 +233,46 @@
   .tc-auth .tc-card-inner { padding: 18px; }
   .tc-auth .tc-tabs { gap: 6px; }
 }
+
+/* --- 修補：卡片與表單邊界 --- */
+.tc-auth .tc-auth-card {
+  width: min(560px, 92vw);
+  margin: 6vh auto;
+  padding: 0 10px;               /* 防止外層擠出 */
+  box-sizing: border-box;
+}
+
+.tc-auth .tc-card-inner {
+  overflow: hidden;              /* 阻止內部元素溢出 */
+  padding: 22px;                 /* 內距統一 */
+  box-sizing: border-box;
+}
+
+.tc-auth .tc-grid {
+  display: grid;
+  gap: 14px;
+  width: 100%;                   /* 表單佔滿卡片寬 */
+}
+
+.tc-auth .tc-input,
+.tc-auth .tc-row,
+.tc-auth .tc-btn {
+  max-width: 100%;
+}
+
+.tc-auth .tc-input input {
+  width: 100%;
+  box-sizing: border-box;        /* 讓 padding 不會把寬度撐爆 */
+}
+
+/* --- LOGO 絕對置中（已在 .tc-brand 設計過，但再保險一層） --- */
+.tc-auth .tc-brand {
+  text-align: center !important;
+  margin-top: 4px;
+  margin-bottom: 18px;
+}
+
+/* 行動端再收一點內距，避免擠出 */
+@media (max-width: 480px) {
+  .tc-auth .tc-card-inner { padding: 18px; }
+}
