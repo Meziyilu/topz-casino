@@ -2,13 +2,25 @@
 import { useEffect, useState } from "react";
 
 export default function Clock() {
-  const [now, setNow] = useState(new Date());
+  const [time, setTime] = useState<string>("");
+
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000);
+    function tick() {
+      const now = new Date();
+      setTime(
+        now.toLocaleTimeString("zh-TW", {
+          hour12: false,
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        })
+      );
+    }
+    tick(); // 立刻顯示一次
+    const t = setInterval(tick, 1000);
     return () => clearInterval(t);
   }, []);
-  const hh = String(now.getHours()).padStart(2, "0");
-  const mm = String(now.getMinutes()).padStart(2, "0");
-  const ss = String(now.getSeconds()).padStart(2, "0");
-  return <div style={{ color: "#cfeaff", fontVariantNumeric: "tabular-nums" }}>{hh}:{mm}:{ss}</div>;
+
+  // 用 suppressHydrationWarning 避免 SSR/CSR 初始內容不一致的警告
+  return <div suppressHydrationWarning>{time || "--:--:--"}</div>;
 }
