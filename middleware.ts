@@ -1,27 +1,51 @@
-import { NextRequest, NextResponse } from "next/server";
+// middleware.ts
+import { NextRequest, NextResponse } from 'next/server';
+// 若你要嚴格驗證：import jwt from 'jsonwebtoken';
 
-// 只白名單公開頁；其餘要看到 token 才放行
-const PUBLIC_PREFIXES = ["/login","/register","/forgot","/reset","/api/_debug"];
+const PUBLIC_PATHS = new Set([
+  '/login', '/register', '/forgot', '/reset',
+  '/api/auth/login', '/api/auth/register', '/api/auth/forgot', '/api/auth/reset'
+]);
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // 不攔 _next / 靜態 / API
-  if (pathname.startsWith("/_next") || pathname.startsWith("/favicon") || pathname.startsWith("/public") || pathname.startsWith("/api")) {
+  // 靜態與公開路由直接放行
+  if (
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/favicon') ||
+    pathname.startsWith('/public') ||
+    PUBLIC_PATHS.has(pathname)
+  ) {
     return NextResponse.next();
   }
 
-  if (PUBLIC_PREFIXES.some(p => pathname.startsWith(p))) return NextResponse.next();
+  // 只檢查是否有 token（避免伺服端在 verify 時 500）
+  const token = req.cookies.get('token')?.value;
+  if (!token) {
+    const url = new URL('/login', req.url);
+    url.searchParams.set('next', pathname);
+    return NextResponse.redirect(url);
+  }
 
-  const token = req.cookies.get("token")?.value;
-  if (token) return NextResponse.next();
+  // --- 如果你要嚴格驗證，改成下面這段（確保 try/catch 不會 500）
+  /*
+  try {
+    const secret = (process.env.JWT_SECRET || '') as jwt.Secret;
+    jwt.verify(token, secret);
+  } catch {
+    const url = new URL('/login', req.url);
+    url.searchParams.set('next', pathname);
+    return NextResponse.redirect(url);
+  }
+  */
 
-  const url = req.nextUrl.clone();
-  url.pathname = "/login";
-  url.searchParams.set("next", pathname);
-  return NextResponse.redirect(url);
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/","/profile/:path*","/wallet/:path*","/casino/:path*","/admin/:path*"],
+  matcher: [
+    '/', '/profile/:path*', '/wallet/:path*',
+    '/casino/:path*', '/admin/:path*',
+  ],
 };
