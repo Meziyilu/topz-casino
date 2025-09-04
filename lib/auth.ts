@@ -1,21 +1,21 @@
-// lib/auth.ts
-import jwt from 'jsonwebtoken';
-import type { NextRequest } from 'next/server';
+// lib/auth.ts 里新增這段
+import { NextResponse } from 'next/server';
 
-export type AuthContext = {
-  uid: string;
-  isAdmin?: boolean;
-} | null;
-
-export function getAuthFromRequest(req: NextRequest): AuthContext {
-  try {
-    const raw = req.cookies.get('token')?.value;
-    if (!raw) return null;
-    const secret = (process.env.JWT_SECRET || '') as jwt.Secret;
-    const decoded = jwt.verify(raw, secret) as any;
-    if (!decoded?.uid) return null;
-    return { uid: String(decoded.uid), isAdmin: !!decoded.isAdmin };
-  } catch {
-    return null;
-  }
+export function clearAuthCookies(res: NextResponse): NextResponse {
+  const isProd = process.env.NODE_ENV === 'production';
+  res.cookies.set('token', '', {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: isProd,
+    path: '/',
+    maxAge: 0,
+  });
+  res.cookies.set('refresh_token', '', {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: isProd,
+    path: '/',
+    maxAge: 0,
+  });
+  return res;
 }
