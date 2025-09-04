@@ -1,28 +1,27 @@
-// middleware.ts
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
 
-const PUBLIC_PAGE_PREFIXES = ['/login', '/register', '/forgot', '/reset'];
+// 只白名單公開頁；其餘要看到 token 才放行
+const PUBLIC_PREFIXES = ["/login","/register","/forgot","/reset","/api/_debug"];
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // 白名單頁面直接放行
-  if (PUBLIC_PAGE_PREFIXES.some((p) => pathname.startsWith(p))) {
+  // 不攔 _next / 靜態 / API
+  if (pathname.startsWith("/_next") || pathname.startsWith("/favicon") || pathname.startsWith("/public") || pathname.startsWith("/api")) {
     return NextResponse.next();
   }
 
-  // 只要看到 token 就放行（先確保能進大廳）
-  const token = req.cookies.get('token')?.value;
+  if (PUBLIC_PREFIXES.some(p => pathname.startsWith(p))) return NextResponse.next();
+
+  const token = req.cookies.get("token")?.value;
   if (token) return NextResponse.next();
 
-  // 沒 token → 導回 /login?next=<原頁>
   const url = req.nextUrl.clone();
-  url.pathname = '/login';
-  url.searchParams.set('next', pathname);
+  url.pathname = "/login";
+  url.searchParams.set("next", pathname);
   return NextResponse.redirect(url);
 }
 
-// 只攔前端頁面路由；API/靜態資源不攔
 export const config = {
-  matcher: ['/', '/profile/:path*', '/wallet/:path*', '/casino/:path*', '/admin/:path*'],
+  matcher: ["/","/profile/:path*","/wallet/:path*","/casino/:path*","/admin/:path*"],
 };
