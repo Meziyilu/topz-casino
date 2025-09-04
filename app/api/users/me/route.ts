@@ -5,18 +5,34 @@ import { getAuthFromRequest } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
   try {
-    const ctx = getAuthFromRequest(req);
-    if (!ctx) return NextResponse.json({ ok: false }, { status: 401 });
+    const auth = getAuthFromRequest(req);
+    if (!auth.ok) {
+      return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
+    }
 
-    const user = await prisma.user.findUnique({
-      where: { id: ctx.uid },
-      select: { id: true, email: true, displayName: true, isAdmin: true }
+    const me = await prisma.user.findUnique({
+      where: { id: auth.uid },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        avatarUrl: true,
+        isAdmin: true,
+        balance: true,
+        bankBalance: true,
+        headframe: true,
+        panelStyle: true,
+        vipTier: true,
+        level: true,
+        xp: true,
+      },
     });
 
-    if (!user) return NextResponse.json({ ok: false }, { status: 401 });
-    return NextResponse.json({ ok: true, user });
+    if (!me) return NextResponse.json({ ok: false, error: 'USER_NOT_FOUND' }, { status: 404 });
+
+    return NextResponse.json({ ok: true, user: me });
   } catch (e) {
-    console.error('ME_ERROR', e);
-    return NextResponse.json({ ok: false, error: 'INTERNAL' }, { status: 500 });
+    console.error('USERS_ME_ERROR', e);
+    return NextResponse.json({ ok: false, error: 'INTERNAL_ERROR' }, { status: 500 });
   }
 }
