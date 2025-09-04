@@ -1,15 +1,43 @@
-// middleware.ts（可選）
+// middleware.ts
 import { NextRequest, NextResponse } from 'next/server';
-const OPEN = new Set(['/','/login','/register','/forgot','/reset']);
+import jwt from 'jsonwebtoken';
+
+const PUBLIC_PATHS = new Set([
+  '/login', '/register', '/forgot', '/reset',
+  '/api/auth/login', '/api/auth/register', '/api/auth/forgot', '/api/auth/reset',
+]);
 
 export function middleware(req: NextRequest) {
-  const p = req.nextUrl.pathname;
-  if (OPEN.has(p) || p.startsWith('/_next') || p.startsWith('/favicon') || p.startsWith('/api/auth')) {
+  const { pathname } = req.nextUrl;
+
+  // 放行公開路由 & 靜態資源
+  if (
+    PUBLIC_PATHS.has(pathname) ||
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/favicon') ||
+    pathname.startsWith('/public')
+  ) {
     return NextResponse.next();
   }
+
   const token = req.cookies.get('token')?.value;
-  if (!token) return NextResponse.redirect(new URL('/login', req.url));
-  return NextResponse.next();
+  if (!token) {
+    const url = new URL('/login', req.url);
+    url.searchParams.set('next', pathname);
+    return NextResponse.redirect(url);
+  }
+
+  const secret = (process.env.JWT_SECRET || 'dev_secret') as jwt.Secret;
+  try {
+    jwt.verify(token, secret);
+    return NextResponse.next();
+  } catch {
+    const url = new URL('/login', req.url);
+    url.searchParams.set('next', pathname);
+    return NextResponse.redirect(url);
+  }
 }
 
-export const config = { matcher: ['/', '/profile/:path*', '/wallet/:path*', '/casino/:path*', '/admin/:path*'] };
+export const config = {
+  matcher: ['/', '/profile/:path*', '/wallet/:path*', '/casino/:path*', '/admin/:path*'],
+};
