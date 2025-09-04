@@ -2,46 +2,55 @@
 import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 
-function isAuthed(req: NextRequest) {
-  const token = req.cookies.get('token')?.value;
-  if (!token || !process.env.JWT_SECRET) return false;
-  try {
-    const p = jwt.verify(token, process.env.JWT_SECRET);
-    // @ts-ignore
-    return p?.typ === 'access';
-  } catch {
-    return false;
-  }
-}
+const PUBLIC_PATHS = [
+  '/login',
+  '/register',
+  '/forgot',
+  '/reset',
+  '/api/auth/login',
+  '/api/auth/register',
+  '/api/auth/forgot',
+  '/api/auth/reset',
+];
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // 不保護的路徑
+  // 放行公開路由與靜態資源、_next
   if (
-    pathname.startsWith('/api/auth') ||
-    pathname.startsWith('/login') ||
-    pathname.startsWith('/register') ||
+    PUBLIC_PATHS.includes(pathname) ||
     pathname.startsWith('/_next') ||
+    pathname.startsWith('/public') ||
     pathname.startsWith('/favicon') ||
-    pathname === '/robots.txt'
+    pathname.startsWith('/api/auth') // 其他 auth API
   ) {
     return NextResponse.next();
   }
 
-  // 只保護首頁（大廳）
-  if (pathname === '/') {
-    if (!isAuthed(req)) {
-      const url = req.nextUrl.clone();
-      url.pathname = '/login';
-      url.searchParams.set('next', '/');
-      return NextResponse.redirect(url);
-    }
+  // 其餘視為需要登入
+  const token = req.cookies.get('token')?.value;
+  if (!token) {
+    const url = new URL('/login', req.url);
+    url.searchParams.set('next', pathname);
+    return NextResponse.redirect(url);
   }
 
-  return NextResponse.next();
+  // 驗證 JWT
+  const secret = (process.env.JWT_SECRET || '') as jwt.Secret;
+  try {
+    jwt.verify(token, secret);
+    return NextResponse.next();
+  } catch {
+    const url = new URL('/login', req.url);
+    url.searchParams.set('next', pathname);
+    return NextResponse.redirect(url);
+  }
 }
 
 export const config = {
-  matcher: ['/', '/((?!.*\\.).*)'], // 保留靜態檔案
+  matcher: [
+    '/', '/profile/:path*', '/wallet/:path*',
+    '/casino/:path*', '/admin/:path*',
+    // 其他需要保護的前端路由加在這裡
+  ],
 };

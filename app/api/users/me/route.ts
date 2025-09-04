@@ -1,26 +1,19 @@
 // app/api/users/me/route.ts
-export const dynamic = 'force-dynamic';
-
-import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { NextRequest, NextResponse } from 'next/server';
+import jwt from 'jsonwebtoken';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
 
-export async function GET() {
-  const tk = cookies().get('token')?.value;
-  const payload = tk ? verifyToken<{ sub: string; typ: string }>(tk) : null;
-  if (!payload || payload.typ !== 'access') {
-    return NextResponse.json({ ok: false }, { status: 401 });
+export async function GET(req: NextRequest) {
+  try {
+    const token = req.cookies.get('token')?.value;
+    if (!token) return NextResponse.json({ ok: false, reason: 'NO_TOKEN' }, { status: 401 });
+
+    const JWT_SECRET = (process.env.JWT_SECRET || '') as jwt.Secret;
+    const payload = jwt.verify(token, JWT_SECRET) as any;
+    const user = await prisma.user.findUnique({ where: { id: payload.uid }, select: { id: true, email: true, displayName: true, isAdmin: true } });
+    if (!user) return NextResponse.json({ ok: false, reason: 'NOT_FOUND' }, { status: 404 });
+    return NextResponse.json({ ok: true, user });
+  } catch (e) {
+    return NextResponse.json({ ok: false, reason: 'BAD_TOKEN' }, { status: 401 });
   }
-
-  const user = await prisma.user.findUnique({
-    where: { id: payload.sub },
-    select: {
-      id: true, email: true, displayName: true, avatarUrl: true,
-      isAdmin: true, headframe: true, panelStyle: true, vipTier: true,
-    },
-  });
-  if (!user) return NextResponse.json({ ok: false }, { status: 401 });
-
-  return NextResponse.json({ ok: true, user });
 }
