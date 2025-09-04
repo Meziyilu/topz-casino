@@ -46,25 +46,22 @@ export async function POST(req: NextRequest) {
     if (!user) return NextResponse.json({ ok: false, error: 'INVALID_CREDENTIALS' }, { status: 401 });
     if (user.isBanned) return NextResponse.json({ ok: false, error: 'ACCOUNT_BANNED' }, { status: 403 });
 
-    // 要強制 email 驗證才登入的話就開這段
-    // if (!user.emailVerifiedAt) return NextResponse.json({ ok: false, error: 'EMAIL_NOT_VERIFIED' }, { status: 403 });
+    // 這裡不再檢查 emailVerifiedAt
 
     const ok = await bcrypt.compare(password, user.password);
     if (!ok) return NextResponse.json({ ok: false, error: 'INVALID_CREDENTIALS' }, { status: 401 });
 
-    // 發 Token
-    const accessPayload = { uid: user.id, isAdmin: user.isAdmin, isVerified: !!user.emailVerifiedAt, typ: 'access' as const };
+    const accessPayload = { uid: user.id, isAdmin: user.isAdmin, typ: 'access' as const };
     const refreshPayload = { uid: user.id, typ: 'refresh' as const };
 
     const accessToken = jwt.sign(accessPayload, JWT_SECRET, { expiresIn: ACCESS_TTL } as SignOptions);
     const refreshToken = jwt.sign(refreshPayload, REFRESH_SECRET, { expiresIn: REFRESH_TTL } as SignOptions);
 
-    // 回寫登入時間/IP（不擋建置）
+    // 回寫登入資訊（不阻塞）
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.ip || '';
     prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date(), lastLoginIp: ip } }).catch(() => {});
 
     const res = NextResponse.json({ ok: true });
-
     const isProd = process.env.NODE_ENV === 'production';
     res.cookies.set('token', accessToken, {
       httpOnly: true, sameSite: 'lax', secure: isProd, path: '/', maxAge: ttlToSeconds(ACCESS_TTL),

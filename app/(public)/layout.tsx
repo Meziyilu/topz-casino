@@ -1,32 +1,22 @@
-// app/(public)/layout.tsx
-import React from 'react';
-import './auth-theme.css';
+import type { ReactNode } from 'react';
+import './styles/auth-theme.css';
 
-export const metadata = {
-  title: 'TOPZCASINO — Sign in / Sign up',
-  description: 'Secure login for Topzcasino',
-};
-
-export default function PublicLayout({ children }: { children: React.ReactNode }) {
+export default function PublicLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="zh-Hant" suppressHydrationWarning>
+    <html lang="zh-Hant">
       <body className="auth-root">
-        {/* 背景層：微網格、柔光、雜訊 */}
-        <div aria-hidden className="bg-grid" />
-        <div aria-hidden className="bg-glow" />
-        <div aria-hidden className="bg-noise" />
+        {/* 整片動畫背景 */}
+        <div id="auth-bg" aria-hidden />
 
+        {/* 置中加大的文字 LOGO */}
         <header className="auth-header">
-          <div className="brand">
-            <span className="brand-kern">TOPZCASINO</span>
-          </div>
+          <h1 className="auth-logo">TOPZCASINO</h1>
         </header>
 
+        {/* 內容區（置中） */}
         <main className="auth-main">
           {children}
         </main>
-
-        <footer className="auth-footer">© {new Date().getFullYear()} TOPZCASINO</footer>
       </body>
     </html>
   );

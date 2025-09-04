@@ -1,74 +1,52 @@
-// app/(public)/login/page.tsx
 'use client';
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 
 export default function LoginPage() {
-  const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [pwd, setPwd] = useState('');
-  const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
-  async function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setErr(null); setLoading(true);
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password: pwd }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data?.ok) {
-        setErr(data?.message ?? '登入失敗'); setLoading(false); return;
-      }
-      router.push('/'); // 登入成功導回大廳
-    } catch (e) {
-      setErr('連線異常，請稍後再試'); setLoading(false);
+    setErr(null);
+    setLoading(true);
+
+    const fd = new FormData(e.currentTarget);
+    const payload: Record<string, string> = {};
+    fd.forEach((v, k) => (payload[k] = String(v)));
+
+    const res = await fetch('/api/auth/login', { method: 'POST', body: JSON.stringify(payload), headers: { 'content-type': 'application/json' }});
+    const data = await res.json();
+    setLoading(false);
+    if (!data.ok) {
+      setErr(data.error ?? '登入失敗');
+      return;
     }
+    // 登入成功 → 回大廳
+    location.href = '/';
   }
 
   return (
-    <div className="auth-card" role="dialog" aria-labelledby="login-title">
-      <div className="card-head">
-        <div className="card-title" id="login-title">登入</div>
-        <div className="card-sub">歡迎回來，請使用您的帳號登入</div>
-      </div>
-
-      {err && <div className="error">{err}</div>}
-
-      <form className="form" onSubmit={onSubmit} noValidate>
-        <div className="field">
-          <label className="label" htmlFor="email">Email</label>
-          <input
-            id="email" className="input" type="email" placeholder="you@example.com"
-            value={email} onChange={(e) => setEmail(e.target.value)} required
-            autoComplete="email"
-          />
+    <div className="auth-card" role="dialog" aria-label="Login">
+      <h2 className="auth-title">登入</h2>
+      <form onSubmit={onSubmit}>
+        <div className="auth-field">
+          <label htmlFor="email">Email</label>
+          <input id="email" name="email" type="email" autoComplete="email" required />
         </div>
-
-        <div className="field">
-          <label className="label" htmlFor="password">密碼</label>
-          <input
-            id="password" className="input" type="password" placeholder="••••••••"
-            value={pwd} onChange={(e) => setPwd(e.target.value)} required
-            autoComplete="current-password"
-          />
+        <div className="auth-field">
+          <label htmlFor="password">密碼</label>
+          <input id="password" name="password" type="password" autoComplete="current-password" required />
         </div>
-
-        <div className="row">
-          <button className="btn btn-primary" type="submit" disabled={loading}>
-            {loading ? '登入中…' : '登入'}
-          </button>
-          <a className="hint" href="/register">還沒有帳號？前往註冊</a>
-        </div>
-
-        <div className="hint">
-          忘記密碼？之後會提供重設流程。
-        </div>
+        <button className="auth-btn" disabled={loading} aria-busy={loading}>
+          {loading ? '登入中…' : '登入'}
+        </button>
       </form>
+      <div className="auth-links">
+        <a href="/register">註冊新帳號</a>
+        <a href="/forgot">忘記密碼？</a>
+      </div>
+      {err && <p style={{ marginTop: 10, color: '#fca5a5' }}>{err}</p>}
     </div>
   );
 }

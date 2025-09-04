@@ -1,57 +1,66 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
+import { prisma } from '@/lib/prisma';
 import { parseFormData } from '@/lib/form';
-import { randomBytes } from 'crypto';
 
-function genReferral() {
-  return randomBytes(4).toString('hex'); // 8字元
+function randomCode(len = 8) {
+  const dict = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let out = '';
+  for (let i = 0; i < len; i++) out += dict[Math.floor(Math.random() * dict.length)];
+  return out;
 }
 
 export async function POST(req: NextRequest) {
   try {
     const isJson = req.headers.get('content-type')?.includes('application/json');
-    const body = isJson ? await req.json() : await parseFormData(req);
+    const raw = isJson ? await req.json() : await parseFormData(req);
 
-    const email = String(body.email || '').trim().toLowerCase();
-    const password = String(body.password || '');
-    const displayName = String(body.displayName || '').trim();
-    const referralCode = String(body.referralCode || '').trim() || undefined;
+    const email = String((raw as any).email || '').trim().toLowerCase();
+    const password = String((raw as any).password || '');
+    const displayName = String((raw as any).displayName || '').trim();
+    const referralCodeInput = String((raw as any).referralCode || '').trim();
+    const isOver18 = String((raw as any).isOver18 || '') === 'true';
+    const acceptTOS = String((raw as any).acceptTOS || '') === 'true';
 
     if (!email || !password || !displayName) {
       return NextResponse.json({ ok: false, error: 'MISSING_FIELDS' }, { status: 400 });
     }
+    if (!isOver18 || !acceptTOS) {
+      return NextResponse.json({ ok: false, error: 'MUST_ACCEPT' }, { status: 400 });
+    }
 
     const exists = await prisma.user.findFirst({
       where: { OR: [{ email }, { displayName }] },
-      select: { id: true, email: true, displayName: true },
+      select: { id: true },
     });
     if (exists) {
-      return NextResponse.json({ ok: false, error: 'DUPLICATE_EMAIL_OR_NAME' }, { status: 409 });
+      return NextResponse.json({ ok: false, error: 'EMAIL_OR_NAME_TAKEN' }, { status: 409 });
     }
 
-    const hashed = await bcrypt.hash(password, 10);
+    const inviter = referralCodeInput
+      ? await prisma.user.findFirst({ where: { referralCode: referralCodeInput }, select: { id: true } })
+      : null;
 
-    const user = await prisma.user.create({
+    const hashed = await bcrypt.hash(password, 10);
+    const selfReferral = randomCode(8);
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.ip || '';
+
+    await prisma.user.create({
       data: {
         email,
         password: hashed,
         displayName,
-        referralCode: genReferral(),
-        // 如果你有 inviter 邏輯，可在這裡處理 referralCode -> inviterId
+        referralCode: selfReferral,
+        inviterId: inviter?.id ?? null,
+        registeredIp: ip,
+        emailVerifiedAt: new Date(), // ← 直接當作已驗證
       },
-      select: { id: true, email: true, displayName: true },
     });
 
-    // 你目前沒有真發信，先不強制 email 驗證
-    // 若要做，這裡建立 EmailVerifyToken，回傳 verifyUrl
-    // const token = randomBytes(32).toString('hex');
-    // const expiredAt = new Date(Date.now() + 1000 * 60 * 30);
-    // await prisma.emailVerifyToken.create({ data: { userId: user.id, token, expiredAt } });
-
-    return NextResponse.json({ ok: true, user });
-  } catch (err) {
-    console.error('REGISTER_ERROR', err);
+    // 不再建立 EmailVerifyToken
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    console.error('REGISTER_ERROR', e);
     return NextResponse.json({ ok: false, error: 'INTERNAL_ERROR' }, { status: 500 });
   }
 }
