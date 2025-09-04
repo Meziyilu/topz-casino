@@ -2,44 +2,39 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
-    setError(null);
 
     const fd = new FormData(e.currentTarget);
     const body: Record<string, string> = {};
     fd.forEach((v, k) => (body[k] = String(v)));
 
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    let data: any = null;
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      data = await res.json();
+    } catch {}
 
-      const data = await res.json();
-      setLoading(false);
+    setLoading(false);
 
-      if (!res.ok || !data.ok) {
-        setError("登入失敗，請檢查帳號或密碼");
-        return;
-      }
-
-      // ✅ 成功後導向大廳
-      router.push("/");
-    } catch (err) {
-      setError("系統錯誤，請稍後再試");
-      setLoading(false);
+    // 成功後整頁導向大廳
+    if (res.ok && data?.ok) {
+      window.location.assign("/"); // ✅ 保證 Cookie 被帶上
+      return;
     }
+
+    alert("登入失敗，請檢查帳號密碼");
   }
 
   return (
@@ -53,7 +48,9 @@ export default function LoginPage() {
           <Link href="/login" className="tc-tab active" aria-current="page">
             登入
           </Link>
-          <Link href="/register" className="tc-tab">註冊</Link>
+          <Link href="/register" className="tc-tab">
+            註冊
+          </Link>
         </div>
 
         <form className="tc-grid" onSubmit={onSubmit} noValidate>
@@ -86,10 +83,10 @@ export default function LoginPage() {
               <input type="checkbox" name="remember" />
               記住我
             </label>
-            <Link href="/forgot" className="tc-link">忘記密碼？</Link>
+            <Link href="/forgot" className="tc-link">
+              忘記密碼？
+            </Link>
           </div>
-
-          {error && <div className="tc-error">{error}</div>}
 
           <button className="tc-btn" disabled={loading}>
             {loading ? "登入中…" : "登入"}
@@ -97,7 +94,10 @@ export default function LoginPage() {
 
           <div className="tc-sep"></div>
           <div className="tc-hint">
-            還沒有帳號？<Link className="tc-link" href="/register">前往註冊</Link>
+            還沒有帳號？
+            <Link className="tc-link" href="/register">
+              前往註冊
+            </Link>
           </div>
         </form>
       </div>
