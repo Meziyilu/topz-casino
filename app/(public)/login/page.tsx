@@ -9,32 +9,40 @@ export default function LoginPage() {
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
 
-    const fd = new FormData(e.currentTarget);
-    const body: Record<string, string> = {};
-    fd.forEach((v, k) => (body[k] = String(v)));
-
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    let data: any = null;
     try {
-      data = await res.json();
-    } catch {}
+      const fd = new FormData(e.currentTarget);
+      const body: Record<string, string> = {};
+      fd.forEach((v, k) => (body[k] = String(v)));
 
-    setLoading(false);
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "include", // 保險：帶上/接受 Cookie
+        body: JSON.stringify(body),
+      });
 
-    // 成功後整頁導向大廳
-    if (res.ok && data?.ok) {
-      window.location.assign("/"); // ✅ 保證 Cookie 被帶上
-      return;
+      // 只要 2xx 就直接整頁導回大廳，確保 Cookie 已寫入
+      if (res.ok) {
+        window.location.assign("/"); // ⬅️ 強制整頁跳轉
+        return;
+      }
+
+      // 非 2xx：盡量取錯誤訊息
+      let msg = "登入失敗，請檢查帳號密碼";
+      try {
+        const data = await res.json();
+        if (data?.message) msg = data.message;
+      } catch {}
+      alert(msg);
+    } catch (err) {
+      console.error(err);
+      alert("網路或伺服器異常，稍後再試");
+    } finally {
+      setLoading(false);
     }
-
-    alert("登入失敗，請檢查帳號密碼");
   }
 
   return (
@@ -88,7 +96,7 @@ export default function LoginPage() {
             </Link>
           </div>
 
-          <button className="tc-btn" disabled={loading}>
+          <button className="tc-btn" type="submit" disabled={loading}>
             {loading ? "登入中…" : "登入"}
           </button>
 
