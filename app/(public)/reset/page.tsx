@@ -1,29 +1,80 @@
-// app/(public)/reset/page.tsx
-import "../auth-theme.css";
-import ResetForm from "./reset-form";
+"use client";
+import { useState } from "react";
+import Link from "next/link";
 
-export default function ResetPage({
-  searchParams,
-}: {
-  searchParams: { token?: string };
-}) {
-  const tokenInUrl = searchParams?.token ?? "";
+export default function ResetPage() {
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setMsg(null);
+    setErr(null);
+    setLoading(true);
+
+    const fd = new FormData(e.currentTarget);
+    const body: Record<string, string> = {};
+    fd.forEach((v, k) => (body[k] = String(v)));
+
+    try {
+      const res = await fetch("/api/auth/reset", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          token: body.token ?? "",
+          newPassword: body.newPassword ?? "",
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setErr(data?.error ?? "RESET_FAILED");
+      } else {
+        setMsg("密碼已更新，請用新密碼登入。");
+        // 2 秒後回登入
+        setTimeout(() => (window.location.href = "/login"), 2000);
+      }
+    } catch {
+      setErr("NETWORK_ERROR");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <main className="tc-auth-card tc-follow">
       <div className="tc-card-inner">
-        {/* 置中文字 LOGO */}
         <div className="tc-brand">TOPZCASINO</div>
 
-        {/* 分頁切換 */}
         <div className="tc-tabs">
-          <a href="/login" className="tc-tab">登入</a>
-          <a href="/register" className="tc-tab">註冊</a>
+          <Link href="/login" className="tc-tab">登入</Link>
+          <Link href="/register" className="tc-tab">註冊</Link>
           <span className="tc-tab active" aria-current="page">重設密碼</span>
         </div>
 
-        {/* 將 URL token 傳給 client 元件，不用在 client 再讀 searchParams */}
-        <ResetForm initialToken={tokenInUrl} />
+        <form className="tc-grid" onSubmit={onSubmit} noValidate>
+          <div className="tc-input">
+            <input name="token" type="text" placeholder=" " required />
+            <span className="tc-label">重設代碼</span>
+          </div>
+
+          <div className="tc-input">
+            <input name="newPassword" type="password" placeholder=" " required minLength={6} />
+            <span className="tc-label">新密碼</span>
+          </div>
+
+          {err && <div className="tc-error">{err}</div>}
+          {msg && <div className="tc-ok">{msg}</div>}
+
+          <button className="tc-btn" disabled={loading}>
+            {loading ? "更新中…" : "更新密碼"}
+          </button>
+        </form>
       </div>
+
+      {/* 同樣用 link，而非 import */}
+      <link rel="stylesheet" href="/styles/auth-theme.css" />
     </main>
   );
 }
