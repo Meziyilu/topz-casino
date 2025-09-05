@@ -1,4 +1,6 @@
+// app/page.tsx  或 app/(public)/page.tsx
 "use client";
+import "@/public/styles/lobby.css"; // 直接 import，避免 public 路徑錯用
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Clock from "@/components/lobby/Clock";
@@ -9,15 +11,22 @@ import GameCard from "@/components/lobby/GameCard";
 import ChatBox from "@/components/lobby/ChatBox";
 import ServiceWidget from "@/components/lobby/ServiceWidget";
 
-type Me = { id: string; displayName: string; balance: number; bankBalance: number; vipTier: number; avatarUrl?: string | null };
+type Me = {
+  id: string;
+  displayName: string;
+  balance: number;
+  bankBalance: number;
+  vipTier: number;
+  avatarUrl?: string | null;
+};
 
 export default function LobbyPage() {
   const [me, setMe] = useState<Me | null>(null);
 
   useEffect(() => {
     fetch("/api/users/me", { credentials: "include" })
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => setMe(d.user ?? null))
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => setMe(d.user ?? null))
       .catch(() => setMe(null));
   }, []);
 
@@ -67,20 +76,36 @@ export default function LobbyPage() {
           <div className="lb-card">
             <div className="lb-card-title">功能入口</div>
             <div className="lb-actions">
-              <Link href="/wallet" className="lb-btn">🏦 銀行</Link>
-              <Link href="/shop" className="lb-btn">🛍 商店</Link>
-              <Link href="/admin" className="lb-btn">⚙️ 管理</Link>
+              <Link href="/wallet" className="lb-btn">
+                🏦 銀行
+              </Link>
+              <Link href="/shop" className="lb-btn">
+                🛍 商店
+              </Link>
+              <Link href="/admin" className="lb-btn">
+                ⚙️ 管理
+              </Link>
             </div>
           </div>
 
           <div className="lb-card">
             <div className="lb-card-title">排行榜（週）</div>
             <ol className="lb-list">
-              <li>#1 王牌玩家 <span>+12,400</span></li>
-              <li>#2 LuckyStar <span>+8,210</span></li>
-              <li>#3 黑桃A <span>+6,420</span></li>
-              <li>#4 Neon <span>+4,900</span></li>
-              <li>#5 Nova <span>+3,110</span></li>
+              <li>
+                #1 王牌玩家 <span>+12,400</span>
+              </li>
+              <li>
+                #2 LuckyStar <span>+8,210</span>
+              </li>
+              <li>
+                #3 黑桃A <span>+6,420</span>
+              </li>
+              <li>
+                #4 Neon <span>+4,900</span>
+              </li>
+              <li>
+                #5 Nova <span>+3,110</span>
+              </li>
             </ol>
           </div>
 
@@ -89,7 +114,7 @@ export default function LobbyPage() {
             <ul className="lb-list soft">
               <li>🎁 回饋活動加碼至 120%</li>
               <li>🧧 連續登入送紅包券</li>
-              <li>🛠️ 系統維護 02:00 - 03:00</li>
+              <li>🛠 系統維護 02:00 - 03:00</li>
             </ul>
           </div>
         </aside>
@@ -116,7 +141,6 @@ export default function LobbyPage() {
       </div>
 
       <ServiceWidget />
-      <link rel="stylesheet" href="@/public/styles/lobby.css" />
     </main>
   );
 }
