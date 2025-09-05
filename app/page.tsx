@@ -1,51 +1,143 @@
 // app/page.tsx
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import Clock from "@/components/lobby/Clock";
+import ThemeToggle from "@/components/lobby/ThemeToggle";
+import AnnouncementTicker from "@/components/lobby/AnnouncementTicker";
+import ProfileCard from "@/components/lobby/ProfileCard";
+import GameCard from "@/components/lobby/GameCard";
+import ChatBox from "@/components/lobby/ChatBox";
+import ServiceWidget from "@/components/lobby/ServiceWidget";
 
-export default function Home() {
+type Me = {
+  id: string;
+  displayName: string;
+  balance: number;
+  bankBalance: number;
+  vipTier: number;
+  avatarUrl?: string | null;
+};
+
+export default function LobbyPage() {
+  const [me, setMe] = useState<Me | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/users/me", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => setMe(d.user ?? null))
+      .catch(() => setMe(null))
+      .finally(() => setLoading(false));
+  }, []);
+
   return (
-    <main style={{
-      minHeight: '100svh',
-      display: 'grid',
-      placeItems: 'center',
-      padding: 24,
-      background: 'radial-gradient(1200px 600px at 10% -10%, rgba(96,165,250,.18), transparent 60%), radial-gradient(1000px 800px at 110% 10%, rgba(167,139,250,.18), transparent 60%), radial-gradient(800px 700px at 50% 110%, rgba(253,164,175,.16), transparent 60%)'
-    }}>
-      {/* 掛上你的大廳樣式（不會影響登入註冊，因為各自有自己的 css link） */}
+    <main className="lb-wrap">
+      {/* 先掛樣式，確保首屏就套到 */}
       <link rel="stylesheet" href="/styles/lobby.css" />
 
-      <div style={{
-        width: 'min(980px,92vw)',
-        padding: 24,
-        borderRadius: 16,
-        background: 'rgba(16,20,27,.45)',
-        border: '1px solid rgba(255,255,255,.12)',
-        boxShadow: '0 10px 30px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.08), 0 0 80px rgba(0,180,255,.12)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)'
-      }}>
-        <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <div style={{ fontSize: 22, letterSpacing: 2, fontWeight: 800 }}>TOPZCASINO</div>
-          <nav style={{ display: 'flex', gap: 12, opacity: .9 }}>
-            <Link href="/login" style={{ color: '#b9c7d6', textDecoration: 'none' }}>登入</Link>
-            <Link href="/register" style={{ color: '#b9c7d6', textDecoration: 'none' }}>註冊</Link>
-          </nav>
-        </header>
+      <div className="lb-bg" />
+      <div className="lb-particles" aria-hidden />
 
-        <div style={{ fontSize: 28, fontWeight: 700, marginTop: 16 }}>大廳就緒 ✅</div>
-        <p style={{ opacity: .8, marginTop: 8 }}>
-          這是公開首頁。登入成功後，前端會把你導向 <code style={{opacity:.8}}>/{' '}</code>（本頁）並顯示大廳骨架。
-        </p>
-
-        <div style={{ marginTop: 16, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          {/* 先不做權限判斷，點了沒登入會被 API 擋；你要權限再加 ProtectedLink */}
-          <Link href="/wallet" className="lb-btn">🏦 銀行</Link>
-          <Link href="/casino/baccarat" className="lb-btn">🎴 百家樂</Link>
-          <Link href="/casino/sicbo" className="lb-btn">🎲 骰寶</Link>
-          <Link href="/casino/lotto" className="lb-btn">🎟 樂透</Link>
+      {/* Header */}
+      <header className="lb-header">
+        <div className="left">
+          <div className="lb-logo">TOPZCASINO</div>
+          <span className="lb-beta">LOBBY</span>
         </div>
+
+        <div className="center">
+          <AnnouncementTicker
+            items={[
+              "🎉 新手禮包開放領取！",
+              "🔥 百家樂 R60 房間將於 21:00 開新局",
+              "💎 連續簽到 7 天可抽稀有徽章",
+            ]}
+          />
+        </div>
+
+        <div className="right">
+          <Clock />
+          <ThemeToggle />
+          <Link href="/profile" className="lb-user-mini">
+            <span className="name">{me?.displayName ?? "玩家"}</span>
+          </Link>
+        </div>
+      </header>
+
+      {/* 若未登入，顯示一條小提醒（不影響布局） */}
+      {!loading && !me && (
+        <div className="lb-banner">
+          <span>你目前為訪客模式，登入可解鎖完整功能。</span>
+          <Link href="/login" className="lb-btn ghost">立即登入</Link>
+        </div>
+      )}
+
+      {/* 主板塊 */}
+      <div className="lb-grid">
+        {/* 左欄 */}
+        <aside className="lb-col">
+          <ProfileCard
+            displayName={me?.displayName ?? "玩家"}
+            avatarUrl={me?.avatarUrl ?? undefined}
+            vipTier={me?.vipTier ?? 0}
+            wallet={me?.balance ?? 0}
+            bank={me?.bankBalance ?? 0}
+          />
+
+          <div className="lb-card">
+            <div className="lb-card-title">功能入口</div>
+            <div className="lb-actions">
+              <Link href="/wallet" className="lb-btn">🏦 銀行</Link>
+              <Link href="/shop" className="lb-btn">🛍 商店</Link>
+              <Link href="/admin" className="lb-btn">⚙️ 管理</Link>
+            </div>
+          </div>
+
+          <div className="lb-card">
+            <div className="lb-card-title">排行榜（週）</div>
+            <ol className="lb-list">
+              <li>#1 王牌玩家 <span>+12,400</span></li>
+              <li>#2 LuckyStar <span>+8,210</span></li>
+              <li>#3 黑桃A <span>+6,420</span></li>
+              <li>#4 Neon <span>+4,900</span></li>
+              <li>#5 Nova <span>+3,110</span></li>
+            </ol>
+          </div>
+
+          <div className="lb-card">
+            <div className="lb-card-title">公告 / 活動</div>
+            <ul className="lb-list soft">
+              <li>🎁 回饋活動加碼至 120%</li>
+              <li>🧧 連續登入送紅包券</li>
+              <li>🛠 系統維護 02:00 - 03:00</li>
+            </ul>
+          </div>
+        </aside>
+
+        {/* 中欄：遊戲 / 聊天 */}
+        <section className="lb-main">
+          <div className="lb-games">
+            <GameCard title="百家樂" online={328} countdown={27} href="/casino/baccarat" />
+            <GameCard title="骰寶" online={152} countdown={41} href="/casino/sicbo" />
+            <GameCard title="樂透" online={93} href="/casino/lotto" />
+            <GameCard title="21點" online={0} disabled href="/casino/blackjack" />
+          </div>
+
+          <ChatBox room="LOBBY" />
+        </section>
+
+        {/* 右欄：保留空位（之後擴充） */}
+        <aside className="lb-col right-col">
+          <div className="lb-card tall center">
+            <div className="lb-card-title">客服中心</div>
+            <p className="lb-muted">任何問題？點擊右下角小幫手</p>
+          </div>
+        </aside>
       </div>
+
+      <ServiceWidget />
     </main>
   );
 }
