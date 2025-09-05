@@ -3,9 +3,10 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getUserFromRequest } from '@/lib/auth'; // ✅ 修正這行
+import { getUserFromRequest } from '@/lib/auth';
 import { z } from 'zod';
 
+// 允許局部更新的欄位
 const PutSchema = z.object({
   displayName: z.string().trim().min(2).max(20).regex(/^[\p{L}\p{N}_]+$/u).optional(),
   about: z.string().trim().max(200).optional().nullable(),
@@ -16,24 +17,40 @@ const PutSchema = z.object({
   panelTint: z.string().trim().max(32).optional().nullable(),
 });
 
+type AuthedUserMin = { id: string };
+
 export async function GET(req: NextRequest) {
   try {
-    const auth = getUserFromRequest(req); // ✅ 這裡改用 getUserFromRequest
-    if (!auth?.uid) return NextResponse.json({ ok: false }, { status: 401 });
+    // ✅ 一定要 await，且用 id 不是 uid
+    const auth = (await getUserFromRequest(req)) as (AuthedUserMin | null);
+    if (!auth?.id) return NextResponse.json({ ok: false }, { status: 401 });
 
+    // 你 lib/auth 可能已經查過 DB，但這裡仍以最新資料為準
     const user = await prisma.user.findUnique({
-      where: { id: auth.uid },
+      where: { id: auth.id },
       select: {
-        id: true, email: true, displayName: true, name: true, avatarUrl: true,
-        vipTier: true, balance: true, bankBalance: true,
-        about: true, country: true,
-        headframe: true, panelStyle: true, panelTint: true,
-        isAdmin: true, isBanned: true, isMuted: true,
-        createdAt: true, lastLoginAt: true,
+        id: true,
+        email: true,
+        displayName: true,
+        name: true,
+        avatarUrl: true,
+        vipTier: true,
+        balance: true,
+        bankBalance: true,
+        about: true,
+        country: true,
+        headframe: true,
+        panelStyle: true,
+        panelTint: true,
+        isAdmin: true,
+        isBanned: true,
+        isMuted: true,
+        createdAt: true,
+        lastLoginAt: true,
       },
     });
-    if (!user) return NextResponse.json({ ok: false }, { status: 404 });
 
+    if (!user) return NextResponse.json({ ok: false }, { status: 404 });
     return NextResponse.json({ ok: true, user });
   } catch (e) {
     console.error('PROFILE_ME_GET', e);
@@ -43,27 +60,30 @@ export async function GET(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const auth = getUserFromRequest(req); // ✅ 同樣改這裡
-    if (!auth?.uid) return NextResponse.json({ ok: false }, { status: 401 });
+    // ✅ 同理，await + 用 id
+    const auth = (await getUserFromRequest(req)) as (AuthedUserMin | null);
+    if (!auth?.id) return NextResponse.json({ ok: false }, { status: 401 });
 
     const isJson = req.headers.get('content-type')?.includes('application/json');
-    const raw = isJson ? await req.json() : (async () => {
-      const fd = await req.formData();
-      const map: Record<string, string> = {};
-      fd.forEach((v, k) => (map[k] = String(v)));
-      return map;
-    })();
+    const raw = isJson
+      ? await req.json()
+      : (async () => {
+          const fd = await req.formData();
+          const map: Record<string, string> = {};
+          fd.forEach((v, k) => (map[k] = String(v)));
+          return map;
+        })();
 
     const parsed = PutSchema.safeParse(await raw);
     if (!parsed.success) {
       return NextResponse.json({ ok: false, error: 'INVALID_INPUT' }, { status: 400 });
     }
-
     const data = parsed.data;
 
+    // 檢查暱稱唯一
     if (data.displayName) {
       const exists = await prisma.user.findFirst({
-        where: { displayName: data.displayName, NOT: { id: auth.uid } },
+        where: { displayName: data.displayName, NOT: { id: auth.id } },
         select: { id: true },
       });
       if (exists) {
@@ -72,7 +92,7 @@ export async function PUT(req: NextRequest) {
     }
 
     const updated = await prisma.user.update({
-      where: { id: auth.uid },
+      where: { id: auth.id },
       data: {
         displayName: data.displayName ?? undefined,
         about: data.about ?? undefined,
@@ -83,12 +103,24 @@ export async function PUT(req: NextRequest) {
         panelTint: data.panelTint ?? undefined,
       },
       select: {
-        id: true, email: true, displayName: true, name: true, avatarUrl: true,
-        vipTier: true, balance: true, bankBalance: true,
-        about: true, country: true,
-        headframe: true, panelStyle: true, panelTint: true,
-        isAdmin: true, isBanned: true, isMuted: true,
-        createdAt: true, lastLoginAt: true,
+        id: true,
+        email: true,
+        displayName: true,
+        name: true,
+        avatarUrl: true,
+        vipTier: true,
+        balance: true,
+        bankBalance: true,
+        about: true,
+        country: true,
+        headframe: true,
+        panelStyle: true,
+        panelTint: true,
+        isAdmin: true,
+        isBanned: true,
+        isMuted: true,
+        createdAt: true,
+        lastLoginAt: true,
       },
     });
 
