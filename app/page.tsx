@@ -1,6 +1,4 @@
-// app/page.tsx
 "use client";
-
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Clock from "@/components/lobby/Clock";
@@ -11,32 +9,20 @@ import GameCard from "@/components/lobby/GameCard";
 import ChatBox from "@/components/lobby/ChatBox";
 import ServiceWidget from "@/components/lobby/ServiceWidget";
 
-type Me = {
-  id: string;
-  displayName: string;
-  balance: number;
-  bankBalance: number;
-  vipTier: number;
-  avatarUrl?: string | null;
-};
+type Me = { id: string; displayName: string; balance: number; bankBalance: number; vipTier: number; avatarUrl?: string | null };
 
 export default function LobbyPage() {
   const [me, setMe] = useState<Me | null>(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/users/me", { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((d) => setMe(d.user ?? null))
-      .catch(() => setMe(null))
-      .finally(() => setLoading(false));
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setMe(d.user ?? null))
+      .catch(() => setMe(null));
   }, []);
 
   return (
     <main className="lb-wrap">
-      {/* 先掛樣式，確保首屏就套到 */}
-      <link rel="stylesheet" href="/styles/lobby.css" />
-
       <div className="lb-bg" />
       <div className="lb-particles" aria-hidden />
 
@@ -65,14 +51,6 @@ export default function LobbyPage() {
           </Link>
         </div>
       </header>
-
-      {/* 若未登入，顯示一條小提醒（不影響布局） */}
-      {!loading && !me && (
-        <div className="lb-banner">
-          <span>你目前為訪客模式，登入可解鎖完整功能。</span>
-          <Link href="/login" className="lb-btn ghost">立即登入</Link>
-        </div>
-      )}
 
       {/* 主板塊 */}
       <div className="lb-grid">
@@ -111,7 +89,7 @@ export default function LobbyPage() {
             <ul className="lb-list soft">
               <li>🎁 回饋活動加碼至 120%</li>
               <li>🧧 連續登入送紅包券</li>
-              <li>🛠 系統維護 02:00 - 03:00</li>
+              <li>🛠️ 系統維護 02:00 - 03:00</li>
             </ul>
           </div>
         </aside>
@@ -138,6 +116,7 @@ export default function LobbyPage() {
       </div>
 
       <ServiceWidget />
+      <link rel="stylesheet" href="/styles/lobby.css" />
     </main>
   );
 }
