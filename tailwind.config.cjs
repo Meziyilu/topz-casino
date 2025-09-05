@@ -1,12 +1,4 @@
-/**** minimal, 可自行擴充 ****/
-module.exports = {
-  content: [
-    "./app/**/*.{ts,tsx}",
-    "./components/**/*.{ts,tsx}"
-  ],
-  theme: { extend: {} },
-  plugins: []
-};
+import type { Config } from "tailwindcss";
 
 const config: Config = {
   content: [
@@ -17,7 +9,10 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // 用於宇宙感點綴
+        // 主色
+        primary: { DEFAULT: "#7c3aed" },
+
+        // 宇宙感點綴
         cosmic: {
           cyan: "#67e8f9",
           rose: "#fda4af",
@@ -25,6 +20,7 @@ const config: Config = {
           violet: "#a78bfa",
           blue: "#60a5fa",
         },
+
         // 排行榜色彩（壓暗版）
         rank: {
           gold: "#E6C200",
@@ -62,15 +58,37 @@ const config: Config = {
           "0%": { transform: "rotateY(0deg)" },
           "100%": { transform: "rotateY(180deg)" },
         },
+        pop: {
+          "0%": { transform: "scale(0.6)" },
+          "70%": { transform: "scale(1.08)" },
+          "100%": { transform: "scale(1)" },
+        },
+        flip: {
+          "0%": { transform: "rotateY(90deg)" },
+          "100%": { transform: "rotateY(0deg)" },
+        },
+        confetti: {
+          "0%": {
+            transform: "translateY(-20vh) rotate(0)",
+            opacity: "0",
+          },
+          "10%": { opacity: "1" },
+          "100%": {
+            transform: "translateY(110vh) rotate(720deg)",
+            opacity: "0",
+          },
+        },
       },
       animation: {
         drift: "drift 12s ease-in-out infinite",
         twinkle: "twinkle 4s ease-in-out infinite",
         sheen: "sheen 1.2s ease-in-out",
         flipIn: "flipIn .6s ease forwards",
+        pop: "pop .28s ease-out both",
+        flip: "flip .4s ease-out both",
+        confetti: "confetti 1.4s ease-in forwards",
       },
       backgroundImage: {
-        // 星雲/星點多層背景
         "cosmic-noise":
           "radial-gradient(1200px 600px at 10% -10%, rgba(96,165,250,.18), transparent 60%), radial-gradient(1000px 800px at 110% 10%, rgba(167,139,250,.18), transparent 60%), radial-gradient(800px 700px at 50% 110%, rgba(253,164,175,.16), transparent 60%)",
       },
@@ -78,20 +96,5 @@ const config: Config = {
   },
   plugins: [],
 };
-/** @type {import('tailwindcss').Config} */
-module.exports = {
-  content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],
-  theme: {
-    extend: {
-      colors: { primary: { DEFAULT: "#7c3aed" } },
-      keyframes: {
-        pop: { "0%": { transform: "scale(0.6)" }, "70%": { transform: "scale(1.08)" }, "100%": { transform: "scale(1)" } },
-        flip: { "0%": { transform: "rotateY(90deg)" }, "100%": { transform: "rotateY(0deg)" } },
-        confetti: { "0%": { transform: "translateY(-20vh) rotate(0)", opacity: "0" }, "10%": { opacity: "1" }, "100%": { transform: "translateY(110vh) rotate(720deg)", opacity: "0" } },
-      },
-      animation: { pop: "pop .28s ease-out both", flip: "flip .4s ease-out both", confetti: "confetti 1.4s ease-in forwards" },
-    },
-  },
-  plugins: [],
-};
+
 export default config;
