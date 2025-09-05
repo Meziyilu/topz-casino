@@ -1,52 +1,60 @@
-// app/api/auth/register/route.ts
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 export const runtime = 'nodejs';
-import { NextRequest, NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
-import { prisma } from '@/lib/prisma';
 
-function makeReferralCode(len = 8) {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  return Array.from({ length: len }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
-}
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import argon2 from 'argon2';
+import jwt from 'jsonwebtoken';
 
 export async function POST(req: NextRequest) {
   try {
-    const isJson = req.headers.get('content-type')?.includes('application/json');
-    const body = isJson ? await req.json() : Object.fromEntries(await req.formData());
-    const email = String((body as any).email || '').trim().toLowerCase();
-    const displayName = String((body as any).displayName || '').trim();
-    const password = String((body as any).password || '');
-    const referralCode = String((body as any).referralCode || '').trim();
+    const { email, password, displayName } = await req.json();
 
-    if (!email || !password || !displayName) {
-      return NextResponse.json({ ok: false, error: 'MISSING_FIELDS' }, { status: 400 });
+    if (!email || !password) {
+      return NextResponse.json({ error: '缺少帳號或密碼' }, { status: 400 });
     }
 
-    const dup = await prisma.user.findFirst({ where: { OR: [{ email }, { displayName }] } });
-    if (dup) return NextResponse.json({ ok: false, error: 'DUPLICATE' }, { status: 409 });
-
-    const hashed = await bcrypt.hash(password, 10);
-
-    let inviterId: string | undefined = undefined;
-    if (referralCode) {
-      const inviter = await prisma.user.findFirst({ where: { referralCode } });
-      if (inviter) inviterId = inviter.id;
+    const existed = await prisma.user.findUnique({ where: { email } });
+    if (existed) {
+      return NextResponse.json({ error: '帳號已存在' }, { status: 400 });
     }
 
-    await prisma.user.create({
+    const hash = await argon2.hash(password);
+
+    const user = await prisma.user.create({
       data: {
-        email,
-        password: hashed,
-        displayName,
-        referralCode: makeReferralCode(),
-        inviterId,
-        emailVerifiedAt: new Date(), // 不做信箱驗證，直接標記已驗證
+        email: email.toLowerCase().trim(),
+        password: hash,
+        displayName: (displayName && String(displayName).trim()) || email.split('@')[0],
+        // 其他 v1.1.2 欄位若有預設值要一起填就在這裡補
+        // isBanned: false, isMuted: false, vipTier: 0, ...
       },
+      select: { id: true, displayName: true }
     });
 
-    return NextResponse.json({ ok: true });
+    // === 自動登入：簽發 JWT 並寫入 Cookie ===
+    const token = jwt.sign(
+      { id: user.id },
+      process.env.JWT_SECRET || 'dev_secret',
+      { expiresIn: '7d' }
+    );
+
+    const res = NextResponse.json({ ok: true, user });
+    const isProd = process.env.NODE_ENV === 'production';
+
+    res.cookies.set('token', token, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: isProd,
+      path: '/',
+      // 7 天
+      maxAge: 7 * 24 * 60 * 60,
+    });
+
+    return res;
   } catch (e) {
-    console.error('REGISTER_ERROR', e);
-    return NextResponse.json({ ok: false, error: 'INTERNAL_ERROR' }, { status: 500 });
+    console.error('REGISTER', e);
+    return NextResponse.json({ error: 'INTERNAL' }, { status: 500 });
   }
 }

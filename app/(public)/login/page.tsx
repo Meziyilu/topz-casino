@@ -1,115 +1,113 @@
-// app/(public)/login/page.tsx
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
-export default function LoginPage() {
+// 直接連 public 的 CSS（Render/生產環境最穩）
+const AuthCSS = () => <link rel="stylesheet" href="/styles/auth-theme.css" />;
+
+function LoginInner() {
   const router = useRouter();
-  const sp = useSearchParams();
-  const next = sp?.get('next') || '/';
-  const [showPwd, setShowPwd] = useState(false);
+  const params = useSearchParams();            // ✅ 放在 Suspense 內
+  const next = params.get("next") || "/";      // 預設回到大廳（app/page.tsx）
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState("");
 
-  // 確保載入 CSS（你說放在 public/styles/auth-theme.css）
-  useEffect(() => {
-    const id = 'auth-theme';
-    if (!document.getElementById(id)) {
-      const link = document.createElement('link');
-      link.id = id;
-      link.rel = 'stylesheet';
-      link.href = '/styles/auth-theme.css';
-      document.head.appendChild(link);
-    }
-  }, []);
-
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true); setErr(null);
+    setErr("");
+    setLoading(true);
 
-    const fd = new FormData(e.currentTarget);
-    const body: Record<string, string> = {};
-    fd.forEach((v, k) => (body[k] = String(v)));
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ email, password }),
+    });
 
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        credentials: 'include',             // ⬅️ 確保設 cookie
-        body: JSON.stringify(body),
-      });
+    setLoading(false);
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setErr(data?.error || 'LOGIN_FAILED');
-        return;
-      }
-
-      router.replace(next || '/');          // ⬅️ 成功導回
-    } catch {
-      setErr('NETWORK_ERROR');
-    } finally {
-      setLoading(false);
+    if (res.ok) {
+      router.replace(next);                    // ✅ 登入成功 → 回大廳/next
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setErr(data?.error || "登入失敗");
     }
   }
 
   return (
     <main className="tc-auth-card tc-follow">
+      <AuthCSS />
       <div className="tc-card-inner">
         <div className="tc-brand">TOPZCASINO</div>
 
         <div className="tc-tabs">
-          <Link href="/login" className="tc-tab active" aria-current="page">登入</Link>
-          <Link href="/register" className="tc-tab">註冊</Link>
+          <a className="tc-tab active" aria-current="page">登入</a>
+          <a className="tc-tab" href="/register">註冊</a>
         </div>
+
+        {err && <div className="tc-error">{err}</div>}
 
         <form className="tc-grid" onSubmit={onSubmit} noValidate>
           <div className="tc-input">
-            <input name="email" type="email" placeholder=" " required />
+            <input
+              name="email"
+              type="email"
+              placeholder=" "
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
             <span className="tc-label">電子信箱</span>
           </div>
 
           <div className="tc-input">
             <input
               name="password"
-              type={showPwd ? 'text' : 'password'}
+              type="password"
               placeholder=" "
               required
               minLength={6}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
             />
             <span className="tc-label">密碼</span>
-            <button
-              type="button"
-              className="tc-eye"
-              aria-label="顯示/隱藏密碼"
-              onClick={() => setShowPwd(s => !s)}
-            >
-              👁
-            </button>
           </div>
 
-          {err && <div className="tc-error">登入失敗：{err}</div>}
-
-          <div className="tc-row" style={{ justifyContent: 'space-between' }}>
+          <div className="tc-row" style={{ justifyContent: "space-between" }}>
             <label className="tc-row" style={{ gap: 8 }}>
               <input type="checkbox" name="remember" />
               記住我
             </label>
-            <Link href="/forgot" className="tc-link">忘記密碼？</Link>
+            <a href="/forgot" className="tc-link">忘記密碼？</a>
           </div>
 
           <button className="tc-btn" disabled={loading}>
-            {loading ? '登入中…' : '登入'}
+            {loading ? "登入中…" : "登入"}
           </button>
 
           <div className="tc-sep"></div>
           <div className="tc-hint">
-            還沒有帳號？<Link className="tc-link" href="/register">前往註冊</Link>
+            還沒有帳號？<a className="tc-link" href="/register">前往註冊</a>
           </div>
         </form>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <main className="tc-auth-card tc-follow">
+        <AuthCSS />
+        <div className="tc-card-inner">載入中…</div>
+      </main>
+    }>
+      <LoginInner />
+    </Suspense>
   );
 }
