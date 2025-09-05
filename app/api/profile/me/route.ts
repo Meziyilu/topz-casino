@@ -3,16 +3,14 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getAuthFromRequest } from '@/lib/auth';
+import { getUserFromRequest } from '@/lib/auth'; // ✅ 修正這行
 import { z } from 'zod';
 
 const PutSchema = z.object({
-  // 基本資料
   displayName: z.string().trim().min(2).max(20).regex(/^[\p{L}\p{N}_]+$/u).optional(),
   about: z.string().trim().max(200).optional().nullable(),
   country: z.string().trim().max(32).optional().nullable(),
   avatarUrl: z.string().url().max(512).optional().nullable(),
-  // 外觀
   headframe: z.string().trim().max(64).optional().nullable(),
   panelStyle: z.string().trim().max(32).optional().nullable(),
   panelTint: z.string().trim().max(32).optional().nullable(),
@@ -20,7 +18,7 @@ const PutSchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
-    const auth = getAuthFromRequest(req);
+    const auth = getUserFromRequest(req); // ✅ 這裡改用 getUserFromRequest
     if (!auth?.uid) return NextResponse.json({ ok: false }, { status: 401 });
 
     const user = await prisma.user.findUnique({
@@ -45,18 +43,15 @@ export async function GET(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const auth = getAuthFromRequest(req);
+    const auth = getUserFromRequest(req); // ✅ 同樣改這裡
     if (!auth?.uid) return NextResponse.json({ ok: false }, { status: 401 });
 
     const isJson = req.headers.get('content-type')?.includes('application/json');
-    const raw = isJson ? await req.json() : (() => {
-      // 保險：若有人用 formData
-      return (async () => {
-        const fd = await req.formData();
-        const map: Record<string, string> = {};
-        fd.forEach((v, k) => (map[k] = String(v)));
-        return map;
-      })();
+    const raw = isJson ? await req.json() : (async () => {
+      const fd = await req.formData();
+      const map: Record<string, string> = {};
+      fd.forEach((v, k) => (map[k] = String(v)));
+      return map;
     })();
 
     const parsed = PutSchema.safeParse(await raw);
@@ -66,7 +61,6 @@ export async function PUT(req: NextRequest) {
 
     const data = parsed.data;
 
-    // displayName 唯一性檢查（若有變更）
     if (data.displayName) {
       const exists = await prisma.user.findFirst({
         where: { displayName: data.displayName, NOT: { id: auth.uid } },
