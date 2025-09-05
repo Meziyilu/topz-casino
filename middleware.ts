@@ -2,32 +2,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 
-const PUBLIC_PAGES = new Set([
-  '/login',
-  '/register',
-  // 其他公開頁面要加在這
+const PUBLIC = new Set([
+  '/login', '/register', '/forgot', '/reset',
+  '/api/auth/login', '/api/auth/register', '/api/auth/logout',
 ]);
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // 1) 放行 API & Next 靜態資源 & 靜態檔
   if (
-    pathname.startsWith('/api') ||
+    PUBLIC.has(pathname) ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon') ||
     pathname.startsWith('/public') ||
-    pathname.match(/\.(css|js|png|jpg|jpeg|gif|svg|ico|webp)$/)
+    pathname.startsWith('/styles') ||   // ✅ 樣式檔
+    pathname.startsWith('/images') ||   // ✅ 圖片資源
+    pathname.startsWith('/api/auth')    // ✅ 其他 auth API
   ) {
     return NextResponse.next();
   }
 
-  // 2) 放行公開頁面
-  if (PUBLIC_PAGES.has(pathname)) {
-    return NextResponse.next();
-  }
-
-  // 3) 其餘頁面需要登入（包含 `/` 大廳）
   const token = req.cookies.get('token')?.value;
   if (!token) {
     const url = new URL('/login', req.url);
@@ -46,9 +40,6 @@ export function middleware(req: NextRequest) {
   }
 }
 
-// 只匹配頁面路由（不包含 /api/*）
 export const config = {
-  matcher: [
-    '/((?!api).*)',
-  ],
+  matcher: ['/', '/profile/:path*', '/wallet/:path*', '/casino/:path*', '/admin/:path*'],
 };

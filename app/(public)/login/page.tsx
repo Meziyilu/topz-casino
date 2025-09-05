@@ -2,14 +2,12 @@
 
 import Link from "next/link";
 import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
-// 讓此頁不要在 build 時預先靜態產生，避免 CSR bailout
 export const dynamic = "force-dynamic";
 
 function LoginInner() {
-  const router = useRouter();
-  const search = useSearchParams();             // ✅ 這裡可安全使用
+  const search = useSearchParams();
   const next = search?.get("next") || "/";
 
   const [showPwd, setShowPwd] = useState(false);
@@ -39,16 +37,15 @@ function LoginInner() {
       return;
     }
 
-    router.push(next); // ✅ 登入成功導回大廳（/），或 ?next=...
+    // ✅ 關鍵：用整頁跳轉，確保 httpOnly Cookie 已被瀏覽器帶到下一個請求
+    window.location.replace(next);
   }
 
   return (
     <main className="tc-auth-card tc-follow">
       <div className="tc-card-inner">
-        {/* 置中大字 LOGO */}
         <div className="tc-brand">TOPZCASINO</div>
 
-        {/* 分頁切換 */}
         <div className="tc-tabs">
           <Link href="/login" className="tc-tab active" aria-current="page">登入</Link>
           <Link href="/register" className="tc-tab">註冊</Link>
@@ -100,14 +97,12 @@ function LoginInner() {
         </form>
       </div>
 
-      {/* 確保樣式載入（深色玻璃感） */}
       <link rel="stylesheet" href="/styles/auth-theme.css" />
     </main>
   );
 }
 
 export default function LoginPage() {
-  // ✅ 用 Suspense 包住內層元件，符合 Next 的要求
   return (
     <Suspense fallback={<div style={{ color: "#fff", textAlign: "center", paddingTop: 40 }}>載入中…</div>}>
       <LoginInner />
