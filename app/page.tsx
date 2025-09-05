@@ -116,7 +116,7 @@ export default function LobbyPage() {
       </div>
 
       <ServiceWidget />
-      <link rel="stylesheet" href="/styles/lobby.css" />
+      <link rel="stylesheet" href="@/public/styles/lobby.css" />
     </main>
   );
 }
