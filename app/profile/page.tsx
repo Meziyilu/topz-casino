@@ -14,9 +14,9 @@ type Me = {
   vipTier: number;
   balance: number;
   bankBalance: number;
-  headframe?: string | null;   // 後端是 enum，這裡先用字串承接
-  panelStyle?: string | null;  // 若 schema 是 enum，後端會驗證；這裡照字串送
-  panelTint?: string | null;   // HEX 或 key
+  headframe?: string | null;  // 前端以字串呈現，後端會驗證/正規化
+  panelStyle?: string | null;
+  panelTint?: string | null;
 };
 
 export default function ProfilePage() {
@@ -26,10 +26,11 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
+  // 讀取個人資料
   useEffect(() => {
     fetch("/api/profile/me", { credentials: "include" })
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => {
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => {
         setMe(d.user);
         setForm({
           displayName: d.user.displayName,
@@ -46,11 +47,36 @@ export default function ProfilePage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  // 表單控制
+  const onChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
     const { name, value } = e.target;
-    setForm(s => ({ ...s, [name]: value }));
+    setForm((s) => ({ ...s, [name]: value }));
   };
 
+  // 上傳頭像（走 /api/upload/avatar）
+  const onPickAvatar = async (f?: File | null) => {
+    if (!f) return;
+    const fd = new FormData();
+    fd.append("file", f);
+    const r = await fetch("/api/upload/avatar", {
+      method: "POST",
+      body: fd,
+      credentials: "include",
+    });
+    const d = await r.json();
+    if (r.ok && d.url) {
+      setForm((s) => ({ ...s, avatarUrl: d.url }));
+      setToast({ type: "ok", text: "頭像已上傳 ✅" });
+      setTimeout(() => setToast(null), 1500);
+    } else {
+      setToast({ type: "err", text: "上傳失敗" });
+      setTimeout(() => setToast(null), 1500);
+    }
+  };
+
+  // 儲存
   const onSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (saving) return;
@@ -58,7 +84,16 @@ export default function ProfilePage() {
     setToast(null);
 
     const payload: Record<string, any> = {};
-    for (const k of ["displayName","nickname","about","country","avatarUrl","headframe","panelStyle","panelTint"] as const) {
+    for (const k of [
+      "displayName",
+      "nickname",
+      "about",
+      "country",
+      "avatarUrl",
+      "headframe",
+      "panelStyle",
+      "panelTint",
+    ] as const) {
       if (form[k] !== undefined) payload[k] = form[k];
     }
 
@@ -72,6 +107,7 @@ export default function ProfilePage() {
     if (!res.ok) {
       setSaving(false);
       setToast({ type: "err", text: "儲存失敗" });
+      setTimeout(() => setToast(null), 1600);
       return;
     }
 
@@ -86,38 +122,62 @@ export default function ProfilePage() {
 
   return (
     <main className="pf-wrap">
-      {/* 背景 & 粒子 */}
-      <div className="pf-bg"/>
-      <div className="pf-particles" aria-hidden/>
+      {/* 背景與粒子 */}
+      <div className="pf-bg" />
+      <div className="pf-particles" aria-hidden />
 
+      {/* 載入 CSS */}
       <link rel="stylesheet" href="/styles/profile.css" />
 
-      {/* 頂部導覽 */}
+      {/* Header */}
       <header className="pf-header">
         <div className="left">
-          <Link href="/" className="pf-logo">TOPZCASINO</Link>
+          <Link href="/" className="pf-logo">
+            TOPZCASINO
+          </Link>
           <span className="pf-sub">PROFILE</span>
         </div>
         <nav className="right">
-          <Link className="pf-nav" href="/">大廳</Link>
-          <Link className="pf-nav" href="/wallet">錢包</Link>
-          <Link className="pf-nav" href="/shop">商店</Link>
+          <Link className="pf-nav" href="/">
+            大廳
+          </Link>
+          <Link className="pf-nav" href="/wallet">
+            錢包
+          </Link>
+          <Link className="pf-nav" href="/shop">
+            商店
+          </Link>
         </nav>
       </header>
 
-      {/* HERO 卡（頭像／VIP／餘額） */}
+      {/* HERO 卡（留白加大、玻璃＋流光） */}
       <section className="pf-hero pf-tilt">
-        <div className="pf-avatar">
-          <div className="pf-ava-core">
-            {form.avatarUrl
-              ? <img src={form.avatarUrl} alt="avatar" />
-              : <div className="pf-ava-fallback">👤</div>}
+        <div className="pf-hero-left">
+          <div
+            className={`pf-avatar ${form.headframe ? `hf-${String(form.headframe).toLowerCase()}` : "hf-none"}`}
+            style={form.panelTint ? ({ ["--pf-tint" as any]: form.panelTint } as any) : undefined}
+          >
+            <div className="pf-ava-core">
+              {form.avatarUrl ? (
+                <img src={form.avatarUrl} alt="avatar" />
+              ) : (
+                <div className="pf-ava-fallback">👤</div>
+              )}
+            </div>
+            <div className="pf-ava-frame" />
+            <div className="pf-ava-glow" />
+            <label className="pf-file-btn">
+              上傳頭像
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                onChange={(e) => onPickAvatar(e.currentTarget.files?.[0])}
+              />
+            </label>
           </div>
-          <div className="pf-ava-frame"/>
-          <div className="pf-ava-glow"/>
         </div>
 
-        <div className="pf-hero-text">
+        <div className="pf-hero-right">
           <h1 className="pf-name">{me?.displayName ?? "玩家"}</h1>
           <div className="pf-vip">{vipLabel}</div>
           <div className="pf-balances">
@@ -132,46 +192,62 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* hero 右上角流光 */}
+        {/* 右上角掃光 */}
         <div className="pf-hero-sheen" />
       </section>
 
-      {/* 主卡：編輯表單 */}
+      {/* 編輯卡（網格放大間距，避免擁擠） */}
       <section className="pf-card pf-tilt">
         <form className="pf-grid" onSubmit={onSave}>
           <div className="pf-field">
-            <input name="displayName" value={form.displayName ?? ""} onChange={onChange} placeholder=" " required minLength={2} maxLength={20}/>
+            <input
+              name="displayName"
+              value={form.displayName ?? ""}
+              onChange={onChange}
+              placeholder=" "
+              required
+              minLength={2}
+              maxLength={20}
+            />
             <label>玩家暱稱</label>
           </div>
 
           <div className="pf-field">
-            <input name="nickname" value={form.nickname ?? ""} onChange={onChange} placeholder=" " maxLength={30}/>
+            <input name="nickname" value={form.nickname ?? ""} onChange={onChange} placeholder=" " maxLength={30} />
             <label>暱稱（公開）</label>
           </div>
 
           <div className="pf-field wide">
-            <textarea name="about" value={form.about ?? ""} onChange={onChange} placeholder=" " rows={3} maxLength={200}/>
+            <textarea
+              name="about"
+              value={form.about ?? ""}
+              onChange={onChange}
+              placeholder=" "
+              rows={4}
+              maxLength={200}
+            />
             <label>自我介紹</label>
           </div>
 
           <div className="pf-field">
-            <input name="country" value={form.country ?? ""} onChange={onChange} placeholder=" " maxLength={2}/>
+            <input name="country" value={form.country ?? ""} onChange={onChange} placeholder=" " maxLength={2} />
             <label>國家（ISO-2）</label>
           </div>
 
           <div className="pf-field">
             <input name="avatarUrl" value={form.avatarUrl ?? ""} onChange={onChange} placeholder=" " />
-            <label>頭像 URL</label>
+            <label>頭像 URL（可選）</label>
           </div>
 
           <div className="pf-field">
             <input name="panelTint" value={form.panelTint ?? ""} onChange={onChange} placeholder=" " />
-            <label>面板色（HEX）</label>
+            <label>面板色（HEX 或預設 key）</label>
           </div>
 
           <div className="pf-field">
             <input name="headframe" value={form.headframe ?? ""} onChange={onChange} placeholder=" " />
             <label>頭框代碼（可選）</label>
+            <small className="pf-help">示例：gold / cyan / neon / royal …（先用字串；之後可串 enum）</small>
           </div>
 
           <div className="pf-field">
@@ -183,21 +259,19 @@ export default function ProfilePage() {
             <button className="pf-btn" disabled={saving || loading}>
               {saving ? "儲存中…" : "儲存變更"}
             </button>
-            <Link className="pf-btn ghost" href="/">回大廳</Link>
+            <Link className="pf-btn ghost" href="/">
+              回大廳
+            </Link>
           </div>
         </form>
 
         {/* 卡片邊緣霓虹 */}
-        <div className="pf-ring pf-ring-1"/>
-        <div className="pf-ring pf-ring-2"/>
+        <div className="pf-ring pf-ring-1" />
+        <div className="pf-ring pf-ring-2" />
       </section>
 
       {/* Toast */}
-      {toast && (
-        <div className={`pf-toast ${toast.type === "ok" ? "ok" : "err"}`}>
-          {toast.text}
-        </div>
-      )}
+      {toast && <div className={`pf-toast ${toast.type === "ok" ? "ok" : "err"}`}>{toast.text}</div>}
     </main>
   );
 }
