@@ -1,107 +1,240 @@
+/* ====== PROFILE 濃厚玻璃感 + 大動畫 ====== */
+
 :root {
-  --pf-bg: #0b0f1a;
-  --pf-card: rgba(20, 24, 36, 0.46);
-  --pf-glass: rgba(255, 255, 255, 0.06);
-  --pf-text: #dfe6ff;
-  --pf-muted: #8ea0bf;
-  --pf-primary: #5ac8fa;
-  --pf-accent: #a78bfa;
-  --pf-border: rgba(255, 255, 255, 0.16);
-  --pf-shadow: rgba(0, 0, 0, 0.35);
-  --pf-blur: 14px;
+  --bg: #0b0f1a;
+  --glass: rgba(255,255,255,0.06);
+  --card: rgba(14,18,28,0.48);
+  --border: rgba(255,255,255,0.15);
+  --text: #dfe6ff;
+  --muted: #8ea0bf;
+  --accent: #7c3aed;      /* 紫霓虹 */
+  --prime: #5ac8fa;       /* 冷藍霓虹 */
+  --mint: #34d399;
+  --danger: #ef4444;
+  --shadow: rgba(0,0,0,.35);
+  --blur: 14px;
 }
 
-.pf-wrap { min-height: 100svh; color: var(--pf-text); position: relative; }
+/* BG + 粒子 */
+.pf-wrap { min-height: 100svh; position: relative; color: var(--text); }
 .pf-bg {
-  position: fixed; inset: 0; z-index: -1;
+  position: fixed; inset: 0; z-index: -2;
   background:
-   radial-gradient(1200px 800px at 20% -10%, rgba(90,200,250,.18), transparent 60%),
-   radial-gradient(1000px 700px at 90% 10%, rgba(167,139,250,.16), transparent 60%),
-   radial-gradient(600px 500px at 60% 90%, rgba(52,211,153,.12), transparent 60%),
-   var(--pf-bg);
+    radial-gradient(1200px 800px at 15% -10%, rgba(90,200,250,.18), transparent 60%),
+    radial-gradient(1000px 700px at 85% 10%, rgba(124,58,237,.18), transparent 60%),
+    radial-gradient(800px 600px at 50% 110%, rgba(52,211,153,.12), transparent 60%),
+    var(--bg);
+}
+.pf-particles::before,
+.pf-particles::after {
+  content: ""; position: fixed; inset: -10%; z-index: -1;
+  background-image:
+    radial-gradient(circle at 12% 28%, rgba(255,255,255,.08) 0 2px, transparent 3px),
+    radial-gradient(circle at 68% 62%, rgba(255,255,255,.06) 0 2px, transparent 3px),
+    radial-gradient(circle at 86% 18%, rgba(255,255,255,.05) 0 2px, transparent 3px);
+  background-size: 260px 260px, 200px 200px, 320px 320px;
+  animation: pf-drift 30s linear infinite;
+  pointer-events: none;
+  filter: drop-shadow(0 0 8px rgba(255,255,255,.12));
+}
+.pf-particles::after { filter: blur(2px); opacity: .7; animation-duration: 44s; }
+@keyframes pf-drift {
+  from { transform: translate3d(0,0,0) }
+  to   { transform: translate3d(-8%, -5%, 0) }
 }
 
+/* Header */
 .pf-header {
-  display: flex; align-items: center; justify-content: space-between;
+  display: grid; grid-template-columns: 1fr auto; gap: 12px;
   padding: 18px clamp(16px, 4vw, 40px);
 }
-.pf-brand { font-weight: 800; letter-spacing: .08em; font-size: clamp(18px,2.2vw,24px); }
-.pf-nav .pf-link { color: var(--pf-muted); text-decoration: none; margin-left: 14px; }
-.pf-nav .pf-link:hover { color: var(--pf-text); }
-
-.pf-container {
-  display: grid; gap: 16px;
-  grid-template-columns: minmax(260px, 320px) 1fr;
-  padding: 0 clamp(16px, 4vw, 40px) 48px;
+.pf-logo {
+  text-decoration: none; color: var(--text);
+  font-weight: 900; letter-spacing: .12em; font-size: clamp(18px, 2.2vw, 24px);
+  text-shadow: 0 0 24px color-mix(in srgb, var(--accent) 55%, transparent),
+               0 0 10px color-mix(in srgb, var(--prime) 45%, transparent);
 }
-.pf-side { display: grid; gap: 12px; }
-.pf-main { display: grid; gap: 12px; }
+.pf-sub {
+  margin-left: 10px; padding: 4px 10px; border-radius: 999px; font-size: 12px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--glass), transparent);
+  backdrop-filter: blur(var(--blur));
+}
+.pf-nav {
+  text-decoration: none; color: var(--text);
+  border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px;
+  background: linear-gradient(180deg, var(--glass), transparent);
+  backdrop-filter: blur(var(--blur));
+  margin-left: 10px; transition: .2s ease;
+}
+.pf-nav:hover { transform: translateY(-1px); box-shadow: 0 6px 16px var(--shadow) }
 
-.pf-card {
-  position: relative;
+/* HERO 卡 */
+.pf-hero {
+  width: min(1080px, 92vw);
+  margin: 10px auto 16px;
+  padding: 18px;
   border-radius: 18px;
-  padding: 16px;
-  backdrop-filter: blur(var(--pf-blur));
-  border: 1px solid var(--pf-border);
+  border: 1px solid var(--border);
   background:
-    linear-gradient(180deg, var(--pf-glass), transparent 60%),
-    radial-gradient(120% 100% at 10% 0%, rgba(90,200,250,.08), transparent 40%),
-    radial-gradient(120% 120% at 100% 0%, rgba(167,139,250,.08), transparent 40%),
-    var(--pf-card);
-  box-shadow: 0 12px 28px var(--pf-shadow), inset 0 0 0 1px rgba(255,255,255,.04);
+    linear-gradient(180deg, var(--glass), transparent 55%),
+    radial-gradient(120% 100% at 0% 0%, rgba(90,200,250,.10), transparent 50%),
+    radial-gradient(120% 120% at 100% 0%, rgba(124,58,237,.10), transparent 50%),
+    var(--card);
+  backdrop-filter: blur(var(--blur));
+  box-shadow: 0 14px 32px var(--shadow), inset 0 0 0 1px rgba(255,255,255,.04);
+  display: grid; grid-template-columns: 92px 1fr; gap: 14px; align-items: center;
+  position: relative; overflow: clip;
+}
+.pf-tilt { transform-style: preserve-3d; will-change: transform; }
+.pf-tilt:hover { animation: pf-tilt .6s ease both }
+@keyframes pf-tilt {
+  from { transform: rotateX(0) rotateY(0) }
+  to   { transform: rotateX(2deg) rotateY(-3deg) }
 }
 
-.pf-usercard { display: grid; grid-template-columns: 72px 1fr; gap: 12px; align-items: center; }
-.pf-avatar { position: relative; width: 72px; aspect-ratio: 1; border-radius: 50%; overflow: hidden; }
-.pf-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.pf-avatar-ph { width: 100%; height: 100%; display: grid; place-items: center; font-size: 28px; background: rgba(255,255,255,.04); }
-
-.pf-frame {
-  position: absolute; inset: -8px; border-radius: 50%;
-  background: conic-gradient(from 0deg, rgba(90,200,250,.7), rgba(167,139,250,.8), rgba(52,211,153,.7), rgba(90,200,250,.7));
-  filter: blur(10px); opacity: .7; pointer-events: none;
+.pf-avatar { position: relative; width: 92px; aspect-ratio: 1; border-radius: 50%; }
+.pf-ava-core {
+  width: 100%; height: 100%; border-radius: 50%; overflow: hidden;
+  border: 1px solid var(--border); background: rgba(255,255,255,.04);
+  position: relative; z-index: 2;
 }
-
-.pf-userinfo .pf-name { font-weight: 700; letter-spacing: .02em; font-size: 18px; }
-.pf-meta { color: var(--pf-muted); margin-top: 4px; }
-.pf-meta.tiny { font-size: 12px; }
-
-.pf-kv { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed var(--pf-border); }
-.pf-kv:last-child { border-bottom: 0; }
-.pf-kv span { color: var(--pf-muted); font-size: 13px; }
-.pf-kv b { letter-spacing: .04em; }
-
-.pf-tabs { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
-.pf-tabs button {
-  padding: 10px 12px; border-radius: 12px; color: var(--pf-text);
-  border: 1px solid var(--pf-border);
-  background: linear-gradient(180deg, var(--pf-glass), transparent);
+.pf-ava-core img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pf-ava-fallback {
+  width: 100%; height: 100%; display: grid; place-items: center; font-size: 40px; opacity: .9;
 }
-.pf-tabs button.on { outline: 2px solid color-mix(in srgb, var(--pf-primary) 40%, transparent); }
+.pf-ava-frame {
+  position: absolute; inset: -10px; border-radius: 50%;
+  background: conic-gradient(from 0deg, rgba(90,200,250,.7), rgba(124,58,237,.9), rgba(52,211,153,.75), rgba(90,200,250,.7));
+  filter: blur(12px); opacity: .8; z-index: 1; pointer-events: none;
+  animation: pf-spin 10s linear infinite;
+}
+.pf-ava-glow {
+  position: absolute; inset: -20px; border-radius: 50%; z-index: 0;
+  box-shadow: 0 0 42px color-mix(in srgb, var(--prime) 35%, transparent),
+              0 0 32px color-mix(in srgb, var(--accent) 30%, transparent);
+  mix-blend-mode: screen; opacity: .6;
+}
+@keyframes pf-spin { to { transform: rotate(360deg) } }
 
-.pf-title { font-weight: 700; margin-bottom: 12px; }
-.pf-about { opacity: .9; }
-
-.pf-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-
-.pf-form { display: grid; gap: 12px; }
-.pf-field { display: grid; gap: 6px; }
-.pf-field input, .pf-field textarea, .pf-field select {
-  width: 100%;
-  border-radius: 12px;
-  border: 1px solid var(--pf-border);
+.pf-hero-text .pf-name { margin: 0; font-size: clamp(18px, 2vw, 24px); letter-spacing: .04em }
+.pf-vip {
+  display: inline-block; margin-top: 6px; padding: 4px 10px; border-radius: 8px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--glass), transparent);
+  color: var(--prime);
+}
+.pf-balances { display: grid; grid-template-columns: repeat(2, minmax(120px, 160px)); gap: 10px; margin-top: 10px }
+.pf-bal {
+  border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px;
   background: linear-gradient(180deg, rgba(255,255,255,.04), transparent);
-  padding: 10px 12px; color: var(--pf-text);
 }
-.pf-actions { display: flex; justify-content: flex-end; gap: 8px; }
-.pf-btn {
-  padding: 10px 14px; border-radius: 12px; color: var(--pf-text);
-  border: 1px solid var(--pf-border);
-  background: linear-gradient(180deg, var(--pf-glass), transparent);
-}
-.pf-btn:hover { transform: translateY(-1px); }
+.pf-bal span { color: var(--muted); font-size: 12px }
+.pf-bal b { display: block; margin-top: 6px; letter-spacing: .04em }
 
+.pf-hero-sheen {
+  position: absolute; inset: 0; pointer-events: none; overflow: hidden;
+}
+.pf-hero-sheen::before {
+  content: ""; position: absolute; top: 0; left: -120%;
+  width: 60%; height: 100%; transform: skewX(-20deg);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent);
+  animation: pf-sheen 2.4s ease-in-out infinite;
+}
+@keyframes pf-sheen { 0%{ left:-120% } 60%{ left:140% } 100%{ left:140% } }
+
+/* 主卡：表單 */
+.pf-card {
+  width: min(1080px, 92vw);
+  margin: 0 auto 40px;
+  border-radius: 18px; padding: 18px;
+  border: 1px solid var(--border);
+  backdrop-filter: blur(var(--blur));
+  background:
+    linear-gradient(180deg, var(--glass), transparent 60%),
+    radial-gradient(120% 100% at 0% 0%, rgba(90,200,250,.10), transparent 50%),
+    var(--card);
+  box-shadow: 0 14px 32px var(--shadow), inset 0 0 0 1px rgba(255,255,255,.04);
+  position: relative; overflow: clip;
+}
+
+.pf-grid { display: grid; grid-template-columns: repeat(2, minmax(240px, 1fr)); gap: 14px }
+.pf-field { position: relative }
+.pf-field.wide { grid-column: 1 / -1 }
+
+.pf-field input,
+.pf-field textarea {
+  width: 100%; color: var(--text);
+  border-radius: 12px; padding: 14px 12px 12px 12px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(255,255,255,.05), transparent);
+  outline: none; transition: .2s ease;
+}
+.pf-field input:focus,
+.pf-field textarea:focus {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent),
+              0 0 24px color-mix(in srgb, var(--prime) 25%, transparent);
+}
+.pf-field label {
+  position: absolute; left: 12px; top: 10px; pointer-events: none;
+  color: var(--muted); transition: .18s ease;
+  background: transparent; padding: 0 4px;
+}
+.pf-field input:not(:placeholder-shown) + label,
+.pf-field textarea:not(:placeholder-shown) + label,
+.pf-field input:focus + label,
+.pf-field textarea:focus + label {
+  transform: translateY(-12px) scale(.88); color: var(--prime);
+  background: rgba(11,15,26,.75);
+}
+
+.pf-actions { grid-column: 1 / -1; display: flex; gap: 10px; margin-top: 6px }
+.pf-btn {
+  cursor: pointer; color: var(--text);
+  border: 1px solid var(--border); border-radius: 12px;
+  background: linear-gradient(180deg, var(--glass), transparent);
+  padding: 12px 16px; transition: .2s ease; text-decoration: none; display: inline-flex; align-items: center;
+}
+.pf-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 18px var(--shadow) }
+.pf-btn.ghost { background: transparent }
+
+.pf-ring {
+  position: absolute; inset: -2px; pointer-events: none; border-radius: 18px;
+  border: 1px solid transparent;
+}
+.pf-ring-1 {
+  box-shadow: 0 0 60px color-mix(in srgb, var(--prime) 30%, transparent);
+  animation: pf-breathe 4.8s ease-in-out infinite;
+}
+.pf-ring-2 {
+  box-shadow: 0 0 80px color-mix(in srgb, var(--accent) 24%, transparent);
+  animation: pf-breathe 6.2s ease-in-out infinite;
+}
+@keyframes pf-breathe {
+  0%,100% { opacity: .35; transform: scale(1) }
+  50%     { opacity: .85; transform: scale(1.01) }
+}
+
+/* Toast */
+.pf-toast {
+  position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
+  padding: 12px 16px; border-radius: 12px; z-index: 50;
+  color: var(--text); border: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+  background: linear-gradient(180deg, rgba(255,255,255,.08), transparent);
+  box-shadow: 0 10px 24px var(--shadow);
+  animation: pf-pop .25s ease-out both;
+}
+.pf-toast.ok  { box-shadow: 0 10px 24px var(--shadow), 0 0 24px color-mix(in srgb, var(--mint) 25%, transparent) }
+.pf-toast.err { box-shadow: 0 10px 24px var(--shadow), 0 0 24px color-mix(in srgb, var(--danger) 25%, transparent) }
+@keyframes pf-pop {
+  0% { transform: translateX(-50%) scale(.92); opacity: 0 }
+  100%{ transform: translateX(-50%) scale(1);    opacity: 1 }
+}
+
+/* RWD */
 @media (max-width: 960px) {
-  .pf-container { grid-template-columns: 1fr; }
-  .pf-grid2 { grid-template-columns: 1fr; }
+  .pf-hero { grid-template-columns: 72px 1fr }
+  .pf-grid { grid-template-columns: 1fr }
 }
