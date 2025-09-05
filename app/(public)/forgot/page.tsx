@@ -1,44 +1,39 @@
 "use client";
-import { useState } from "react";
-import Link from "next/link";
 
-export default function ForgotPage() {
+import Link from "next/link";
+import { Suspense, useState } from "react";
+
+function ForgotForm() {
   const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setMsg(null);
-    setErr(null);
     setLoading(true);
 
     const fd = new FormData(e.currentTarget);
     const body: Record<string, string> = {};
     fd.forEach((v, k) => (body[k] = String(v)));
 
-    try {
-      const res = await fetch("/api/auth/forgot", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ email: body.email?.trim().toLowerCase() }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setErr(data?.error ?? "REQUEST_FAILED");
-      } else {
-        setMsg("如果信箱存在，我們已寄送重設連結（此環境會在伺服器日誌輸出連結）。");
-      }
-    } catch {
-      setErr("NETWORK_ERROR");
-    } finally {
-      setLoading(false);
+    const res = await fetch("/api/auth/forgot", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      credentials: "include",
+    });
+
+    setLoading(false);
+
+    if (res.ok) {
+      alert("如果此信箱存在，我們已寄出重設連結。請查收信箱（或收件匣/垃圾郵件）。");
+    } else {
+      alert("送出失敗，請稍後再試。");
     }
   }
 
   return (
     <main className="tc-auth-card tc-follow">
+      <link rel="stylesheet" href="/styles/auth-theme.css" />
+
       <div className="tc-card-inner">
         <div className="tc-brand">TOPZCASINO</div>
 
@@ -54,22 +49,24 @@ export default function ForgotPage() {
             <span className="tc-label">註冊信箱</span>
           </div>
 
-          {err && <div className="tc-error">{err}</div>}
-          {msg && <div className="tc-ok">{msg}</div>}
-
           <button className="tc-btn" disabled={loading}>
             {loading ? "送出中…" : "寄送重設連結"}
           </button>
 
           <div className="tc-sep" />
           <div className="tc-hint">
-            想起密碼了？<Link className="tc-link" href="/login">回登入</Link>
+            想起來了？<Link className="tc-link" href="/login">回登入</Link>
           </div>
         </form>
       </div>
-
-      {/* 這一行是關鍵：從 public/ 載入樣式 */}
-      <link rel="stylesheet" href="/styles/auth-theme.css" />
     </main>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={null}>
+      <ForgotForm />
+    </Suspense>
   );
 }
