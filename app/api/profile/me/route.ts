@@ -1,13 +1,35 @@
-// ✅ 關鍵 3 行：這支 API 會讀 cookies，所以一定要強制動態 & 指定 Node runtime
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-export const runtime = 'nodejs';
-
+// app/api/profile/me/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth';
+import { z } from 'zod';
 
-// ===== GET /api/profile/me =====
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+// 與前端 HEADFRAMES.value 一致（請對齊 Prisma enum）
+const ALLOWED_HEADFRAMES = new Set([
+  'NEON_AZURE',
+  'NEON_VIOLET',
+  'NEON_EMERALD',
+  'GOLD_RING',
+  'SILVER_RING',
+  'NONE',
+]);
+
+// 允許更新的欄位（全部 optional）
+const PutSchema = z.object({
+  displayName: z.string().min(2).max(20).optional(),
+  nickname: z.string().max(30).optional(),
+  about: z.string().max(200).optional(),
+  country: z.string().max(2).optional(),
+  avatarUrl: z.string().url().optional(),
+  headframe: z.string().optional(),     // 後面做白名單檢查
+  panelStyle: z.string().optional(),    // 若未來用 enum 再改
+  panelTint: z.string().max(16).optional(), // HEX 或 key
+});
+
+// GET 個資
 export async function GET(req: NextRequest) {
   try {
     const auth = await getUserFromRequest(req);
@@ -27,8 +49,8 @@ export async function GET(req: NextRequest) {
         nickname: true,
         about: true,
         country: true,
-        headframe: true,   // 你的 schema 如為 enum，這裡只是讀取沒問題
-        panelStyle: true,  // 若是 enum 也可安全讀取
+        headframe: true,
+        panelStyle: true,
         panelTint: true,
       },
     });
@@ -41,45 +63,47 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// ===== PUT /api/profile/me =====
-// 備註：這版只更新安全的字串欄位，避免 enum 造成再度型別卡關。
-// （之後你若要加 headframe/panelStyle 的 enum 驗證，再說。）
+// 更新個資
 export async function PUT(req: NextRequest) {
   try {
     const auth = await getUserFromRequest(req);
     if (!auth?.id) return NextResponse.json({ ok: false }, { status: 401 });
 
     const isJson = req.headers.get('content-type')?.includes('application/json');
-    let raw: Record<string, string> = {};
+    let raw: any;
     if (isJson) {
-      raw = (await req.json()) ?? {};
+      raw = await req.json();
     } else {
       const fd = await req.formData();
+      raw = {} as Record<string, string>;
       fd.forEach((v, k) => (raw[k] = String(v)));
     }
 
-    const data = {
-      displayName: raw.displayName?.trim(),
-      nickname: raw.nickname?.trim(),
-      about: raw.about?.trim(),
-      country: raw.country?.trim(),
-      avatarUrl: raw.avatarUrl?.trim(),
-      panelTint: raw.panelTint?.trim(),
-      // ⚠️ 如需 enum，請之後補 zod + enum 轉換，再塞進 data。這裡先不更新以確保可部署。
-      // headframe: raw.headframe
-      // panelStyle: raw.panelStyle
+    const parsed = PutSchema.safeParse(raw);
+    if (!parsed.success) {
+      return NextResponse.json({ ok: false, error: 'BAD_PAYLOAD' }, { status: 400 });
+    }
+    const data = parsed.data;
+
+    // 準備要更新的欄位（undefined 就不更新）
+    const updateData: any = {
+      displayName: data.displayName ?? undefined,
+      nickname: data.nickname ?? undefined,
+      about: data.about ?? undefined,
+      country: data.country ?? undefined,
+      avatarUrl: data.avatarUrl ?? undefined,
+      panelStyle: data.panelStyle ?? undefined, // string-safe
+      panelTint: data.panelTint ?? undefined,
     };
+
+    // headframe 僅允許白名單內（對齊 Prisma enum）
+    if (data.headframe && ALLOWED_HEADFRAMES.has(data.headframe)) {
+      updateData.headframe = data.headframe;
+    }
 
     const user = await prisma.user.update({
       where: { id: auth.id },
-      data: {
-        displayName: data.displayName || undefined,
-        nickname: data.nickname || undefined,
-        about: data.about || undefined,
-        country: data.country || undefined,
-        avatarUrl: data.avatarUrl || undefined,
-        panelTint: data.panelTint || undefined,
-      },
+      data: updateData,
       select: {
         id: true,
         email: true,

@@ -238,3 +238,38 @@
   .pf-hero { grid-template-columns: 72px 1fr }
   .pf-grid { grid-template-columns: 1fr }
 }
+
+/* === 讓兩張主要卡片有更舒服的垂直間距 === */
+.pf-hero { 
+  margin: clamp(12px, 2.2vw, 18px) auto; 
+}
+.pf-card { 
+  margin: clamp(16px, 2.6vw, 26px) auto; 
+}
+
+/* 控制卡片層級，避免陰影/光暈互壓 */
+.pf-hero, .pf-card { 
+  position: relative; 
+  z-index: 1; 
+}
+.pf-hero .pf-hero-sheen { 
+  z-index: 2; 
+}
+
+/* 調整 avatar 的層次，確保光暈與框線不會蓋到標題/按鈕 */
+.pf-avatar { z-index: 1; }
+.pf-hero-text { position: relative; z-index: 2; }
+
+/* 編輯表單與霓虹環的位置，防止環形光暈蓋到按鈕 */
+.pf-ring { z-index: 0; }
+.pf-card .pf-actions { position: relative; z-index: 3; }
+
+/* 卡片內部 padding 微調，避免內容貼邊產生重疊感 */
+.pf-card.pf-tilt { padding: clamp(16px, 2vw, 22px); }
+.pf-hero.pf-tilt { padding: clamp(16px, 2vw, 22px); }
+
+/* 小螢幕時上下距再放鬆一點 */
+@media (max-width: 680px) {
+  .pf-hero { margin: 16px auto; }
+  .pf-card { margin: 20px auto; }
+}
