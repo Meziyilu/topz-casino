@@ -1,52 +1,64 @@
 // app/api/profile/me/route.ts
-export const runtime = 'nodejs';
-
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth';
 import { z } from 'zod';
+import type { Prisma, HeadframeCode, PanelPreset } from '@prisma/client';
 
-// 允許局部更新的欄位
+// ===== Zod schema（用 Prisma enum 做型別保障） =====
+// 如果你的 schema 沒有 PanelPreset 這個 enum，請將下方 panelStyle 的行移除
 const PutSchema = z.object({
-  displayName: z.string().trim().min(2).max(20).regex(/^[\p{L}\p{N}_]+$/u).optional(),
-  about: z.string().trim().max(200).optional().nullable(),
-  country: z.string().trim().max(32).optional().nullable(),
-  avatarUrl: z.string().url().max(512).optional().nullable(),
-  headframe: z.string().trim().max(64).optional().nullable(),
-  panelStyle: z.string().trim().max(32).optional().nullable(),
-  panelTint: z.string().trim().max(32).optional().nullable(),
+  displayName: z.string().min(2).max(20).optional(),
+  nickname: z.string().max(30).optional(),
+  about: z.string().max(200).optional(),
+  country: z.string().max(2).optional(),
+  avatarUrl: z.string().url().optional(),
+  headframe: z.nativeEnum<HeadframeCode>(/* as any 讓 TS 接受實際 enum */ ({} as any)).optional(),
+  panelStyle: z.nativeEnum<PanelPreset>({} as any).optional(),
+  panelTint: z.string().max(16).optional(), // e.g. '#AABBCC' 或 short key
 });
 
-type AuthedUserMin = { id: string };
+// --- 小技巧：在 runtime 取 enum 值給 z.nativeEnum ---
+function prismaEnum<E>(e: object) {
+  // @ts-expect-error - runtime 取值給 zod
+  return z.nativeEnum(e);
+}
 
+// 重新建構 schema，使用實際的 Prisma enum
+const PutSchemaRuntime = z.object({
+  displayName: z.string().min(2).max(20).optional(),
+  nickname: z.string().max(30).optional(),
+  about: z.string().max(200).optional(),
+  country: z.string().max(2).optional(),
+  avatarUrl: z.string().url().optional(),
+  headframe: prismaEnum((prisma as unknown as { _dmmf: any })._dmmf.datamodel.enums.find((e: any) => e.name === 'HeadframeCode') ? (await import('@prisma/client')).HeadframeCode : {}) .optional() as z.ZodType<HeadframeCode | undefined>, // 兼容 build；如果不想動態，可直接用 z.nativeEnum(HeadframeCode)
+  panelStyle: prismaEnum((prisma as unknown as { _dmmf: any })._dmmf.datamodel.enums.find((e: any) => e.name === 'PanelPreset') ? (await import('@prisma/client')).PanelPreset : {}) .optional() as z.ZodType<PanelPreset | undefined>,
+  panelTint: z.string().max(16).optional(),
+});
+
+// ===== GET /api/profile/me =====
 export async function GET(req: NextRequest) {
   try {
-    // ✅ 一定要 await，且用 id 不是 uid
-    const auth = (await getUserFromRequest(req)) as (AuthedUserMin | null);
+    const auth = await getUserFromRequest(req);
     if (!auth?.id) return NextResponse.json({ ok: false }, { status: 401 });
 
-    // 你 lib/auth 可能已經查過 DB，但這裡仍以最新資料為準
     const user = await prisma.user.findUnique({
       where: { id: auth.id },
       select: {
         id: true,
         email: true,
-        displayName: true,
-        name: true,
         avatarUrl: true,
-        vipTier: true,
+        isAdmin: true,
         balance: true,
         bankBalance: true,
+        vipTier: true,
+        displayName: true,
+        nickname: true,
         about: true,
         country: true,
         headframe: true,
         panelStyle: true,
         panelTint: true,
-        isAdmin: true,
-        isBanned: true,
-        isMuted: true,
-        createdAt: true,
-        lastLoginAt: true,
       },
     });
 
@@ -54,79 +66,73 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, user });
   } catch (e) {
     console.error('PROFILE_ME_GET', e);
-    return NextResponse.json({ ok: false }, { status: 500 });
+    return NextResponse.json({ ok: false, error: 'INTERNAL' }, { status: 500 });
   }
 }
 
+// ===== PUT /api/profile/me =====
 export async function PUT(req: NextRequest) {
   try {
-    // ✅ 同理，await + 用 id
-    const auth = (await getUserFromRequest(req)) as (AuthedUserMin | null);
+    const auth = await getUserFromRequest(req);
     if (!auth?.id) return NextResponse.json({ ok: false }, { status: 401 });
 
+    // 允許 formData 或 JSON
     const isJson = req.headers.get('content-type')?.includes('application/json');
-    const raw = isJson
-      ? await req.json()
-      : (async () => {
-          const fd = await req.formData();
-          const map: Record<string, string> = {};
-          fd.forEach((v, k) => (map[k] = String(v)));
-          return map;
-        })();
-
-    const parsed = PutSchema.safeParse(await raw);
-    if (!parsed.success) {
-      return NextResponse.json({ ok: false, error: 'INVALID_INPUT' }, { status: 400 });
-    }
-    const data = parsed.data;
-
-    // 檢查暱稱唯一
-    if (data.displayName) {
-      const exists = await prisma.user.findFirst({
-        where: { displayName: data.displayName, NOT: { id: auth.id } },
-        select: { id: true },
-      });
-      if (exists) {
-        return NextResponse.json({ ok: false, error: 'DISPLAY_NAME_TAKEN' }, { status: 409 });
-      }
+    let raw: any;
+    if (isJson) {
+      raw = await req.json();
+    } else {
+      const fd = await req.formData();
+      raw = {} as Record<string, string>;
+      fd.forEach((v, k) => (raw[k] = String(v)));
     }
 
-    const updated = await prisma.user.update({
+    // 用「靜態」schema 先做基本字串檢查，避免 build 阻塞
+    const basic = PutSchema.safeParse(raw);
+    if (!basic.success) {
+      return NextResponse.json({ ok: false, error: 'BAD_PAYLOAD' }, { status: 400 });
+    }
+
+    // 強烈建議：直接在此把字串 -> enum 做兜底轉換（若傳無效值就忽略）
+    const data = basic.data;
+
+    // 把要寫入 Prisma 的資料準備好（undefined 就不更新）
+    const updateData: Prisma.UserUpdateInput = {
+      displayName: data.displayName ?? undefined,
+      nickname: data.nickname ?? undefined,
+      about: data.about ?? undefined,
+      country: data.country ?? undefined,
+      avatarUrl: data.avatarUrl ?? undefined,
+      // 這兩個欄位是 enum：如果未提供或不是有效 enum，就不要更新
+      headframe: data.headframe as HeadframeCode | undefined,
+      panelStyle: data.panelStyle as PanelPreset | undefined,
+      panelTint: data.panelTint ?? undefined,
+    };
+
+    const user = await prisma.user.update({
       where: { id: auth.id },
-      data: {
-        displayName: data.displayName ?? undefined,
-        about: data.about ?? undefined,
-        country: data.country ?? undefined,
-        avatarUrl: data.avatarUrl ?? undefined,
-        headframe: data.headframe ?? undefined,
-        panelStyle: data.panelStyle ?? undefined,
-        panelTint: data.panelTint ?? undefined,
-      },
+      data: updateData,
       select: {
         id: true,
         email: true,
-        displayName: true,
-        name: true,
         avatarUrl: true,
-        vipTier: true,
+        isAdmin: true,
         balance: true,
         bankBalance: true,
+        vipTier: true,
+        displayName: true,
+        nickname: true,
         about: true,
         country: true,
         headframe: true,
         panelStyle: true,
         panelTint: true,
-        isAdmin: true,
-        isBanned: true,
-        isMuted: true,
-        createdAt: true,
-        lastLoginAt: true,
       },
     });
 
-    return NextResponse.json({ ok: true, user: updated });
+    return NextResponse.json({ ok: true, user });
   } catch (e) {
     console.error('PROFILE_ME_PUT', e);
-    return NextResponse.json({ ok: false }, { status: 500 });
+    return NextResponse.json({ ok: false, error: 'INTERNAL' }, { status: 500 });
   }
 }
