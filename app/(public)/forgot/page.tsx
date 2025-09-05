@@ -1,15 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useState } from "react";
+import { useState } from "react";
 
-function ForgotForm() {
+export default function ForgotPage() {
   const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
-
     const fd = new FormData(e.currentTarget);
     const body: Record<string, string> = {};
     fd.forEach((v, k) => (body[k] = String(v)));
@@ -18,15 +18,13 @@ function ForgotForm() {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
-      credentials: "include",
     });
 
     setLoading(false);
-
-    if (res.ok) {
-      alert("如果此信箱存在，我們已寄出重設連結。請查收信箱（或收件匣/垃圾郵件）。");
-    } else {
-      alert("送出失敗，請稍後再試。");
+    setDone(res.ok);
+    if (!res.ok) {
+      const msg = await res.text().catch(() => "");
+      alert(`送出失敗：${msg || "請稍後再試"}`);
     }
   }
 
@@ -43,30 +41,23 @@ function ForgotForm() {
           <span className="tc-tab active" aria-current="page">忘記密碼</span>
         </div>
 
-        <form className="tc-grid" onSubmit={onSubmit} noValidate>
-          <div className="tc-input">
-            <input name="email" type="email" placeholder=" " required />
-            <span className="tc-label">註冊信箱</span>
+        {done ? (
+          <div className="tc-hint" style={{ textAlign: "center", padding: "12px 0" }}>
+            若信箱存在，我們已建立重設流程。請至信箱（或使用內建 reset 測試連結）完成重設。
           </div>
+        ) : (
+          <form className="tc-grid" onSubmit={onSubmit} noValidate>
+            <div className="tc-input">
+              <input name="email" type="email" placeholder=" " required />
+              <span className="tc-label">電子信箱</span>
+            </div>
 
-          <button className="tc-btn" disabled={loading}>
-            {loading ? "送出中…" : "寄送重設連結"}
-          </button>
-
-          <div className="tc-sep" />
-          <div className="tc-hint">
-            想起來了？<Link className="tc-link" href="/login">回登入</Link>
-          </div>
-        </form>
+            <button className="tc-btn" disabled={loading}>
+              {loading ? "送出中…" : "建立重設流程"}
+            </button>
+          </form>
+        )}
       </div>
     </main>
-  );
-}
-
-export default function Page() {
-  return (
-    <Suspense fallback={null}>
-      <ForgotForm />
-    </Suspense>
   );
 }

@@ -1,4 +1,3 @@
-// app/(public)/login/page.tsx
 "use client";
 
 import Link from "next/link";
@@ -38,14 +37,11 @@ function LoginForm() {
 
   return (
     <main className="tc-auth-card tc-follow">
-      {/* ✅ 正確引用 public/styles/auth-theme.css */}
       <link rel="stylesheet" href="/styles/auth-theme.css" />
 
       <div className="tc-card-inner">
-        {/* 置中大字 LOGO */}
         <div className="tc-brand">TOPZCASINO</div>
 
-        {/* 分頁切換 */}
         <div className="tc-tabs">
           <span className="tc-tab active" aria-current="page">登入</span>
           <Link href="/register" className="tc-tab">註冊</Link>
@@ -98,7 +94,6 @@ function LoginForm() {
   );
 }
 
-// 包一層 Suspense（避免 useSearchParams 造成預渲染警告）
 export default function Page() {
   return (
     <Suspense fallback={null}>

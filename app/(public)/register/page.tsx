@@ -1,12 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
-function RegisterForm() {
+export default function RegisterPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -14,12 +13,11 @@ function RegisterForm() {
     e.preventDefault();
     setLoading(true);
     const fd = new FormData(e.currentTarget);
-    const body: Record<string, string> = {};
+    const body: Record<string, string | boolean> = {};
     fd.forEach((v, k) => (body[k] = String(v)));
-
-    // 勾選欄位補齊（沒勾時不會在 FormData 裡）
-    body.isOver18 = String(!!fd.get("isOver18"));
-    body.acceptTOS = String(!!fd.get("acceptTOS"));
+    // 後端有驗證 isOver18 / acceptTOS，可確保有傳
+    body.isOver18 = !!fd.get("isOver18");
+    body.acceptTOS = !!fd.get("acceptTOS");
 
     const res = await fetch("/api/auth/register", {
       method: "POST",
@@ -31,28 +29,24 @@ function RegisterForm() {
     setLoading(false);
 
     if (res.ok) {
-      // 你目前是關掉 Email 驗證，所以註冊後導回 /login
-      const next = searchParams.get("next") || "/login";
-      router.push(next);
+      // 註冊完成 -> 導回登入
+      router.push("/login?reg=1");
     } else {
       const msg = await res.text().catch(() => "");
-      alert(`註冊失敗：${msg || "請檢查輸入內容"}`);
+      alert(`註冊失敗：${msg || "請檢查欄位或換個暱稱/信箱"}`);
     }
   }
 
   return (
     <main className="tc-auth-card tc-follow">
-      {/* ✅ 吃 public/styles/auth-theme.css */}
       <link rel="stylesheet" href="/styles/auth-theme.css" />
 
       <div className="tc-card-inner">
-        {/* LOGO */}
         <div className="tc-brand">TOPZCASINO</div>
 
-        {/* Tabs */}
         <div className="tc-tabs">
           <Link href="/login" className="tc-tab">登入</Link>
-          <Link href="/register" className="tc-tab active" aria-current="page">註冊</Link>
+          <span className="tc-tab active" aria-current="page">註冊</span>
         </div>
 
         <form className="tc-grid" onSubmit={onSubmit} noValidate>
@@ -74,7 +68,7 @@ function RegisterForm() {
               required
               minLength={6}
             />
-            <span className="tc-label">密碼</span>
+            <span className="tc-label">密碼（至少 6 碼）</span>
             <button
               type="button"
               className="tc-eye"
@@ -87,38 +81,29 @@ function RegisterForm() {
 
           <div className="tc-input">
             <input name="referralCode" placeholder=" " />
-            <span className="tc-label">邀請碼（選填）</span>
+            <span className="tc-label">推薦碼（選填）</span>
           </div>
 
-          <label className="tc-row" style={{ gap: 10 }}>
+          <label className="tc-row" style={{ gap: 8 }}>
             <input type="checkbox" name="isOver18" required />
-            我已滿 18 歲
+            我已年滿 18 歲
           </label>
 
-          <label className="tc-row" style={{ gap: 10 }}>
+          <label className="tc-row" style={{ gap: 8 }}>
             <input type="checkbox" name="acceptTOS" required />
-            我同意服務條款與隱私政策
+            我同意服務條款
           </label>
 
           <button className="tc-btn" disabled={loading}>
-            {loading ? "註冊中…" : "建立帳號"}
+            {loading ? "送出中…" : "建立帳號"}
           </button>
 
-          <div className="tc-sep" />
+          <div className="tc-sep"></div>
           <div className="tc-hint">
-            已有帳號？<Link className="tc-link" href="/login">返回登入</Link>
+            已有帳號？<Link className="tc-link" href="/login">回到登入</Link>
           </div>
         </form>
       </div>
     </main>
-  );
-}
-
-// ✅ 用 Suspense 包 useSearchParams
-export default function Page() {
-  return (
-    <Suspense fallback={null}>
-      <RegisterForm />
-    </Suspense>
   );
 }

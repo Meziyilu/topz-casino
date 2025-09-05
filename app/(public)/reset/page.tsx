@@ -6,35 +6,33 @@ import { Suspense, useState } from "react";
 
 function ResetForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const tokenFromUrl = searchParams.get("token") || "";
+  const sp = useSearchParams();
+  const token = sp.get("token") || "";
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [token, setToken] = useState(tokenFromUrl);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
-
     const fd = new FormData(e.currentTarget);
     const body: Record<string, string> = {};
     fd.forEach((v, k) => (body[k] = String(v)));
-    body.token = token || body.token || "";
+    body.token = token;
 
     const res = await fetch("/api/auth/reset", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
-      credentials: "include",
     });
 
     setLoading(false);
 
     if (res.ok) {
-      alert("已重設密碼，請使用新密碼登入。");
+      alert("密碼已更新，請重新登入");
       router.push("/login");
     } else {
-      alert("重設失敗，請確認連結是否有效或稍後再試。");
+      const msg = await res.text().catch(() => "");
+      alert(`重設失敗：${msg || "請稍後再試"}`);
     }
   }
 
@@ -52,18 +50,6 @@ function ResetForm() {
         </div>
 
         <form className="tc-grid" onSubmit={onSubmit} noValidate>
-          {/* Token 可由連結帶入，也提供欄位手動貼上 */}
-          <div className="tc-input">
-            <input
-              name="token"
-              placeholder=" "
-              required
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-            />
-            <span className="tc-label">重設 Token</span>
-          </div>
-
           <div className="tc-input">
             <input
               name="newPassword"
@@ -72,7 +58,7 @@ function ResetForm() {
               required
               minLength={6}
             />
-            <span className="tc-label">新密碼</span>
+            <span className="tc-label">新密碼（至少 6 碼）</span>
             <button
               type="button"
               className="tc-eye"
@@ -84,20 +70,14 @@ function ResetForm() {
           </div>
 
           <button className="tc-btn" disabled={loading}>
-            {loading ? "變更中…" : "變更密碼"}
+            {loading ? "更新中…" : "更新密碼"}
           </button>
-
-          <div className="tc-sep" />
-          <div className="tc-hint">
-            完成了？<Link className="tc-link" href="/login">回登入</Link>
-          </div>
         </form>
       </div>
     </main>
   );
 }
 
-// ✅ 用 Suspense 包 useSearchParams，避免 SSR build 錯誤
 export default function Page() {
   return (
     <Suspense fallback={null}>
