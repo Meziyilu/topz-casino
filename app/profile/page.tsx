@@ -1,194 +1,140 @@
-'use client';
+// app/profile/page.tsx
+"use client";
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useEffect, useState } from "react";
+import Link from "next/link";
 
-type UserMe = {
+type Me = {
   id: string;
   email: string;
-  displayName: string | null;
-  name: string | null;
+  displayName: string;
+  nickname?: string | null;
+  about?: string | null;
+  country?: string | null;
   avatarUrl?: string | null;
   vipTier: number;
   balance: number;
   bankBalance: number;
-  about?: string | null;
-  country?: string | null;
-  headframe?: string | null;
-  panelStyle?: string | null;
+  headframe?: string | null;   // 如果是 enum，這裡只是顯示字串即可
+  panelStyle?: string | null;  // 同上
   panelTint?: string | null;
-  createdAt: string;
-  lastLoginAt?: string | null;
 };
 
 export default function ProfilePage() {
-  const [user, setUser] = useState<UserMe | null>(null);
-  const [tab, setTab] = useState<'overview' | 'edit' | 'appearance'>('overview');
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    displayName: '',
-    about: '',
-    country: '',
-    avatarUrl: '',
-    headframe: '',
-    panelStyle: 'glass',
-    panelTint: 'neon',
-  });
+  const [me, setMe] = useState<Me | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/profile/me', { credentials: 'include' })
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => {
-        const u = d.user as UserMe;
-        setUser(u);
-        setForm({
-          displayName: u.displayName ?? '',
-          about: u.about ?? '',
-          country: u.country ?? '',
-          avatarUrl: u.avatarUrl ?? '',
-          headframe: u.headframe ?? '',
-          panelStyle: u.panelStyle ?? 'glass',
-          panelTint: u.panelTint ?? 'neon',
-        });
-      })
-      .catch(() => setUser(null));
+    let alive = true;
+    (async () => {
+      try {
+        const r = await fetch("/api/profile/me", { credentials: "include" });
+        if (r.status === 401) {
+          // 沒登入 → 去登入，帶回跳參數
+          window.location.href = "/login?next=/profile";
+          return;
+        }
+        if (!r.ok) throw new Error("FETCH_ME_FAIL");
+        const data = await r.json();
+        if (alive) setMe(data.user as Me);
+      } catch {
+        // 發生錯誤也導回登入（保守處理）
+        window.location.href = "/login?next=/profile";
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => { alive = false; };
   }, []);
 
-  async function onSave() {
-    setSaving(true);
-    try {
-      const res = await fetch('/api/profile/me', {
-        method: 'PUT',
-        credentials: 'include',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(form),
-      });
-      const data = await res.json();
-      if (data.ok) setUser(data.user);
-    } finally {
-      setSaving(false);
-    }
+  if (loading) {
+    return (
+      <main style={{minHeight:'100svh',display:'grid',placeItems:'center',color:'#b9c7d6'}}>
+        載入中…
+      </main>
+    );
   }
 
+  if (!me) return null;
+
   return (
-    <main className="pf-wrap">
-      <div className="pf-bg" />
-      <header className="pf-header">
-        <div className="pf-brand">TOPZCASINO</div>
-        <nav className="pf-nav">
-          <Link href="/" className="pf-link">大廳</Link>
-          <Link href="/wallet" className="pf-link">錢包</Link>
-          <Link href="/shop" className="pf-link">商店</Link>
-        </nav>
-      </header>
+    <main style={{ minHeight: "100svh", padding: 24, background: "radial-gradient(1000px 600px at 10% -10%, rgba(90,200,250,.12), transparent 50%), radial-gradient(900px 700px at 110% 0%, rgba(167,139,250,.12), transparent 60%), #0b0f1a", color: "#dfe6ff" }}>
+      <div style={{ maxWidth: 960, margin: "0 auto" }}>
+        <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 20 }}>
+          <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: 2 }}>TOPZCASINO</div>
+          <nav style={{ display: "flex", gap: 12 }}>
+            <Link href="/" style={{ color: "#b9c7d6", textDecoration: "none" }}>回大廳</Link>
+            <Link href="/logout" onClick={async (e)=>{ e.preventDefault(); await fetch("/api/auth/logout",{method:"POST"}); window.location.href="/login";}} style={{ color: "#b9c7d6", textDecoration: "none" }}>
+              登出
+            </Link>
+          </nav>
+        </header>
 
-      <div className="pf-container">
-        <aside className="pf-side">
-          <div className="pf-card pf-usercard">
-            <div className="pf-avatar">
-              {user?.avatarUrl ? <img src={user.avatarUrl} alt="avatar" /> : <div className="pf-avatar-ph">🙂</div>}
-              <div className="pf-frame" data-style={user?.headframe || 'none'} />
+        <section style={{
+          display: "grid",
+          gridTemplateColumns: "220px 1fr",
+          gap: 18,
+          borderRadius: 16,
+          padding: 18,
+          background: "rgba(20,24,36,.46)",
+          border: "1px solid rgba(255,255,255,.12)",
+          boxShadow: "0 10px 30px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.08), 0 0 60px rgba(167,139,250,.14)",
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
+        }}>
+          {/* Avatar */}
+          <div style={{ display: "grid", gap: 12 }}>
+            <div style={{ position: "relative", width: 180, height: 180, borderRadius: "50%", overflow: "hidden", border: "1px solid rgba(255,255,255,.14)" }}>
+              {/* 外圍霓虹頭框效果（純視覺） */}
+              <div style={{
+                position: "absolute", inset: -10, borderRadius: "50%",
+                background: "conic-gradient(from 0deg, rgba(90,200,250,.5), rgba(167,139,250,.6), rgba(52,211,153,.5), rgba(90,200,250,.5))",
+                filter: "blur(10px)", opacity: .7
+              }} />
+              <img
+                src={me.avatarUrl || "https://api.dicebear.com/7.x/adventurer-neutral/svg?seed=guest"}
+                alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", position: "relative" }}
+              />
             </div>
-            <div className="pf-userinfo">
-              <div className="pf-name">{user?.displayName || '玩家'}</div>
-              <div className="pf-meta">VIP {user?.vipTier ?? 0}</div>
-              <div className="pf-meta tiny">上次登入：{user?.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : '-'}</div>
+            <div style={{ fontSize: 14, color: "#8ea0bf" }}>
+              頭框：{me.headframe ?? "NONE"}<br/>
+              面板：{me.panelStyle ?? "DEFAULT"} {me.panelTint ? `(${me.panelTint})` : ""}
             </div>
           </div>
 
-          <div className="pf-card">
-            <div className="pf-kv"><span>錢包餘額</span><b>{user?.balance?.toLocaleString?.() ?? 0}</b></div>
-            <div className="pf-kv"><span>銀行餘額</span><b>{user?.bankBalance?.toLocaleString?.() ?? 0}</b></div>
+          {/* Info */}
+          <div style={{ display: "grid", gap: 10 }}>
+            <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: ".03em" }}>
+              {me.displayName} <span style={{ fontSize: 14, color: "#8ea0bf", fontWeight: 500 }}>VIP {me.vipTier}</span>
+            </div>
+            <div style={{ color: "#8ea0bf" }}>{me.email}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 6 }}>
+              <div style={{ border: "1px solid rgba(255,255,255,.14)", borderRadius: 12, padding: 12, background: "linear-gradient(180deg, rgba(255,255,255,.04), transparent)" }}>
+                <div style={{ color: "#8ea0bf", fontSize: 12 }}>錢包餘額</div>
+                <b style={{ letterSpacing: ".04em" }}>{me.balance.toLocaleString()}</b>
+              </div>
+              <div style={{ border: "1px solid rgba(255,255,255,.14)", borderRadius: 12, padding: 12, background: "linear-gradient(180deg, rgba(255,255,255,.04), transparent)" }}>
+                <div style={{ color: "#8ea0bf", fontSize: 12 }}>銀行餘額</div>
+                <b style={{ letterSpacing: ".04em" }}>{me.bankBalance.toLocaleString()}</b>
+              </div>
+            </div>
+            <div style={{ marginTop: 6 }}>
+              <div style={{ color: "#8ea0bf", fontSize: 12, marginBottom: 6 }}>個人介紹</div>
+              <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                {me.about || "—"}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+              <Link href="/" style={{ textDecoration: "none", color: "#dfe6ff", border: "1px solid rgba(255,255,255,.14)", borderRadius: 10, padding: "10px 12px", background: "linear-gradient(180deg, rgba(255,255,255,.06), transparent)" }}>
+                返回大廳
+              </Link>
+              <Link href="/wallet" style={{ textDecoration: "none", color: "#dfe6ff", border: "1px solid rgba(255,255,255,.14)", borderRadius: 10, padding: "10px 12px", background: "linear-gradient(180deg, rgba(255,255,255,.06), transparent)" }}>
+                前往錢包
+              </Link>
+            </div>
           </div>
-
-          <div className="pf-card pf-tabs">
-            <button className={tab==='overview'?'on':''} onClick={()=>setTab('overview')}>總覽</button>
-            <button className={tab==='edit'?'on':''} onClick={()=>setTab('edit')}>編輯資料</button>
-            <button className={tab==='appearance'?'on':''} onClick={()=>setTab('appearance')}>外觀樣式</button>
-          </div>
-        </aside>
-
-        <section className="pf-main">
-          {tab==='overview' && (
-            <div className="pf-card">
-              <div className="pf-title">個人簡介</div>
-              <p className="pf-about">{user?.about || '—'}</p>
-              <div className="pf-grid2">
-                <div className="pf-kv"><span>Email</span><b>{user?.email}</b></div>
-                <div className="pf-kv"><span>國家/地區</span><b>{user?.country || '—'}</b></div>
-                <div className="pf-kv"><span>建立時間</span><b>{user? new Date(user.createdAt).toLocaleString() : '—'}</b></div>
-              </div>
-            </div>
-          )}
-
-          {tab==='edit' && (
-            <div className="pf-card">
-              <div className="pf-title">編輯基本資料</div>
-              <div className="pf-form">
-                <label className="pf-field">
-                  <span>顯示名稱（2–20，中文/英數/底線）</span>
-                  <input value={form.displayName} onChange={e=>setForm(f=>({...f, displayName:e.target.value}))} maxLength={20}/>
-                </label>
-                <label className="pf-field">
-                  <span>自我介紹（最多 200）</span>
-                  <textarea value={form.about} onChange={e=>setForm(f=>({...f, about:e.target.value}))} maxLength={200}/>
-                </label>
-                <label className="pf-field">
-                  <span>國家/地區</span>
-                  <input value={form.country} onChange={e=>setForm(f=>({...f, country:e.target.value}))} maxLength={32}/>
-                </label>
-                <label className="pf-field">
-                  <span>頭像連結（暫用 URL）</span>
-                  <input value={form.avatarUrl} onChange={e=>setForm(f=>({...f, avatarUrl:e.target.value}))} placeholder="https://..."/>
-                </label>
-                <div className="pf-actions">
-                  <button className="pf-btn" onClick={onSave} disabled={saving}>{saving?'儲存中…':'儲存'}</button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {tab==='appearance' && (
-            <div className="pf-card">
-              <div className="pf-title">外觀設定</div>
-              <div className="pf-form">
-                <label className="pf-field">
-                  <span>頭像框（headframe）</span>
-                  <select value={form.headframe} onChange={e=>setForm(f=>({...f, headframe:e.target.value}))}>
-                    <option value="">無</option>
-                    <option value="neon-cyan">Neon Cyan</option>
-                    <option value="neon-violet">Neon Violet</option>
-                    <option value="aurora">Aurora</option>
-                  </select>
-                </label>
-                <label className="pf-field">
-                  <span>面板風格（panelStyle）</span>
-                  <select value={form.panelStyle} onChange={e=>setForm(f=>({...f, panelStyle:e.target.value}))}>
-                    <option value="glass">Glass</option>
-                    <option value="solid">Solid</option>
-                    <option value="soft">Soft</option>
-                  </select>
-                </label>
-                <label className="pf-field">
-                  <span>面板色調（panelTint）</span>
-                  <select value={form.panelTint} onChange={e=>setForm(f=>({...f, panelTint:e.target.value}))}>
-                    <option value="neon">Neon</option>
-                    <option value="blue">Blue</option>
-                    <option value="violet">Violet</option>
-                    <option value="amber">Amber</option>
-                  </select>
-                </label>
-                <div className="pf-actions">
-                  <button className="pf-btn" onClick={onSave} disabled={saving}>{saving?'儲存中…':'儲存'}</button>
-                </div>
-              </div>
-            </div>
-          )}
         </section>
       </div>
-
-      {/* 掛上專用 CSS */}
-      <link rel="stylesheet" href="/styles/profile.css" />
     </main>
   );
 }
