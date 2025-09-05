@@ -3,21 +3,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 
 const PUBLIC = new Set([
-  '/login', '/register', '/forgot', '/reset',
-  '/api/auth/login', '/api/auth/register', '/api/auth/logout',
+  '/login',
+  '/register',
+  '/forgot',
+  '/reset',
+  '/api/auth/login',
+  '/api/auth/register',
+  '/api/auth/logout',
+  // 其他純公開 API 也可加這邊
 ]);
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  // 放行公開路由 & 靜態資源
   if (
     PUBLIC.has(pathname) ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon') ||
     pathname.startsWith('/public') ||
-    pathname.startsWith('/styles') ||   // ✅ 樣式檔
-    pathname.startsWith('/images') ||   // ✅ 圖片資源
-    pathname.startsWith('/api/auth')    // ✅ 其他 auth API
+    pathname.startsWith('/styles')
   ) {
     return NextResponse.next();
   }
@@ -41,5 +46,6 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
+  // 只保護真正需要登入的頁面（你的大廳在 /）
   matcher: ['/', '/profile/:path*', '/wallet/:path*', '/casino/:path*', '/admin/:path*'],
 };
