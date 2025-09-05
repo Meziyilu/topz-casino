@@ -1,9 +1,11 @@
 // app/api/auth/logout/route.ts
+export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
-import { clearAuthCookies } from '@/lib/auth';
 
 export async function POST() {
   const res = NextResponse.json({ ok: true });
-  clearAuthCookies(res);
+  const isProd = process.env.NODE_ENV === 'production';
+  res.cookies.set('token', '', { httpOnly: true, sameSite: 'lax', secure: isProd, path: '/', maxAge: 0 });
+  res.cookies.set('refresh_token', '', { httpOnly: true, sameSite: 'lax', secure: isProd, path: '/', maxAge: 0 });
   return res;
 }
