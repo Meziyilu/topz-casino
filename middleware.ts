@@ -2,43 +2,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 
-// 明確列出無需登入的頁面（含 auth 頁）
-const PUBLIC_PATHS = new Set<string>([
+const PUBLIC_PAGES = new Set([
   '/login',
   '/register',
-  '/forgot',
-  '/reset',
-  '/api/auth/login',
-  '/api/auth/register',
-  '/api/auth/logout',
+  // 其他公開頁面要加在這
 ]);
-
-// 靜態資源前綴（永遠放行）
-const PUBLIC_PREFIXES = [
-  '/_next',        // Next 內部
-  '/favicon',      // favicon.ico / icons
-  '/public',       // 若你真的從 /public 暴露
-  '/styles',       // /styles/*.css (你現在的 lobby.css 在這)
-  '/images',
-  '/assets',
-  '/robots.txt',
-  '/sitemap.xml',
-];
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // 1) 公開頁面直接放行
-  if (PUBLIC_PATHS.has(pathname)) {
+  // 1) 放行 API & Next 靜態資源 & 靜態檔
+  if (
+    pathname.startsWith('/api') ||
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/favicon') ||
+    pathname.startsWith('/public') ||
+    pathname.match(/\.(css|js|png|jpg|jpeg|gif|svg|ico|webp)$/)
+  ) {
     return NextResponse.next();
   }
 
-  // 2) 公開前綴直接放行（靜態/內部資源）
-  if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) {
+  // 2) 放行公開頁面
+  if (PUBLIC_PAGES.has(pathname)) {
     return NextResponse.next();
   }
 
-  // 3) 其餘視為需要登入
+  // 3) 其餘頁面需要登入（包含 `/` 大廳）
   const token = req.cookies.get('token')?.value;
   if (!token) {
     const url = new URL('/login', req.url);
@@ -46,9 +35,8 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // 4) 驗證 JWT：失敗則導回登入
-  const secret = (process.env.JWT_SECRET || 'dev_secret') as jwt.Secret;
   try {
+    const secret = (process.env.JWT_SECRET || 'dev_secret') as jwt.Secret;
     jwt.verify(token, secret);
     return NextResponse.next();
   } catch {
@@ -58,13 +46,9 @@ export function middleware(req: NextRequest) {
   }
 }
 
-// 僅保護前端頁面；不攔 API
+// 只匹配頁面路由（不包含 /api/*）
 export const config = {
   matcher: [
-    '/',                 // 大廳
-    '/profile/:path*',
-    '/wallet/:path*',
-    '/casino/:path*',
-    '/admin/:path*',
+    '/((?!api).*)',
   ],
 };
