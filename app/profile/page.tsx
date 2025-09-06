@@ -1,3 +1,4 @@
+// app/profile/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -60,31 +61,35 @@ export default function ProfilePage() {
     if (!f) return;
     const fd = new FormData();
     fd.append("file", f);
-    const r = await fetch("/api/upload/avatar", {
-      method: "POST",
-      body: fd,
-      credentials: "include",
-    });
-    const d = await r.json();
-    if (r.ok && d.url) {
-      setForm((s) => ({ ...s, avatarUrl: d.url }));
-      setToast({ type: "ok", text: "頭像已上傳 ✅" });
-      setTimeout(() => setToast(null), 1500);
-    } else {
-      setToast({ type: "err", text: "上傳失敗" });
+    try {
+      const r = await fetch("/api/upload/avatar", {
+        method: "POST",
+        body: fd,
+        credentials: "include",
+      });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok && d.url) {
+        setForm((s) => ({ ...s, avatarUrl: d.url }));
+        setToast({ type: "ok", text: "頭像已上傳 ✅" });
+      } else {
+        setToast({ type: "err", text: d?.error ?? "上傳失敗" });
+      }
+    } catch {
+      setToast({ type: "err", text: "上傳失敗（網路錯誤）" });
+    } finally {
       setTimeout(() => setToast(null), 1500);
     }
   };
 
-  // 儲存
+  // 儲存（重點：空字串→省略，只送允許欄位）
   const onSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (saving) return;
     setSaving(true);
     setToast(null);
 
-    const payload: Record<string, any> = {};
-    for (const k of [
+    // 允許被更新的欄位白名單
+    const ALLOWED: (keyof Me)[] = [
       "displayName",
       "nickname",
       "about",
@@ -93,29 +98,55 @@ export default function ProfilePage() {
       "headframe",
       "panelStyle",
       "panelTint",
-    ] as const) {
-      if (form[k] !== undefined) payload[k] = form[k];
+    ];
+
+    // 將空字串清空（避免後端 enum/格式 400）
+    const normalize = (v: unknown) => {
+      if (typeof v === "string") {
+        const s = v.trim();
+        return s.length ? s : undefined;
+      }
+      return v ?? undefined;
+    };
+
+    const payload: Record<string, unknown> = {};
+    for (const k of ALLOWED) {
+      if (form[k] !== undefined) {
+        const v = normalize(form[k] as any);
+        if (v !== undefined) payload[k] = v;
+      }
     }
 
-    const res = await fetch("/api/profile/me", {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify(payload),
-    });
+    try {
+      const res = await fetch("/api/profile/me", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
 
-    if (!res.ok) {
+      // 未登入直接回登入
+      if (res.status === 401) {
+        window.location.href = "/login?next=/profile";
+        return;
+      }
+
+      const d = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setToast({ type: "err", text: d?.error ?? "儲存失敗" });
+        return;
+      }
+
+      // 更新畫面資料
+      if (d?.user) setMe(d.user);
+      setToast({ type: "ok", text: "已更新 ✅" });
+    } catch {
+      setToast({ type: "err", text: "儲存失敗（網路錯誤）" });
+    } finally {
       setSaving(false);
-      setToast({ type: "err", text: "儲存失敗" });
       setTimeout(() => setToast(null), 1600);
-      return;
     }
-
-    const d = await res.json();
-    setMe(d.user);
-    setSaving(false);
-    setToast({ type: "ok", text: "已更新 ✅" });
-    setTimeout(() => setToast(null), 1600);
   };
 
   const vipLabel = useMemo(() => `VIP ${me?.vipTier ?? 0}`, [me]);
@@ -155,7 +186,11 @@ export default function ProfilePage() {
         <div className="pf-hero-left">
           <div
             className={`pf-avatar ${form.headframe ? `hf-${String(form.headframe).toLowerCase()}` : "hf-none"}`}
-            style={form.panelTint ? ({ ["--pf-tint" as any]: form.panelTint } as any) : undefined}
+            style={
+              form.panelTint
+                ? ({ ["--pf-tint" as any]: form.panelTint } as React.CSSProperties)
+                : undefined
+            }
           >
             <div className="pf-ava-core">
               {form.avatarUrl ? (

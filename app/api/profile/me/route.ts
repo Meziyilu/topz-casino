@@ -1,23 +1,43 @@
-// app/api/profile/me/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth';
 import { z } from 'zod';
 import { HeadframeCode, PanelPreset, Prisma } from '@prisma/client';
 
-// ====== Zod schema：用 Prisma enum 做型別驗證 ======
+// 將空字串 → undefined（避免驗證失敗）
+const emptyToUndef = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), schema);
+
+// 欄位正規化（去頭尾空白 & 空字串轉 undefined）
+const trimToUndef = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((v) => {
+    if (typeof v === 'string') {
+      const t = v.trim();
+      return t === '' ? undefined : t;
+    }
+    return v;
+  }, schema);
+
+// Zod schema：所有欄位都容許「不傳」或「空字串」
 const PutSchema = z.object({
-  displayName: z.string().min(2).max(20).optional(),
-  nickname: z.string().max(30).optional(),
-  about: z.string().max(200).optional(),
-  country: z.string().max(2).optional(),
-  avatarUrl: z.string().url().optional(),
-  headframe: z.nativeEnum(HeadframeCode).optional(),
-  panelStyle: z.nativeEnum(PanelPreset).optional(),
-  panelTint: z.string().max(16).optional(), // e.g. '#AABBCC'
+  displayName: trimToUndef(z.string().min(2).max(20)).optional(),
+  nickname: trimToUndef(z.string().max(30)).optional(),
+  about: trimToUndef(z.string().max(200)).optional(),
+  country: trimToUndef(
+    z
+      .string()
+      .max(2)
+      .transform((s) => (s ? s.toUpperCase() : s))
+  ).optional(),
+  // 空或合法 URL
+  avatarUrl: emptyToUndef(z.string().url()).optional(),
+  // enum：空字串會被轉成 undefined（=> 不更新），傳錯值會 400
+  headframe: emptyToUndef(z.nativeEnum(HeadframeCode)).optional(),
+  panelStyle: emptyToUndef(z.nativeEnum(PanelPreset)).optional(),
+  panelTint: trimToUndef(z.string().max(16)).optional(),
 });
 
-// ====== GET /api/profile/me ======
+// GET /api/profile/me
 export async function GET(req: NextRequest) {
   try {
     const auth = await getUserFromRequest(req);
@@ -51,40 +71,37 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// ====== PUT /api/profile/me ======
+// PUT /api/profile/me
 export async function PUT(req: NextRequest) {
   try {
     const auth = await getUserFromRequest(req);
     if (!auth?.id) return NextResponse.json({ ok: false }, { status: 401 });
 
-    // 支援 JSON 與 formData
+    // 支援 JSON / formData
     const isJson = req.headers.get('content-type')?.includes('application/json');
     let raw: Record<string, any> = {};
     if (isJson) {
       raw = await req.json();
     } else {
       const fd = await req.formData();
-      fd.forEach((v, k) => (raw[k] = String(v)));
+      fd.forEach((v, k) => (raw[k] = typeof v === 'string' ? v : String(v)));
     }
 
-    // 先用 schema 驗證，把字串映射到 enum
     const parsed = PutSchema.safeParse(raw);
     if (!parsed.success) {
-      // 統一 400，不把具體 issues 暴露到用戶端（要的話可印在 log）
       console.warn('PROFILE_ME_PUT_BAD_PAYLOAD', parsed.error.flatten());
       return NextResponse.json({ ok: false, error: 'BAD_PAYLOAD' }, { status: 400 });
     }
     const data = parsed.data;
 
-    // 組 updateData（用 undefined 表示不更新）
     const updateData: Prisma.UserUpdateInput = {
       displayName: data.displayName ?? undefined,
       nickname: data.nickname ?? undefined,
       about: data.about ?? undefined,
       country: data.country ?? undefined,
       avatarUrl: data.avatarUrl ?? undefined,
-      headframe: data.headframe ?? undefined,     // enum 已驗證
-      panelStyle: data.panelStyle ?? undefined,   // enum 已驗證
+      headframe: data.headframe ?? undefined,     // enum OK
+      panelStyle: data.panelStyle ?? undefined,   // enum OK
       panelTint: data.panelTint ?? undefined,
     };
 
