@@ -8,9 +8,9 @@ type Props = {
   vipTier: number;
   wallet: number;
   bank: number;
-  /** 新增：可選頭框代碼（字串即可，後端可用 enum 驗證） */
+  /** 新增：頭框代碼，可選 */
   headframe?: string | null;
-  /** 新增：可選面板色（HEX 或 key），會帶到 CSS 變數 --pf-tint */
+  /** 新增：面板色，可選（HEX 或 key） */
   panelTint?: string | null;
 };
 
@@ -23,8 +23,11 @@ export default function ProfileCard({
   headframe,
   panelTint,
 }: Props) {
+  // 有做頭框樣式時可用；現在先不依賴樣式也不會壞
   const hfClass = headframe ? `hf-${String(headframe).toLowerCase()}` : "hf-none";
-  const tintStyle = panelTint ? ({ ["--pf-tint" as any]: panelTint } as React.CSSProperties) : undefined;
+  const tintStyle = panelTint
+    ? ({ ["--pf-tint" as any]: panelTint } as React.CSSProperties)
+    : undefined;
 
   return (
     <div className="lb-card">
@@ -39,6 +42,7 @@ export default function ProfileCard({
               <div className="lb-ava-fallback">👤</div>
             )}
           </div>
+          {/* 若未加頭框樣式檔，下面兩層不會造成錯誤 */}
           <div className="lb-ava-frame" />
           <div className="lb-ava-glow" />
         </div>
