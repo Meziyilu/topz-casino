@@ -1,241 +1,148 @@
 // app/bank/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useBank } from "@/hooks/useBank";
+import "@/public/styles/bank.css";
+
+type BankState = {
+  wallet: number;
+  bank: number;
+  dailyOut: number;
+  recentLedgers: { id: string; type: string; target: string; amount: number; createdAt: string }[];
+};
 
 export default function BankPage() {
-  const {
-    me,
-    items,
-    hasMore,
-    loadMore,
-    loading,
-    acting,
-    error,
-    deposit,
-    withdraw,
-    transfer,
-  } = useBank();
+  const [data, setData] = useState<BankState | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState<string | null>(null);
 
-  const [depAmount, setDepAmount] = useState("");
-  const [wdAmount, setWdAmount] = useState("");
-  const [toUserId, setToUserId] = useState("");
-  const [tfAmount, setTfAmount] = useState("");
+  const [amount, setAmount] = useState<number>(0);
+  const [memo, setMemo] = useState<string>("");
+
+  async function refresh() {
+    try {
+      const r = await fetch("/api/bank/me", { credentials: "include" });
+      if (r.status === 401) return (window.location.href = "/login?next=/bank");
+      const d = await r.json();
+      setData(d);
+    } catch {
+      setToast("讀取失敗");
+    } finally {
+      setLoading(false);
+      setTimeout(() => setToast(null), 1500);
+    }
+  }
+
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  async function call(path: "/api/bank/deposit" | "/api/bank/withdraw" | "/api/bank/transfer", body: any) {
+    try {
+      const r = await fetch(path, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(body),
+      });
+      if (r.status === 401) return (window.location.href = "/login?next=/bank");
+      const d = await r.json();
+      if (!r.ok || !d.ok) throw new Error(d?.error ?? "操作失敗");
+      setToast("成功 ✅");
+      await refresh();
+    } catch (e: any) {
+      setToast(e?.message ?? "操作失敗");
+    } finally {
+      setTimeout(() => setToast(null), 1600);
+    }
+  }
 
   return (
-    <main className="bank-wrap" style={{ padding: 24, maxWidth: 1000, margin: "0 auto" }}>
-      <header style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
-        <div>
-          <h1 style={{ margin: 0 }}>銀行帳戶</h1>
-          <small style={{ opacity: 0.7 }}>
-            今日銀行流出：{me?.dailyOut?.toLocaleString?.() ?? 0}
-          </small>
+    <main className="lb-wrap">
+      <div className="lb-bg" />
+      <div className="lb-particles" aria-hidden />
+
+      <header className="lb-header">
+        <div className="left">
+          <Link href="/" className="lb-logo">TOPZCASINO</Link>
+          <span className="lb-beta">BANK</span>
         </div>
-        <Link href="/" style={{ textDecoration: "none" }}>← 回大廳</Link>
+        <div className="right" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <Link href="/" className="lb-btn">回大廳</Link>
+        </div>
       </header>
 
-      {/* 餘額卡 */}
-      <section
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr 1fr",
-          gap: 16,
-          marginBottom: 24,
-        }}
-      >
-        <div className="card">
-          <div className="label">錢包</div>
-          <div className="value">{me?.wallet?.toLocaleString?.() ?? 0}</div>
-        </div>
-        <div className="card">
-          <div className="label">銀行</div>
-          <div className="value">{me?.bank?.toLocaleString?.() ?? 0}</div>
-        </div>
-        <div className="card">
-          <div className="label">今日銀行流出</div>
-          <div className="value red">{me?.dailyOut?.toLocaleString?.() ?? 0}</div>
-        </div>
-      </section>
+      <div className="lb-grid">
+        <section className="lb-main" style={{ gridColumn: "1 / -1" }}>
+          <div className="lb-card bank">
+            <div className="lb-card-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span>銀行中心</span>
+              <button className="lb-btn" onClick={refresh} disabled={loading}>重新整理</button>
+            </div>
 
-      {/* 操作表單 */}
-      <section
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: 16,
-          marginBottom: 24,
-        }}
-      >
-        <form
-          className="card"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            const v = parseInt(depAmount, 10);
-            await deposit(v);
-            setDepAmount("");
-          }}
-        >
-          <div className="label">存款（錢包 → 銀行）</div>
-          <input
-            type="number"
-            min={1}
-            value={depAmount}
-            onChange={(e) => setDepAmount(e.target.value)}
-            placeholder="金額"
-          />
-          <button disabled={acting || !depAmount}>存入</button>
-        </form>
+            {loading || !data ? (
+              <p className="lb-muted">載入中…</p>
+            ) : (
+              <>
+                <div className="lb-bank-rows">
+                  <div className="lb-bank-kv">
+                    <span>錢包餘額</span>
+                    <b>{data.wallet.toLocaleString()}</b>
+                  </div>
+                  <div className="lb-bank-kv">
+                    <span>銀行餘額</span>
+                    <b>{data.bank.toLocaleString()}</b>
+                  </div>
+                  <div className="lb-bank-kv">
+                    <span>今日銀行流出</span>
+                    <b>{data.dailyOut.toLocaleString()}</b>
+                  </div>
+                </div>
 
-        <form
-          className="card"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            const v = parseInt(wdAmount, 10);
-            await withdraw(v);
-            setWdAmount("");
-          }}
-        >
-          <div className="label">提領（銀行 → 錢包）</div>
-          <input
-            type="number"
-            min={1}
-            value={wdAmount}
-            onChange={(e) => setWdAmount(e.target.value)}
-            placeholder="金額"
-          />
-          <button disabled={acting || !wdAmount}>提領</button>
-        </form>
+                <div className="lb-bank-forms">
+                  <div className="lb-bank-row">
+                    <input
+                      className="lb-input"
+                      type="number"
+                      placeholder="金額（整數）"
+                      value={amount || ""}
+                      onChange={(e) => setAmount(parseInt(e.target.value || "0", 10))}
+                      min={0}
+                    />
+                    <input
+                      className="lb-input"
+                      placeholder="備註（可空）"
+                      value={memo}
+                      onChange={(e) => setMemo(e.target.value)}
+                      maxLength={120}
+                    />
+                  </div>
+                  <div className="lb-bank-row">
+                    <button className="lb-btn" onClick={() => call("/api/bank/deposit", { amount, memo })}>存款（錢包 → 銀行）</button>
+                    <button className="lb-btn" onClick={() => call("/api/bank/withdraw", { amount, memo })}>提領（銀行 → 錢包）</button>
+                  </div>
+                </div>
 
-        <form
-          className="card"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            const v = parseInt(tfAmount, 10);
-            await transfer(toUserId.trim(), v);
-            setTfAmount("");
-            setToUserId("");
-          }}
-        >
-          <div className="label">轉帳（銀行 → 他人銀行）</div>
-          <input
-            type="text"
-            value={toUserId}
-            onChange={(e) => setToUserId(e.target.value)}
-            placeholder="對方使用者 ID"
-          />
-          <input
-            type="number"
-            min={1}
-            value={tfAmount}
-            onChange={(e) => setTfAmount(e.target.value)}
-            placeholder="金額"
-          />
-          <button disabled={acting || !tfAmount || !toUserId.trim()}>轉帳</button>
-        </form>
-      </section>
+                <div className="lb-card-title" style={{ marginTop: 16 }}>最近流水</div>
+                <ul className="lb-list soft">
+                  {data.recentLedgers?.length ? (
+                    data.recentLedgers.map((x) => (
+                      <li key={x.id}>
+                        {new Date(x.createdAt).toLocaleString()}　[{x.type}/{x.target}]　{(x.amount >= 0 ? "+" : "") + x.amount.toLocaleString()}
+                      </li>
+                    ))
+                  ) : (
+                    <li>尚無紀錄</li>
+                  )}
+                </ul>
 
-      {/* 流水紀錄 */}
-      <section className="card" style={{ marginBottom: 24 }}>
-        <div className="label" style={{ marginBottom: 8 }}>最近流水（BANK）</div>
-        {loading && <div>載入中…</div>}
-        {!loading && items.length === 0 && <div>目前沒有資料</div>}
-        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-          {items.map((it) => (
-            <li
-              key={it.id}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "160px 120px 1fr",
-                gap: 12,
-                padding: "8px 0",
-                borderBottom: "1px solid rgba(255,255,255,0.08)",
-              }}
-            >
-              <span style={{ opacity: 0.8 }}>
-                {new Date(it.createdAt).toLocaleString()}
-              </span>
-              <b
-                style={{
-                  color:
-                    it.type === "DEPOSIT" ? "var(--green, #48d597)" : "var(--red, #ff6b6b)",
-                }}
-              >
-                {it.type}
-              </b>
-              <span>{it.amount.toLocaleString()}</span>
-            </li>
-          ))}
-        </ul>
-        {hasMore && (
-          <div style={{ marginTop: 12 }}>
-            <button onClick={loadMore} disabled={loading}>
-              載入更多
-            </button>
+                {toast && <div className="lb-toast">{toast}</div>}
+              </>
+            )}
           </div>
-        )}
-      </section>
-
-      {/* 錯誤提示 */}
-      {error && (
-        <div
-          style={{
-            padding: 12,
-            background: "rgba(255,80,80,0.15)",
-            border: "1px solid rgba(255,80,80,0.35)",
-            borderRadius: 8,
-          }}
-        >
-          {error}
-        </div>
-      )}
-
-      <style jsx global>{`
-        .card {
-          background: rgba(10, 12, 20, 0.65);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 14px;
-          padding: 16px;
-          backdrop-filter: blur(10px);
-        }
-        .label {
-          font-size: 12px;
-          letter-spacing: 0.08em;
-          opacity: 0.8;
-          margin-bottom: 8px;
-        }
-        .value {
-          font-size: 28px;
-          font-weight: 700;
-        }
-        .value.red {
-          color: #ff6b6b;
-        }
-        input {
-          width: 100%;
-          background: rgba(255, 255, 255, 0.06);
-          border: 1px solid rgba(255, 255, 255, 0.12);
-          border-radius: 10px;
-          color: #fff;
-          padding: 10px 12px;
-          margin: 6px 0 10px;
-          outline: none;
-        }
-        button {
-          background: linear-gradient(90deg, #00d1ff 0%, #7a5cff 100%);
-          color: #0c0f17;
-          border: none;
-          padding: 10px 14px;
-          border-radius: 10px;
-          cursor: pointer;
-          font-weight: 700;
-        }
-        button[disabled] {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-      `}</style>
+        </section>
+      </div>
     </main>
   );
 }
