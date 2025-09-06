@@ -1,38 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
-import { s3, R2_BUCKET } from "@/lib/r2";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
+import { s3, R2_BUCKET } from "@/lib/r2";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
+  const key = req.nextUrl.searchParams.get("key");
+  if (!key) return NextResponse.json({ ok: false, error: "NO_KEY" }, { status: 400 });
+
   try {
-    const { searchParams } = new URL(req.url);
-    const key = searchParams.get("key");
-    if (!key) {
-      return NextResponse.json({ ok: false, error: "NO_KEY" }, { status: 400 });
-    }
-
-    const out = await s3.send(
-      new GetObjectCommand({ Bucket: R2_BUCKET, Key: key })
-    );
-
-    const bytes = await out.Body?.transformToByteArray();
-    if (!bytes) {
-      return NextResponse.json({ ok: false, error: "NOT_FOUND" }, { status: 404 });
-    }
-
-    // 👇 用 Uint8Array，而不是 Buffer
-    return new NextResponse(new Uint8Array(bytes), {
+    const out = await s3.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: key }));
+    const arrayBuffer = await out.Body!.transformToByteArray(); // Node18+ API
+    return new NextResponse(arrayBuffer as any, {
       status: 200,
       headers: {
         "Content-Type": out.ContentType || "application/octet-stream",
         "Cache-Control": out.CacheControl || "public, max-age=31536000, immutable",
       },
     });
-  } catch (err) {
-    console.error("R2_PROXY_ERROR", err);
-    return NextResponse.json({ ok: false, error: "INTERNAL" }, { status: 500 });
+  } catch (e: any) {
+    console.error("PROXY_GET_ERROR", e);
+    return NextResponse.json({ ok: false, error: "INTERNAL_ERROR", detail: e?.message }, { status: 500 });
   }
 }
