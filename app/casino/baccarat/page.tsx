@@ -1,45 +1,55 @@
+// app/casino/baccarat/page.tsx
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
-const ROOMS = [
-  { code: "R30", name: "百家樂 · 30秒房", desc: "快速節奏，適合短線進出" },
-  { code: "R60", name: "百家樂 · 60秒房", desc: "標準節奏，最熱門" },
-  { code: "R90", name: "百家樂 · 90秒房", desc: "慢速節奏，思考更充足" },
-] as const;
+type RoomBrief = {
+  code: "R30" | "R60" | "R90";
+  phase: "BETTING" | "REVEALING" | "SETTLED";
+  roundId: string | null;
+  countdown: number;
+  online: number;
+};
 
-export default function BaccaratLobby() {
+export default function BaccaratRoomsPage() {
+  const [rooms, setRooms] = useState<RoomBrief[]>([]);
+
+  useEffect(() => {
+    fetch("/api/casino/baccarat/rooms")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((d) => setRooms(d.rooms ?? []))
+      .catch(() => setRooms([]));
+  }, []);
+
   return (
-    <div className="min-h-screen bg-casino-bg text-white">
-      <div className="max-w-6xl mx-auto px-4 py-10">
-        <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-extrabold">百家樂大廳</h1>
-          <Link href="/lobby" className="btn glass">
-            ← 回大廳
-          </Link>
+    <main className="bk-wrap">
+      <header className="bk-header">
+        <div className="left">
+          <Link href="/" className="bk-logo">TOPZCASINO</Link>
+          <span className="bk-room">Baccarat</span>
         </div>
+        <div className="center">
+          <div className="bk-phase betting">SELECT ROOM</div>
+        </div>
+        <div className="right">
+          <Link href="/" className="bk-btn ghost">返回大廳</Link>
+        </div>
+      </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {ROOMS.map((r) => (
-            <Link
-              key={r.code}
-              href={`/casino/baccarat/rooms/${r.code}`}
-              className="group block rounded-2xl p-5 border border-white/10 bg-white/5 hover:border-white/30 transition"
-            >
-              <div className="text-xl font-bold mb-1">{r.name}</div>
-              <div className="opacity-80 text-sm mb-4">{r.desc}</div>
-              <div className="h-28 rounded-xl border border-white/10 bg-gradient-to-br from-white/10 to-white/5 grid place-items-center">
-                <span className="opacity-80">立即進入</span>
-              </div>
-              <div className="mt-4 text-right">
-                <span className="inline-block px-3 py-1 rounded-full border border-white/20 group-hover:border-white/40 transition">
-                  進入 {r.code} →
-                </span>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </div>
-    </div>
+      <section className="rooms-grid">
+        {rooms.map((r) => (
+          <Link key={r.code} href={`/casino/baccarat/rooms/${r.code}`} className="room-card glass tilt">
+            <div className="room-code">{r.code}</div>
+            <div className={`room-phase ${r.phase.toLowerCase()}`}>{r.phase}</div>
+            <div className="room-countdown">{r.countdown}s</div>
+            <div className="room-enter">進入房間 →</div>
+            <div className="sheen" />
+          </Link>
+        ))}
+      </section>
+
+      <link rel="stylesheet" href="/styles/baccarat.css" />
+    </main>
   );
 }

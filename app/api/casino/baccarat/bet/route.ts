@@ -1,86 +1,29 @@
 // app/api/casino/baccarat/bet/route.ts
-import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
-import { getUserFromRequest } from "@/lib/authz";
-import { ensureCurrentRound, getPhaseForRound, ROOM_DURATION } from "@/services/baccarat.service";
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { BetSide, RoomCode } from "@prisma/client";
+import { getUserFromRequest } from "@/lib/auth";
+import { placeBets } from "services/baccarat.service";
 
-type BetSide =
-  | "PLAYER"
-  | "BANKER"
-  | "TIE"
-  | "PLAYER_PAIR"
-  | "BANKER_PAIR"
-  | "ANY_PAIR"
-  | "PERFECT_PAIR"
-  | "BANKER_SUPER_SIX";
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-export async function POST(req: Request) {
+const BetItem = z.object({ side: z.nativeEnum(BetSide), amount: z.number().int().positive() });
+const BodySchema = z.object({ room: z.nativeEnum(RoomCode), roundId: z.string().min(1), bets: z.array(BetItem).min(1) });
+
+export async function POST(req: NextRequest) {
+  const auth = await getUserFromRequest(req);
+  if (!auth?.id) return NextResponse.json({ ok: false }, { status: 401 });
+
+  const parsed = BodySchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ ok: false, error: "BAD_BODY" }, { status: 400 });
+
   try {
-    const me = await getUserFromRequest(req);
-    if (!me) return NextResponse.json({ ok: false, error: "UNAUTH" }, { status: 401 });
-
-    const body = await req.json().catch(() => ({}));
-    const room = String((body.room || "R60")).toUpperCase() as any;
-    const side = String(body.side || "");
-    const amount = Number(body.amount || 0);
-
-    // 基本驗證
-    const VALID: BetSide[] = [
-      "PLAYER",
-      "BANKER",
-      "TIE",
-      "PLAYER_PAIR",
-      "BANKER_PAIR",
-      "ANY_PAIR",
-      "PERFECT_PAIR",
-      "BANKER_SUPER_SIX",
-    ];
-    if (!VALID.includes(side as BetSide)) throw new Error("BAD_SIDE");
-    if (!Number.isFinite(amount) || amount <= 0) throw new Error("BAD_AMOUNT");
-
-    const round = await ensureCurrentRound(room);
-    const phase = getPhaseForRound(round, ROOM_DURATION[round.room]);
-    if (phase !== "BETTING") throw new Error("NOT_BETTING");
-
-    // 餘額檢查
-    const user = await prisma.user.findUnique({ where: { id: me.id }, select: { id: true, balance: true } });
-    if (!user) throw new Error("USER_NOT_FOUND");
-    if (user.balance < amount) throw new Error("INSUFFICIENT");
-
-    // 交易
-    const bet = await prisma.$transaction(async (tx) => {
-      // 扣錢（Ledger）
-      await tx.ledger.create({
-        data: {
-          userId: me.id,
-          type: "BET_PLACED",
-          target: "WALLET",
-          amount: -amount,
-          roundId: round.id,
-          room: round.room,
-        },
-      });
-      await tx.user.update({
-        where: { id: me.id },
-        data: { balance: { decrement: amount } },
-      });
-
-      // 建 bet
-      const b = await tx.bet.create({
-        data: {
-          userId: me.id,
-          roundId: round.id,
-          side: side as any,
-          amount,
-        },
-        select: { id: true, amount: true, side: true },
-      });
-
-      return b;
-    });
-
-    return NextResponse.json({ ok: true, bet });
+    const { wallet, accepted } = await placeBets(auth.id, parsed.data.room, parsed.data.roundId, parsed.data.bets);
+    return NextResponse.json({ ok: true, wallet, accepted });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message || "BET_FAIL" }, { status: 400 });
+    const msg = String(e?.message ?? "BET_FAIL");
+    const map = msg === "NO_FUNDS" ? 400 : msg === "NOT_BETTING" ? 409 : 400;
+    return NextResponse.json({ ok: false, error: msg }, { status: map });
   }
 }

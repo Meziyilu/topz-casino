@@ -1,0 +1,93 @@
+/* 背景/基底 */
+.bk-wrap { min-height: 100vh; background: radial-gradient(1200px 800px at 10% -10%, rgba(0,200,255,.08), transparent 60%), radial-gradient(1200px 800px at 110% 30%, rgba(140,0,255,.08), transparent 60%), #0b0f17; color: #eaf6ff; }
+
+/* Header */
+.bk-header { display:flex; align-items:center; justify-content:space-between; padding:16px 24px; backdrop-filter: blur(10px); background: linear-gradient(to bottom, rgba(255,255,255,.05), rgba(255,255,255,0)); border-bottom:1px solid rgba(255,255,255,.06); }
+.bk-logo { font-weight:800; letter-spacing:.2em; }
+.bk-room { margin-left: 12px; opacity:.7; }
+.bk-phase { padding:6px 12px; border-radius:999px; border:1px solid rgba(255,255,255,.15) }
+.bk-phase.betting { background: rgba(0,255,170,.08); }
+.bk-phase.revealing { background: rgba(0,140,255,.08); }
+.bk-phase.settled { background: rgba(255,215,0,.08); }
+.bk-count { margin-top:6px; text-align:center; font-size:28px; font-weight:700; }
+.bk-wallet b { font-variant-numeric: tabular-nums; }
+
+/* 玻璃通用卡 */
+.glass { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); border-radius: 16px; backdrop-filter: blur(14px); box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.08); position: relative; overflow: hidden; }
+.tilt::before { content:""; position:absolute; inset:-40%; background: conic-gradient(from 0deg, rgba(255,255,255,0) 0deg, rgba(255,255,255,.12) 30deg, rgba(255,255,255,0) 60deg); animation: spin 7s linear infinite; mix-blend-mode: overlay; pointer-events:none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 開牌舞台 */
+.bk-reveal { margin:20px 24px; padding:20px; }
+.bk-reveal-title { opacity:.8; margin-bottom:4px; }
+.bk-reveal-stage { height:140px; display:flex; align-items:center; justify-content:center; opacity:.9; position:relative; }
+.scanline { position:absolute; left:-50%; top:0; width:50%; height:2px; background: linear-gradient(90deg, transparent, rgba(0,255,220,.8), transparent); animation: scan 3s linear infinite; }
+@keyframes scan { 0%{ transform: translateX(0) } 100%{ transform: translateX(300%) } }
+.flip-hint { opacity:.6; font-size:14px; }
+
+/* 主格局 */
+.bk-grid { display:grid; grid-template-columns: 320px 1fr; gap:20px; padding: 0 24px 24px; }
+.bk-card { padding:16px; }
+.bk-card.wide { padding:16px 16px 24px; }
+.bk-card-title { font-weight:700; opacity:.85; }
+.mt { margin-top: 16px; }
+
+/* 下注池 */
+.bk-pool { display:grid; grid-template-columns: 1fr auto; gap: 8px 12px; margin-top:10px; }
+.bk-pool li { display: contents; }
+
+/* 近十局 */
+.bk-recent { display:flex; gap:6px; margin-top:10px; flex-wrap:wrap; }
+.dot { width:14px; height:14px; border-radius:50%; opacity:.9; box-shadow: 0 0 8px currentColor; }
+.dot.red  { background:#ff4d6d; color:#ff4d6d; }
+.dot.blue { background:#4da3ff; color:#4da3ff; }
+.dot.gold { background:#ffd34d; color:#ffd34d; }
+
+/* 下注面板 */
+.bk-chipbar { display:flex; gap:12px; align-items:center; margin-bottom:12px; }
+.bk-chipbar input { width:120px; padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,.2); background:rgba(0,0,0,.25); color:#fff; }
+.chips { display:flex; gap:8px; flex-wrap:wrap; }
+.chip { padding:8px 10px; border-radius:10px; border:1px solid rgba(255,255,255,.2); background:rgba(255,255,255,.08); color:#fff; transition: transform .12s ease; }
+.chip:hover { transform: translateY(-1px); }
+.chip.ghost { background: transparent; }
+
+.bk-bets { display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; }
+.bk-bet { position:relative; height:80px; border-radius:14px; border:1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.05); color:#fff; overflow: hidden; }
+.bk-bet .lbl { position:absolute; left:12px; top:10px; font-weight:700; opacity:.9; }
+.bk-bet .mine { position:absolute; right:12px; bottom:10px; font-weight:800; }
+.bk-bet .hover-sheen { content:""; position:absolute; inset:0; background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,.18) 50%, transparent 70%); transform: translateX(-100%); transition: transform .5s ease; pointer-events:none; }
+.bk-bet:hover .hover-sheen { transform: translateX(100%); }
+
+/* 下注按鈕色票（可依喜好調整） */
+.bk-bet.player { box-shadow: inset 0 0 0 1px rgba(64,160,255,.35); }
+.bk-bet.banker { box-shadow: inset 0 0 0 1px rgba(255,100,130,.35); }
+.bk-bet.tie { box-shadow: inset 0 0 0 1px rgba(255,220,80,.35); }
+
+/* 動作按鈕 */
+.bk-actions { display:flex; justify-content:flex-end; margin-top:14px; }
+.bk-btn { padding:10px 16px; border-radius:12px; border:1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.06); color:#fff; transition: transform .12s ease, box-shadow .2s; }
+.bk-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 20px rgba(0,0,0,.35); }
+.bk-btn.primary { border-color:#1ef2d6; background: linear-gradient(135deg, rgba(30,242,214,.25), rgba(0,180,255,.25)); }
+.bk-btn.ghost { background: transparent; }
+
+/* Toast */
+.bk-toast { position:fixed; right:18px; bottom:18px; background: rgba(0,0,0,.6); border:1px solid rgba(255,255,255,.2); border-radius:12px; padding:10px 14px; z-index:1000; }
+
+/* 房間列表 */
+.rooms-grid { display:grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap: 20px; padding: 24px; }
+.room-card { position:relative; display:block; padding:20px; text-decoration:none; color:#eaf6ff; }
+.room-card .room-code { font-size:28px; font-weight:800; letter-spacing:.12em; }
+.room-card .room-phase { margin-top:8px; display:inline-block; padding:4px 10px; border-radius:999px; border:1px solid rgba(255,255,255,.2); font-size:12px; opacity:.9; }
+.room-card .room-phase.betting { background: rgba(0,255,170,.08); }
+.room-card .room-phase.revealing { background: rgba(0,140,255,.08); }
+.room-card .room-phase.settled { background: rgba(255,215,0,.08); }
+.room-card .room-countdown { margin-top:14px; font-size:18px; opacity:.9; }
+.room-card .room-enter { margin-top:18px; font-weight:700; opacity:.95; }
+.room-card .sheen { position:absolute; right:-40%; top:-40%; width:80%; height:180%; transform: rotate(25deg); background: radial-gradient(200px 300px at 30% 30%, rgba(255,255,255,.15), transparent 60%); transition: transform .5s ease, opacity .5s; opacity:.6; pointer-events:none; }
+.room-card:hover .sheen { transform: rotate(25deg) translate(-10%, -10%); opacity: .9; }
+
+/* RWD */
+@media (max-width: 1080px) {
+  .bk-grid { grid-template-columns: 1fr; }
+  .rooms-grid { grid-template-columns: 1fr; }
+}
