@@ -21,6 +21,9 @@ export async function GET(req: NextRequest) {
         balance: true,
         bankBalance: true,
         vipTier: true,
+        headframe:true,
+        panelTint:true,
+      
       },
     });
 
