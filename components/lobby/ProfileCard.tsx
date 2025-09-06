@@ -1,32 +1,62 @@
+// components/lobby/ProfileCard.tsx
+import React from "react";
+import Link from "next/link";
+
+export type ProfileCardProps = {
+  displayName: string;
+  avatarUrl?: string;
+  vipTier: number;
+  wallet: number;
+  bank: number;
+  headframe?: string;
+  panelTint?: string;
+};
+
 export default function ProfileCard({
-  displayName, avatarUrl, vipTier, wallet, bank,
-}: { displayName: string; avatarUrl?: string; vipTier: number; wallet: number; bank: number; }) {
+  displayName,
+  avatarUrl,
+  vipTier,
+  wallet,
+  bank,
+  headframe,
+  panelTint,
+}: ProfileCardProps) {
+  const frameClass = headframe ? `hf-${String(headframe).toLowerCase()}` : "hf-none";
+  const tintStyle = panelTint
+    ? ({ ["--pf-tint" as any]: panelTint } as React.CSSProperties)
+    : undefined;
+
   return (
-    <div className="lb-card">
-      <div className="lb-card-title">玩家資訊</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={{
-          width: 48, height: 48, borderRadius: 12, overflow: "hidden",
-          border: "1px solid rgba(255,255,255,.18)", background: "rgba(255,255,255,.08)",
-          display: "grid", placeItems: "center"
-        }}>
-          {avatarUrl ? <img src={avatarUrl} alt="" width={48} height={48} /> : <span>🎲</span>}
+    <div className="lb-card lb-profile" style={tintStyle}>
+      <div className="lb-profile-top">
+        <div className={`lb-avatar ${frameClass}`}>
+          <div className="lb-ava-core">
+            {avatarUrl ? <img src={avatarUrl} alt="avatar" /> : <div className="lb-ava-fallback">👤</div>}
+          </div>
+          <div className="lb-ava-frame" />
+          <div className="lb-ava-glow" />
         </div>
-        <div style={{ flex: 1, minWidth: 0, color: "#eaf6ff" }}>
-          <div style={{ fontWeight: 800 }}>{displayName}</div>
-          <div style={{ fontSize: 12, color: "rgba(210,230,255,.85)" }}>VIP 等級：{vipTier}</div>
+
+        <div className="lb-user">
+          <div className="lb-name">{displayName}</div>
+          <div className="lb-vip">VIP {vipTier}</div>
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
-        <div className="lb-btn">錢包：{wallet}</div>
-        <div className="lb-btn">銀行：{bank}</div>
+      <div className="lb-balance">
+        <div className="lb-b-item">
+          <span>錢包</span>
+          <b>{wallet.toLocaleString()}</b>
+        </div>
+        <div className="lb-b-item">
+          <span>銀行</span>
+          <b>{bank.toLocaleString()}</b>
+        </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginTop: 12 }}>
-        <a className="lb-btn" href="/checkin">簽到</a>
-        <a className="lb-btn" href="/leaderboard">排行</a>
-        <a className="lb-btn" href="/rewards">活動</a>
+      <div className="lb-profile-actions">
+        <Link href="/profile" className="lb-btn small">個人資料</Link>
+        <Link href="/wallet" className="lb-btn small ghost">錢包/銀行</Link>
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
-// app/page.tsx  或 app/(public)/page.tsx
+// app/page.tsx 或 app/(public)/page.tsx
 "use client";
 
-import "@/public/styles/lobby.css"; // 保持你現有的載入方式
+import "@/public/styles/lobby.css";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Clock from "@/components/lobby/Clock";
@@ -11,8 +11,6 @@ import ProfileCard from "@/components/lobby/ProfileCard";
 import GameCard from "@/components/lobby/GameCard";
 import ChatBox from "@/components/lobby/ChatBox";
 import ServiceWidget from "@/components/lobby/ServiceWidget";
-import "@/public/styles/headframes.css";
-
 
 type Me = {
   id: string;
@@ -21,7 +19,6 @@ type Me = {
   bankBalance: number;
   vipTier: number;
   avatarUrl?: string | null;
-  // 對齊後端：頭框／面板色（和 Profile 頁同步）
   headframe?: string | null;
   panelTint?: string | null;
 };
@@ -42,13 +39,10 @@ export default function LobbyPage() {
       setLoggingOut(true);
       await fetch("/api/auth/logout", {
         method: "POST",
-        credentials: "include", // 需要帶 cookie
-        // 不要加 headers/Content-Type，避免 Edge 對 body 解析而報錯
+        credentials: "include",
       });
     } catch {
-      // 忽略
     } finally {
-      // 無論成功與否都導回登入
       window.location.href = "/login";
     }
   }
@@ -105,7 +99,6 @@ export default function LobbyPage() {
             vipTier={me?.vipTier ?? 0}
             wallet={me?.balance ?? 0}
             bank={me?.bankBalance ?? 0}
-            // ✅ 新增：把頭框/面板色傳進去，讓大廳頭像特效和 Profile 一致
             headframe={me?.headframe ?? undefined}
             panelTint={me?.panelTint ?? undefined}
           />
@@ -140,7 +133,7 @@ export default function LobbyPage() {
           </div>
         </aside>
 
-        {/* 中欄：遊戲 / 聊天 */}
+        {/* 中欄 */}
         <section className="lb-main">
           <div className="lb-games">
             <GameCard title="百家樂" online={328} countdown={27} href="/casino/baccarat" />
@@ -148,11 +141,10 @@ export default function LobbyPage() {
             <GameCard title="樂透" online={93} href="/casino/lotto" />
             <GameCard title="21點" online={0} disabled href="/casino/blackjack" />
           </div>
-
           <ChatBox room="LOBBY" />
         </section>
 
-        {/* 右欄：保留空位（之後擴充） */}
+        {/* 右欄 */}
         <aside className="lb-col right-col">
           <div className="lb-card tall center">
             <div className="lb-card-title">客服中心</div>
