@@ -1,29 +1,27 @@
-// services/bank.service.ts — v1.1.2 對齊：用 Ledger.type / Ledger.target，不使用 walletAfter/bankAfter
+// services/bank.service.ts
 import { prisma } from "@/lib/prisma";
-import type { LedgerType, BalanceTarget } from "@prisma/client";
+import { LedgerType, BalanceTarget } from "@prisma/client";
 
-// 金額一律用整數，1 = 1 元（UI 若有小數，請在 UI 端 * 100）
+// 統一使用「整數點數」，1 = 1 元
 const envInt = (k: string, def: number) => {
-  const v = process.env[k];
-  const n = v ? parseInt(v, 10) : NaN;
-  return Number.isFinite(n) ? n : def;
+  const v = parseInt(process.env[k] || "", 10);
+  return Number.isFinite(v) ? v : def;
 };
 
-const BANK_DEPOSIT_MIN   = envInt("BANK_DEPOSIT_MIN",   1);
-const BANK_DEPOSIT_MAX   = envInt("BANK_DEPOSIT_MAX",   1_000_000);
-const BANK_WITHDRAW_MIN  = envInt("BANK_WITHDRAW_MIN",  1);
-const BANK_WITHDRAW_MAX  = envInt("BANK_WITHDRAW_MAX",  1_000_000);
-const BANK_TRANSFER_MIN  = envInt("BANK_TRANSFER_MIN",  1);
-const BANK_TRANSFER_MAX  = envInt("BANK_TRANSFER_MAX",  1_000_000);
-const BANK_DAILY_OUT_MAX = envInt("BANK_DAILY_OUT_MAX", 2_000_000);
+// 參數限制（可用環境變數覆蓋）
+const DAILY_OUT_MAX = envInt("NEXT_PUBLIC_BANK_DAILY_OUT_MAX", 2_000_000); // 今日銀行流出上限
+const DEPOSIT_MIN   = envInt("BANK_DEPOSIT_MIN", 1);
+const WITHDRAW_MIN  = envInt("BANK_WITHDRAW_MIN", 1);
+const TRANSFER_MIN  = envInt("BANK_TRANSFER_MIN", 1);
 
-function todayStart() {
+/** 當日 00:00:00 */
+function startOfToday() {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
   return d;
 }
 
-// 回傳：{ wallet, bank, dailyOut }
+/** 取得錢包/銀行餘額與當日銀行流出總額 */
 export async function getBalances(userId: string) {
   const u = await prisma.user.findUnique({
     where: { id: userId },
@@ -31,37 +29,42 @@ export async function getBalances(userId: string) {
   });
   if (!u) throw new Error("USER_NOT_FOUND");
 
-  // 今日銀行流出 = type ∈ {WITHDRAW, TRANSFER} & target=BANK 的 amount 加總
-  const start = todayStart();
-  const agg = await prisma.ledger.aggregate({
+  const start = startOfToday();
+  const out = await prisma.ledger.aggregate({
     _sum: { amount: true },
     where: {
       userId,
-      target: "BANK" as BalanceTarget,
-      type: { in: ["WITHDRAW", "TRANSFER"] as LedgerType[] },
+      target: BalanceTarget.BANK,
+      type: { in: [LedgerType.WITHDRAW, LedgerType.TRANSFER] },
       createdAt: { gte: start },
     },
   });
-  const dailyOut = agg._sum.amount ?? 0;
 
-  return { wallet: u.balance, bank: u.bankBalance, dailyOut };
+  const dailyOut = out._sum.amount || 0;
+
+  return {
+    wallet: u.balance,
+    bank: u.bankBalance,
+    dailyOut,
+  };
 }
 
-// 存款：錢包 -> 銀行；Ledger: type=DEPOSIT, target=BANK, amount=正值
-export async function deposit(userId: string, amount: number, memo?: string) {
-  if (!Number.isInteger(amount) || amount < BANK_DEPOSIT_MIN || amount > BANK_DEPOSIT_MAX) {
-    throw new Error("BAD_AMOUNT");
-  }
+/** 存款（錢包 → 銀行） */
+export async function deposit(userId: string, amount: number /* , memo?: string */) {
+  if (!Number.isFinite(amount) || amount < DEPOSIT_MIN) throw new Error("BAD_AMOUNT");
 
-  return prisma.$transaction(async (tx) => {
-    const u = await tx.user.findUnique({ where: { id: userId }, select: { balance: true, bankBalance: true } });
+  return await prisma.$transaction(async (tx) => {
+    const u = await tx.user.findUnique({
+      where: { id: userId },
+      select: { balance: true, bankBalance: true },
+    });
     if (!u) throw new Error("USER_NOT_FOUND");
-    if (u.balance < amount) throw new Error("WALLET_NOT_ENOUGH");
+    if (u.balance < amount) throw new Error("INSUFFICIENT_WALLET");
 
     const upd = await tx.user.update({
       where: { id: userId },
       data: {
-        balance:     { decrement: amount },
+        balance: { decrement: amount },
         bankBalance: { increment: amount },
       },
       select: { balance: true, bankBalance: true },
@@ -70,10 +73,9 @@ export async function deposit(userId: string, amount: number, memo?: string) {
     await tx.ledger.create({
       data: {
         userId,
-        type:   "DEPOSIT",
-        target: "BANK",
-        amount: amount, // 正值
-        memo:   memo?.slice(0, 120) ?? "DEPOSIT",
+        type: LedgerType.DEPOSIT,
+        target: BalanceTarget.BANK,
+        amount: amount, // 一律正值；由 type 判斷入/出
       },
     });
 
@@ -81,36 +83,37 @@ export async function deposit(userId: string, amount: number, memo?: string) {
   });
 }
 
-// 提領：銀行 -> 錢包；Ledger: type=WITHDRAW, target=BANK, amount=正值（出帳用 type 表示）
-export async function withdraw(userId: string, amount: number, memo?: string) {
-  if (!Number.isInteger(amount) || amount < BANK_WITHDRAW_MIN || amount > BANK_WITHDRAW_MAX) {
-    throw new Error("BAD_AMOUNT");
-  }
+/** 提領（銀行 → 錢包） */
+export async function withdraw(userId: string, amount: number /* , memo?: string */) {
+  if (!Number.isFinite(amount) || amount < WITHDRAW_MIN) throw new Error("BAD_AMOUNT");
 
-  return prisma.$transaction(async (tx) => {
-    const u = await tx.user.findUnique({ where: { id: userId }, select: { balance: true, bankBalance: true } });
+  return await prisma.$transaction(async (tx) => {
+    const u = await tx.user.findUnique({
+      where: { id: userId },
+      select: { bankBalance: true },
+    });
     if (!u) throw new Error("USER_NOT_FOUND");
-    if (u.bankBalance < amount) throw new Error("BANK_NOT_ENOUGH");
+    if (u.bankBalance < amount) throw new Error("INSUFFICIENT_BANK");
 
-    // 今日銀行流出額度（WITHDRAW + TRANSFER）
-    const start = todayStart();
-    const used = await tx.ledger.aggregate({
+    // 檢查今日流出上限
+    const start = startOfToday();
+    const out = await tx.ledger.aggregate({
       _sum: { amount: true },
       where: {
         userId,
-        target: "BANK",
-        type: { in: ["WITHDRAW", "TRANSFER"] as LedgerType[] },
+        target: BalanceTarget.BANK,
+        type: { in: [LedgerType.WITHDRAW, LedgerType.TRANSFER] },
         createdAt: { gte: start },
       },
     });
-    const usedAmt = used._sum.amount ?? 0;
-    if (usedAmt + amount > BANK_DAILY_OUT_MAX) throw new Error("DAILY_OUT_LIMIT");
+    const todayOut = out._sum.amount || 0;
+    if (todayOut + amount > DAILY_OUT_MAX) throw new Error("DAILY_OUT_LIMIT");
 
     const upd = await tx.user.update({
       where: { id: userId },
       data: {
         bankBalance: { decrement: amount },
-        balance:     { increment: amount },
+        balance: { increment: amount },
       },
       select: { balance: true, bankBalance: true },
     });
@@ -118,10 +121,9 @@ export async function withdraw(userId: string, amount: number, memo?: string) {
     await tx.ledger.create({
       data: {
         userId,
-        type:   "WITHDRAW",
-        target: "BANK",
-        amount: amount, // 正值
-        memo:   memo?.slice(0, 120) ?? "WITHDRAW",
+        type: LedgerType.WITHDRAW,
+        target: BalanceTarget.BANK,
+        amount: amount,
       },
     });
 
@@ -129,94 +131,95 @@ export async function withdraw(userId: string, amount: number, memo?: string) {
   });
 }
 
-// 轉帳：自己銀行 -> 他人銀行；自己記 type=TRANSFER (BANK)，對方記 type=TRANSFER (BANK)
-export async function transfer(userId: string, toUserId: string, amount: number, memo?: string) {
-  if (userId === toUserId) throw new Error("TRANSFER_TO_SELF");
-  if (!Number.isInteger(amount) || amount < BANK_TRANSFER_MIN || amount > BANK_TRANSFER_MAX) {
-    throw new Error("BAD_AMOUNT");
-  }
+/** 轉帳（銀行 → 他人銀行） */
+export async function transfer(userId: string, toUserId: string, amount: number /* , memo?: string */) {
+  if (!Number.isFinite(amount) || amount < TRANSFER_MIN) throw new Error("BAD_AMOUNT");
+  if (!toUserId || toUserId === userId) throw new Error("BAD_TARGET");
 
-  return prisma.$transaction(async (tx) => {
+  return await prisma.$transaction(async (tx) => {
     const [from, to] = await Promise.all([
-      tx.user.findUnique({ where: { id: userId }, select: { bankBalance: true, balance: true } }),
-      tx.user.findUnique({ where: { id: toUserId }, select: { id: true, bankBalance: true } }),
+      tx.user.findUnique({ where: { id: userId }, select: { bankBalance: true } }),
+      tx.user.findUnique({ where: { id: toUserId }, select: { id: true } }),
     ]);
     if (!from) throw new Error("USER_NOT_FOUND");
-    if (!to)   throw new Error("TARGET_NOT_FOUND");
-    if (from.bankBalance < amount) throw new Error("BANK_NOT_ENOUGH");
+    if (!to) throw new Error("TARGET_NOT_FOUND");
+    if (from.bankBalance < amount) throw new Error("INSUFFICIENT_BANK");
 
-    // 今日銀行流出額度
-    const start = todayStart();
-    const used = await tx.ledger.aggregate({
+    // 檢查今日流出上限
+    const start = startOfToday();
+    const out = await tx.ledger.aggregate({
       _sum: { amount: true },
       where: {
         userId,
-        target: "BANK",
-        type: { in: ["WITHDRAW", "TRANSFER"] as LedgerType[] },
+        target: BalanceTarget.BANK,
+        type: { in: [LedgerType.WITHDRAW, LedgerType.TRANSFER] },
         createdAt: { gte: start },
       },
     });
-    const usedAmt = used._sum.amount ?? 0;
-    if (usedAmt + amount > BANK_DAILY_OUT_MAX) throw new Error("DAILY_OUT_LIMIT");
+    const todayOut = out._sum.amount || 0;
+    if (todayOut + amount > DAILY_OUT_MAX) throw new Error("DAILY_OUT_LIMIT");
 
-    // from 扣銀行
-    const fromUpd = await tx.user.update({
+    // 先扣自己，再加對方
+    await tx.user.update({
       where: { id: userId },
       data: { bankBalance: { decrement: amount } },
-      select: { balance: true, bankBalance: true },
     });
-    // to 加銀行
-    await tx.user.update({
+    const updMe = await tx.user.update({
       where: { id: toUserId },
       data: { bankBalance: { increment: amount } },
-      select: { bankBalance: true },
+      select: { id: true },
     });
 
-    // 雙邊 ledger（均為正值，通過 type 區分流向）
+    // 雙邊流水（都寫正值）
     await tx.ledger.create({
       data: {
         userId,
-        type:   "TRANSFER",
-        target: "BANK",
+        type: LedgerType.TRANSFER,
+        target: BalanceTarget.BANK,
         amount: amount,
-        memo:   (memo ?? `TRANSFER_TO:${toUserId}`).slice(0, 120),
       },
     });
     await tx.ledger.create({
       data: {
-        userId: toUserId,
-        type:   "TRANSFER",
-        target: "BANK",
+        userId: updMe.id,
+        type: LedgerType.TRANSFER,
+        target: BalanceTarget.BANK,
         amount: amount,
-        memo:   `FROM:${userId}`.slice(0, 120),
       },
     });
 
-    return { wallet: fromUpd.balance, bank: fromUpd.bankBalance };
+    // 回傳最新餘額
+    const meNow = await tx.user.findUnique({
+      where: { id: userId },
+      select: { balance: true, bankBalance: true },
+    });
+    if (!meNow) throw new Error("USER_NOT_FOUND_AFTER");
+
+    return { wallet: meNow.balance, bank: meNow.bankBalance };
   });
 }
 
-// 歷史（target=BANK），回 { items, nextCursor }
-export async function getHistory(userId: string, cursor?: string | null, limit = 20) {
+/** 取回最近的 BANK 相關流水（供 /api/bank/history 使用） */
+export async function listBankHistory(userId: string, limit = 20, cursor?: string | null) {
   const items = await prisma.ledger.findMany({
-    where: { userId, target: "BANK" },
+    where: { userId, target: BalanceTarget.BANK },
     orderBy: { createdAt: "desc" },
     take: limit + 1,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     select: {
       id: true,
       createdAt: true,
-      type: true,        // LedgerType
-      target: true,      // BalanceTarget
-      amount: true,      // 一律正值；利用 type 判斷入/出帳
-      memo: true,
+      type: true,
+      target: true,
+      amount: true,
     },
   });
 
   let nextCursor: string | null = null;
   if (items.length > limit) {
-    nextCursor = items[limit].id;
-    items.pop();
+    const last = items.pop()!;
+    nextCursor = last.id;
   }
+
   return { items, nextCursor };
 }
