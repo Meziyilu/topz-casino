@@ -1,6 +1,7 @@
 // app/page.tsx  或 app/(public)/page.tsx
 "use client";
-import "@/public/styles/lobby.css"; // 直接 import，避免 public 路徑錯用
+
+import "@/public/styles/lobby.css"; // 保持你現有的載入方式
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Clock from "@/components/lobby/Clock";
@@ -18,10 +19,14 @@ type Me = {
   bankBalance: number;
   vipTier: number;
   avatarUrl?: string | null;
+  // 對齊後端，預留頭框／面板色
+  headframe?: string | null;
+  panelTint?: string | null;
 };
 
 export default function LobbyPage() {
   const [me, setMe] = useState<Me | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     fetch("/api/users/me", { credentials: "include" })
@@ -29,6 +34,18 @@ export default function LobbyPage() {
       .then((d) => setMe(d.user ?? null))
       .catch(() => setMe(null));
   }, []);
+
+  async function onLogout() {
+    try {
+      setLoggingOut(true);
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch {}
+    // 無論成功與否都導回登入
+    window.location.href = "/login";
+  }
 
   return (
     <main className="lb-wrap">
@@ -52,12 +69,23 @@ export default function LobbyPage() {
           />
         </div>
 
-        <div className="right">
+        <div className="right" style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <Clock />
           <ThemeToggle />
           <Link href="/profile" className="lb-user-mini">
             <span className="name">{me?.displayName ?? "玩家"}</span>
           </Link>
+          <button
+            type="button"
+            onClick={onLogout}
+            className="lb-btn"
+            disabled={loggingOut}
+            aria-label="登出"
+            title="登出"
+            style={{ padding: "8px 12px" }}
+          >
+            {loggingOut ? "登出中…" : "登出"}
+          </button>
         </div>
       </header>
 
@@ -76,36 +104,20 @@ export default function LobbyPage() {
           <div className="lb-card">
             <div className="lb-card-title">功能入口</div>
             <div className="lb-actions">
-              <Link href="/wallet" className="lb-btn">
-                🏦 銀行
-              </Link>
-              <Link href="/shop" className="lb-btn">
-                🛍 商店
-              </Link>
-              <Link href="/admin" className="lb-btn">
-                ⚙️ 管理
-              </Link>
+              <Link href="/wallet" className="lb-btn">🏦 銀行</Link>
+              <Link href="/shop" className="lb-btn">🛍 商店</Link>
+              <Link href="/admin" className="lb-btn">⚙️ 管理</Link>
             </div>
           </div>
 
           <div className="lb-card">
             <div className="lb-card-title">排行榜（週）</div>
             <ol className="lb-list">
-              <li>
-                #1 王牌玩家 <span>+12,400</span>
-              </li>
-              <li>
-                #2 LuckyStar <span>+8,210</span>
-              </li>
-              <li>
-                #3 黑桃A <span>+6,420</span>
-              </li>
-              <li>
-                #4 Neon <span>+4,900</span>
-              </li>
-              <li>
-                #5 Nova <span>+3,110</span>
-              </li>
+              <li>#1 王牌玩家 <span>+12,400</span></li>
+              <li>#2 LuckyStar <span>+8,210</span></li>
+              <li>#3 黑桃A <span>+6,420</span></li>
+              <li>#4 Neon <span>+4,900</span></li>
+              <li>#5 Nova <span>+3,110</span></li>
             </ol>
           </div>
 
