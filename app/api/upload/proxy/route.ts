@@ -1,4 +1,3 @@
-// app/api/upload/proxy/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { s3, R2_BUCKET } from "@/lib/r2";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
@@ -19,13 +18,13 @@ export async function GET(req: NextRequest) {
       new GetObjectCommand({ Bucket: R2_BUCKET, Key: key })
     );
 
-    // 取得檔案內容
     const bytes = await out.Body?.transformToByteArray();
     if (!bytes) {
       return NextResponse.json({ ok: false, error: "NOT_FOUND" }, { status: 404 });
     }
 
-    return new NextResponse(Buffer.from(bytes), {
+    // 👇 用 Uint8Array，而不是 Buffer
+    return new NextResponse(new Uint8Array(bytes), {
       status: 200,
       headers: {
         "Content-Type": out.ContentType || "application/octet-stream",
