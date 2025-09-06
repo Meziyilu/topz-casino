@@ -1,41 +1,172 @@
-/* 獨立的頭像/頭框樣式，供 Lobby & Profile 共用 */
-/* 可以和你現有的 profile.css 風格一致；命名使用 lb- 避免衝突 */
+/* public/styles/headframes.css */
+/* 共用頭像 + 頭框特效（同時支援 Profile 與 Lobby） */
 
-.lb-avatar {
+/* 讓 Profile 與 Lobby 共用：.pf- 與 .lb- 兩套 class 一起匹配 */
+.pf-avatar, .lb-avatar {
   position: relative;
-  width: 72px;
-  aspect-ratio: 1;
+  width: 120px;           /* 視覺大小可在各頁覆寫 */
+  height: 120px;
   border-radius: 50%;
+  overflow: visible;      /* ✅ 讓外框可以伸出，不要裁掉 */
+}
+
+/* 頭像核心（圖片區） */
+.pf-ava-core, .lb-ava-core {
+  position: relative;
+  z-index: 2;             /* 圖片永遠在最上層，不被特效遮住 */
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.14);
   overflow: hidden;
-  transform-style: preserve-3d;
 }
-.lb-ava-core { position: relative; width: 100%; height: 100%; border-radius: 50%; overflow: hidden; }
-.lb-ava-core img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.lb-ava-fallback {
-  width: 100%; height: 100%; display: grid; place-items: center;
-  background: rgba(255,255,255,.05); color: #cbd5e1; font-size: 26px;
+.pf-ava-core img, .lb-ava-core img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  border-radius: 50%;
 }
-
-/* 霓虹外框 & 燈光 */
-.lb-ava-frame {
-  position: absolute; inset: -6px; border-radius: 50%;
-  background: conic-gradient(from 0deg, rgba(90,200,250,.7), rgba(167,139,250,.8), rgba(52,211,153,.7), rgba(90,200,250,.7));
-  filter: blur(10px); opacity: .7; pointer-events: none;
-}
-.lb-ava-glow {
-  position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
-  box-shadow: 0 0 24px rgba(96,165,250,.24), inset 0 0 18px rgba(255,255,255,.06);
+.pf-ava-fallback, .lb-ava-fallback {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  font-size: 42px;
+  color: #cbd5e1;
 }
 
-/* 主色（面板色） */
-.lb-avatar { --pf-tint: #00d1ff; }
+/* 外圈「頭框」層（跑在圖片外圍） */
+.pf-ava-frame, .lb-ava-frame {
+  position: absolute;
+  inset: -8px;            /* 外擴 8px（可依頁面調整） */
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 1;             /* 在圖片下方（z=1），但在 glow 之上 */
+}
 
-/* 不同頭框外觀（可按需求擴充） */
-.hf-none .lb-ava-frame { display: none; }
-.hf-gold  .lb-ava-frame { background: conic-gradient(from 0deg,#ffd54a,#ffae00,#ff8a00,#ffd54a); }
-.hf-cyan  .lb-ava-frame { background: conic-gradient(from 0deg,#67e8f9,#60a5fa,#22d3ee,#67e8f9); }
-.hf-royal .lb-ava-frame { background: conic-gradient(from 0deg,#a78bfa,#60a5fa,#f0abfc,#a78bfa); }
-.hf-neon  .lb-ava-frame { background: conic-gradient(from 0deg,var(--pf-tint), #a78bfa, #34d399, var(--pf-tint)); }
+/* 動態光暈（最底層） */
+.pf-ava-glow, .lb-ava-glow {
+  position: absolute;
+  inset: -16px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;             /* 最底層 */
+  filter: blur(10px);
+  opacity: .9;
+}
 
-/* 小動畫（可選） */
-.lb-avatar:hover .lb-ava-frame { filter: blur(8px) brightness(1.1); }
+/* 可選：由面板色驅動整體色調（你在 React 內用 style={{'--pf-tint': '#xx'}}） */
+.pf-avatar, .lb-avatar {
+  --hf-tint: var(--pf-tint, #5ac8fa); /* 預設青藍；可被 style 覆寫 */
+}
+
+/* ============= 頭框主題（挑幾款誇張的 😎） ============= */
+
+/* 1) 金光閃爍 */
+.hf-gold .pf-ava-frame, .hf-gold .lb-ava-frame {
+  border: 4px solid #e6c200;
+  box-shadow: 0 0 20px rgba(255,215,0,.45), inset 0 0 10px rgba(255,255,255,.2);
+  animation: hf-gold-shine 2s linear infinite;
+}
+.hf-gold .pf-ava-glow, .hf-gold .lb-ava-glow {
+  background: radial-gradient(50% 50% at 50% 50%, rgba(255,215,0,.5), transparent 70%);
+}
+@keyframes hf-gold-shine {
+  0%,100% { box-shadow: 0 0 16px rgba(255,215,0,.45), inset 0 0 10px rgba(255,255,255,.2); }
+  50%     { box-shadow: 0 0 30px rgba(255,215,0,.85), inset 0 0 12px rgba(255,255,255,.28); }
+}
+
+/* 2) 霓虹脈衝（依 --hf-tint） */
+.hf-neon .pf-ava-frame, .hf-neon .lb-ava-frame {
+  border: 3px solid var(--hf-tint);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--hf-tint) 50%, transparent);
+  animation: hf-neon-pulse 1.4s ease-in-out infinite alternate;
+}
+.hf-neon .pf-ava-glow, .hf-neon .lb-ava-glow {
+  background: radial-gradient(circle, color-mix(in srgb, var(--hf-tint) 60%, transparent), transparent 70%);
+}
+@keyframes hf-neon-pulse {
+  from { transform: scale(1);   box-shadow: 0 0 16px color-mix(in srgb, var(--hf-tint) 40%, transparent); }
+  to   { transform: scale(1.04); box-shadow: 0 0 40px color-mix(in srgb, var(--hf-tint) 80%, transparent); }
+}
+
+/* 3) 火焰旋轉 */
+.hf-fire .pf-ava-frame, .hf-fire .lb-ava-frame {
+  border: 3px solid transparent;
+  background: conic-gradient(from 0deg, #ff2a2a, #ff7f00, #ffd000, #ff2a2a);
+  animation: hf-ring-spin 3.2s linear infinite;
+  mask: radial-gradient(circle at 50% 50%, transparent 60%, black 61%);
+}
+.hf-fire .pf-ava-glow, .hf-fire .lb-ava-glow {
+  background: radial-gradient(circle, rgba(255,90,0,.6), transparent 70%);
+}
+
+/* 4) 彩虹流動 */
+.hf-rainbow .pf-ava-frame, .hf-rainbow .lb-ava-frame {
+  border: 3px solid transparent;
+  background: conic-gradient(red, orange, yellow, green, cyan, blue, violet, red);
+  animation: hf-ring-spin 4.5s linear infinite;
+  mask: radial-gradient(circle at 50% 50%, transparent 60%, black 62%);
+}
+.hf-rainbow .pf-ava-glow, .hf-rainbow .lb-ava-glow {
+  background: radial-gradient(circle, rgba(160,100,255,.5), transparent 70%);
+}
+
+/* 5) 龍魂爆閃（中心爆光） */
+.hf-dragon .pf-ava-glow, .hf-dragon .lb-ava-glow {
+  background: radial-gradient(circle, rgba(255,0,80,.65), transparent 65%);
+  animation: hf-burst 1.15s ease-in-out infinite;
+}
+.hf-dragon .pf-ava-frame, .hf-dragon .lb-ava-frame {
+  border: 2px solid rgba(255,0,80,.65);
+  box-shadow: inset 0 0 10px rgba(255,0,80,.35);
+}
+
+/* 6) 皇家藍華彩 */
+.hf-royal .pf-ava-frame, .hf-royal .lb-ava-frame {
+  border: 3px solid #60a5fa;
+  box-shadow: 0 0 18px rgba(96,165,250,.5);
+  background:
+    radial-gradient(120% 90% at 10% 5%, rgba(96,165,250,.25), transparent 60%),
+    radial-gradient(120% 90% at 90% 5%, rgba(167,139,250,.25), transparent 60%);
+  animation: hf-sheen 2s ease-in-out infinite;
+}
+.hf-royal .pf-ava-glow, .hf-royal .lb-ava-glow {
+  background: radial-gradient(circle, rgba(96,165,250,.5), transparent 70%);
+}
+
+/* 7) 科技電路（跳動） */
+.hf-cyber .pf-ava-frame, .hf-cyber .lb-ava-frame {
+  border: 2px dashed color-mix(in srgb, var(--hf-tint) 55%, #00e1ff);
+  animation: hf-cyber 1.2s steps(4) infinite;
+}
+.hf-cyber .pf-ava-glow, .hf-cyber .lb-ava-glow {
+  background: radial-gradient(circle, color-mix(in srgb, var(--hf-tint) 55%, #00e1ff), transparent 70%);
+}
+
+/* 8) 漩渦能量（誇張） */
+.hf-vortex .pf-ava-frame, .hf-vortex .lb-ava-frame {
+  border: 3px solid transparent;
+  background:
+    conic-gradient(from 0deg, rgba(90,200,250,.8), rgba(167,139,250,.8), rgba(52,211,153,.8), rgba(90,200,250,.8));
+  mask: radial-gradient(circle at 50% 50%, transparent 58%, black 60%);
+  animation: hf-ring-spin 2.2s linear infinite reverse;
+}
+.hf-vortex .pf-ava-glow, .hf-vortex .lb-ava-glow {
+  background:
+    radial-gradient(60% 60% at 50% 50%, rgba(90,200,250,.35), transparent 60%),
+    radial-gradient(60% 60% at 60% 40%, rgba(167,139,250,.35), transparent 60%);
+}
+
+/* Keyframes 共用 */
+@keyframes hf-ring-spin { to { transform: rotate(360deg); } }
+@keyframes hf-burst    { 0%,100% { opacity:.45; transform: scale(1) } 50% { opacity:1; transform: scale(1.2) } }
+@keyframes hf-sheen    { 0%{ box-shadow: 0 0 14px rgba(96,165,250,.4) } 50%{ box-shadow: 0 0 36px rgba(96,165,250,.8) } 100%{ box-shadow: 0 0 14px rgba(96,165,250,.4) } }
+@keyframes hf-cyber    { to { filter: hue-rotate(30deg) } }
+
+/* 尺寸微調（Lobby 側邊卡多半較小） */
+.lb-avatar { width: 84px; height: 84px; }
+.lb-ava-frame { inset: -6px; }
+.lb-ava-glow  { inset: -12px; }

@@ -20,6 +20,7 @@ type Me = {
   panelTint?: string | null;
 };
 
+// 只能讀取 NEXT_PUBLIC_* 變數（在 client）——你已經有設定這兩個
 const CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "";
 const UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "";
 
@@ -73,9 +74,10 @@ export default function ProfilePage() {
       const fd = new FormData();
       fd.append("file", f);
       fd.append("upload_preset", UPLOAD_PRESET);
-      // 如需固定資料夾，可在這裡加：fd.append("folder", "avatars");
+      // 如需固定資料夾，可開啟下一行：
+      // fd.append("folder", "avatars");
 
-      // 不要手動設定 Content-Type，交給瀏覽器處理
+      // 不要手動設定 Content-Type，由瀏覽器自動帶 multipart/form-data
       const r = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
         method: "POST",
         body: fd,
@@ -86,7 +88,7 @@ export default function ProfilePage() {
         throw new Error(json?.error?.message || "UPLOAD_FAILED");
       }
 
-      // 成功後將 URL 暫存到表單，點「儲存變更」才寫回資料庫
+      // 成功後先寫到表單；按「儲存變更」才寫回 DB
       setForm((s) => ({ ...s, avatarUrl: json.secure_url as string }));
       setToast({ type: "ok", text: "頭像已上傳 ✅" });
     } catch (err: any) {
@@ -167,8 +169,9 @@ export default function ProfilePage() {
       <div className="pf-bg" />
       <div className="pf-particles" aria-hidden />
 
-      {/* 載入 CSS（玻璃＋流光） */}
+      {/* ✅ 套用兩個 CSS：玻璃感 + 頭框效果 */}
       <link rel="stylesheet" href="/styles/profile.css" />
+      <link rel="stylesheet" href="/styles/headframes.css" />
 
       {/* Header */}
       <header className="pf-header">
@@ -197,8 +200,11 @@ export default function ProfilePage() {
                 <div className="pf-ava-fallback">👤</div>
               )}
             </div>
+            {/* 外圈特效（不覆蓋頭像） */}
             <div className="pf-ava-frame" />
             <div className="pf-ava-glow" />
+
+            {/* 上傳按鈕（覆蓋在頭像右下角） */}
             <label className="pf-file-btn">
               上傳頭像
               <input

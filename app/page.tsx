@@ -1,7 +1,10 @@
-// app/page.tsx 或 app/(public)/page.tsx
+// app/page.tsx  或 app/(public)/page.tsx
 "use client";
 
+// ✅ 一次載入大廳樣式 + 頭框特效樣式
 import "@/public/styles/lobby.css";
+import "@/public/styles/headframes.css";
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Clock from "@/components/lobby/Clock";
@@ -42,6 +45,7 @@ export default function LobbyPage() {
         credentials: "include",
       });
     } catch {
+      // ignore
     } finally {
       window.location.href = "/login";
     }
@@ -99,6 +103,7 @@ export default function LobbyPage() {
             vipTier={me?.vipTier ?? 0}
             wallet={me?.balance ?? 0}
             bank={me?.bankBalance ?? 0}
+            // ✅ 同步個人頁：把頭框 / 面板色一起丟進去
             headframe={me?.headframe ?? undefined}
             panelTint={me?.panelTint ?? undefined}
           />
