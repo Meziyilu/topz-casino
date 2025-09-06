@@ -1,51 +1,81 @@
-// Node runtime 才能用 AWS SDK
-export const runtime = 'nodejs';
+// app/api/upload/avatar/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { s3, R2_BUCKET, r2PublicUrl } from "@/lib/r2";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
+import crypto from "node:crypto";
+import { getUserFromRequest } from "@/lib/auth";
 
-import { NextResponse } from 'next/server';
-import { randomUUID } from 'crypto';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+// 重要：這支一定要跑 Node.js（不是 Edge）
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
-// 讀環境變數（確保已在 Render 上設定）
-const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID!;
-const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID!;
-const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY!;
-const R2_BUCKET = process.env.R2_BUCKET!;
-const R2_PUBLIC_BASE = process.env.R2_PUBLIC_BASE!; // 例: https://pub-xxxx.r2.dev 或你的 CDN/domain
+const ALLOWED_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+]);
 
-// R2 S3 端點
-const s3 = new S3Client({
-  region: 'auto',
-  endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-  credentials: {
-    accessKeyId: R2_ACCESS_KEY_ID,
-    secretAccessKey: R2_SECRET_ACCESS_KEY,
-  },
-});
+const EXT_MAP: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const form = await req.formData();
-    const file = form.get('file');
-    if (!file || !(file instanceof File)) {
-      return NextResponse.json({ ok: false, error: 'NO_FILE' }, { status: 400 });
+    // 必須登入
+    const auth = await getUserFromRequest(req);
+    if (!auth?.id) {
+      return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 });
     }
 
-    const buf = Buffer.from(await file.arrayBuffer());
-    const ext = file.name.split('.').pop() || 'png';
-    const key = `avatars/${randomUUID()}.${ext}`;
+    const form = await req.formData();
+    const file = form.get("file");
 
-    await s3.send(new PutObjectCommand({
-      Bucket: R2_BUCKET,
-      Key: key,
-      Body: buf,
-      ContentType: file.type || 'application/octet-stream',
-      ACL: 'public-read', // 若你的 Bucket 是私有，拿掉這行，改走簽名 URL
-    }));
+    if (!(file instanceof File)) {
+      return NextResponse.json({ ok: false, error: "NO_FILE" }, { status: 400 });
+    }
 
-    const url = `${R2_PUBLIC_BASE.replace(/\/+$/, '')}/${key}`;
-    return NextResponse.json({ ok: true, url });
-  } catch (e: any) {
-    console.error('UPLOAD_AVATAR_ERR', e);
-    return NextResponse.json({ ok: false, error: String(e?.message || e) }, { status: 500 });
+    // 檔案大小（預設 <= 5MB）
+    const size = file.size ?? 0;
+    if (size <= 0 || size > 5 * 1024 * 1024) {
+      return NextResponse.json({ ok: false, error: "FILE_TOO_LARGE" }, { status: 400 });
+    }
+
+    // 檔案型態
+    const type = file.type?.toLowerCase() || "";
+    if (!ALLOWED_TYPES.has(type)) {
+      return NextResponse.json({ ok: false, error: "INVALID_FILE_TYPE" }, { status: 400 });
+    }
+
+    // 產生 key
+    const ext = EXT_MAP[type] || "bin";
+    const rand = crypto.randomBytes(6).toString("hex");
+    const key = `avatars/${auth.id}/${Date.now()}-${rand}.${ext}`;
+
+    // 轉成 Buffer 後上傳 R2
+    const ab = await file.arrayBuffer();
+    const buf = Buffer.from(ab);
+
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: R2_BUCKET,
+        Key: key,
+        Body: buf,
+        ContentType: type,
+        CacheControl: "public, max-age=31536000, immutable",
+      })
+    );
+
+    // 產生可供前端使用的 URL（Public Domain 有值則走公網，否則走 proxy）
+    const url = r2PublicUrl(key);
+
+    return NextResponse.json({ ok: true, key, url });
+  } catch (err) {
+    console.error("UPLOAD_AVATAR_ERROR", err);
+    return NextResponse.json({ ok: false, error: "INTERNAL_ERROR" }, { status: 500 });
   }
 }
