@@ -1,36 +1,32 @@
-// app/api/casino/baccarat/stream/route.ts
-import { NextResponse } from "next/server";
-import { getRoomInfo } from "@/services/baccarat.service";
+import { NextRequest } from "next/server";
+import { z } from "zod";
+import { RoomCode } from "@prisma/client";
+import { streamRoom } from "@/services/baccarat.service";
 
+// SSE：回傳的是 ReadableStream，框架會自動設置 Content-Type
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// 簡化版：這裡用 SSE，可以替換成 WebSocket
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const room = searchParams.get("room");
-  if (!room) return NextResponse.json({ ok: false, error: "NO_ROOM" }, { status: 400 });
+export async function GET(req: NextRequest) {
+  const sp = req.nextUrl.searchParams;
+  const schema = z.object({ room: z.nativeEnum(RoomCode) });
+  const parsed = schema.safeParse({ room: sp.get("room") as any });
+  if (!parsed.success) {
+    return new Response('{"ok":false,"error":"BAD_ROOM"}', {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    async start(controller) {
-      controller.enqueue(encoder.encode(`event: ping\ndata: hello\n\n`));
-
-      // 每 3 秒推送一次房間狀態（模擬）
-      const interval = setInterval(async () => {
-        const info = await getRoomInfo(room);
-        controller.enqueue(encoder.encode(`event: update\ndata: ${JSON.stringify(info)}\n\n`));
-      }, 3000);
-
-      req.signal.addEventListener("abort", () => clearInterval(interval));
-    },
-  });
-
-  return new NextResponse(stream, {
+  // 假設 service 會回傳 { stream: ReadableStream }
+  const { stream } = await streamRoom(parsed.data.room);
+  return new Response(stream, {
+    status: 200,
     headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
     },
   });
 }

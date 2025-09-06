@@ -1,29 +1,37 @@
-// app/api/casino/baccarat/rounds/route.ts
-import { NextResponse } from "next/server";
-import { getPublicRounds } from "@/services/baccarat.service";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { RoomCode } from "@prisma/client";
+import { getPublicRounds } from "@/services/baccarat.service";
 
-export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const schema = z.object({
-    room: z.string(),
-    limit: z.string().transform((s) => parseInt(s, 10)).optional(),
-    cursor: z.string().optional(),
-  });
-  const parsed = schema.safeParse({
-    room: url.searchParams.get("room"),
-    limit: url.searchParams.get("limit") ?? "10",
-    cursor: url.searchParams.get("cursor") ?? undefined,
-  });
-  if (!parsed.success) return NextResponse.json({ ok: false, error: "BAD_QUERY" }, { status: 400 });
-
+export async function GET(req: NextRequest) {
   try {
-    const rounds = await getPublicRounds(parsed.data.room, parsed.data.limit, parsed.data.cursor);
-    return NextResponse.json({ ok: true, rounds });
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: String(e?.message ?? "ROUNDS_FAIL") }, { status: 500 });
+    const sp = req.nextUrl.searchParams;
+    const schema = z.object({
+      room: z.nativeEnum(RoomCode),
+      limit: z.coerce.number().int().min(1).max(100).default(20),
+      cursor: z.string().optional(),
+    });
+
+    const parsed = schema.safeParse({
+      room: sp.get("room") as any,
+      limit: sp.get("limit") ?? undefined,
+      cursor: sp.get("cursor") ?? undefined,
+    });
+
+    if (!parsed.success) {
+      return NextResponse.json({ ok: false, error: "BAD_QUERY" }, { status: 400 });
+    }
+
+    const { items, nextCursor } = await getPublicRounds(
+      parsed.data.room,
+      parsed.data.limit,
+      parsed.data.cursor
+    );
+    return NextResponse.json({ ok: true, items, nextCursor });
+  } catch (e) {
+    console.error("BACCARAT_ROUNDS", e);
+    return NextResponse.json({ ok: false, error: "INTERNAL" }, { status: 500 });
   }
 }
