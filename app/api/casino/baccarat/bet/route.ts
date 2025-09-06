@@ -1,51 +1,45 @@
 // app/api/casino/baccarat/bet/route.ts
-import { NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { z } from "zod";
-import { RoomCode, BetSide } from "@prisma/client";
-import { getUserFromRequest } from "@/lib/auth";
+import { RoomCode } from "@prisma/client";
 import { placeBets, type BetInput } from "@/services/baccarat.service";
+import { getUserFromRequest } from "@/lib/auth";
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-
-// --- Zod Schemas ---
 const BetSchema = z.object({
-  side: z.nativeEnum(BetSide),
-  amount: z.number().int().positive(),
-});
-
-const BodySchema = z.object({
-  room: z.nativeEnum(RoomCode),       // 關鍵：用 enum，而不是 string()
+  room: z.nativeEnum(RoomCode),
   roundId: z.string().min(1),
-  bets: z.array(BetSchema).min(1).max(8),
+  bets: z.array(
+    z.object({
+      side: z.enum([
+        "PLAYER", "BANKER", "TIE",
+        "PLAYER_PAIR", "BANKER_PAIR",
+        "ANY_PAIR", "PERFECT_PAIR", "BANKER_SUPER_SIX"
+      ]),
+      amount: z.number().int().positive()
+    })
+  ).min(1)
 });
 
 export async function POST(req: NextRequest) {
   const auth = await getUserFromRequest(req);
-  if (!auth) {
-    return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 });
-  }
+  if (!auth) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 });
 
   const body = await req.json().catch(() => null);
-  const parsed = BodySchema.safeParse(body);
+  const parsed = BetSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ ok: false, error: "BAD_BODY", detail: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "BAD_BODY" }, { status: 400 });
   }
 
-  const { room, roundId, bets } = parsed.data; // room 現在是 RoomCode 型別
   try {
     const { wallet, accepted } = await placeBets(
       auth.id,
-      room as RoomCode,
-      roundId,
-      bets as BetInput[]
+      parsed.data.room,            // ✅ 這裡就是 RoomCode，不會再是 string
+      parsed.data.roundId,
+      parsed.data.bets as BetInput[]
     );
     return NextResponse.json({ ok: true, wallet, accepted });
   } catch (e: any) {
-    const msg = String(e?.message ?? "BET_FAIL");
-    const status = msg.includes("PHASE") || msg.includes("ROUND") ? 409
-                 : msg.includes("BALANCE") ? 402
-                 : 400;
-    return NextResponse.json({ ok: false, error: msg }, { status });
+    return NextResponse.json({ ok: false, error: String(e?.message ?? "BET_FAIL") }, { status: 400 });
   }
 }
