@@ -1,7 +1,7 @@
 // app/page.tsx  或 app/(public)/page.tsx
 "use client";
 
-// 一次載入大廳樣式 + 頭框特效樣式（保持你現有）
+// ✅ 一次載入大廳樣式 + 頭框特效樣式
 import "@/public/styles/lobby.css";
 import "@/public/styles/headframes.css";
 
@@ -14,6 +14,7 @@ import ProfileCard from "@/components/lobby/ProfileCard";
 import GameCard from "@/components/lobby/GameCard";
 import ChatBox from "@/components/lobby/ChatBox";
 import ServiceWidget from "@/components/lobby/ServiceWidget";
+import Leaderboard from "@/components/lobby/Leaderboard";
 
 type Me = {
   id: string;
@@ -26,9 +27,25 @@ type Me = {
   panelTint?: string | null;
 };
 
+type LbItem = {
+  rank: number;
+  displayName: string;
+  avatarUrl?: string | null;
+  vipTier: number;
+  netProfit: number;
+  headframe?: string | null;
+  panelTint?: string | null;
+};
+
 export default function LobbyPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
+
+  // 跑馬燈資料
+  const [marquee, setMarquee] = useState<string[]>([]);
+
+  // 週排行榜
+  const [weeklyLB, setWeeklyLB] = useState<LbItem[]>([]);
 
   useEffect(() => {
     fetch("/api/users/me", { credentials: "include" })
@@ -37,12 +54,34 @@ export default function LobbyPage() {
       .catch(() => setMe(null));
   }, []);
 
+  // 跑馬燈
+  useEffect(() => {
+    fetch("/api/marquee", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => setMarquee(d.texts ?? []))
+      .catch(() => setMarquee([]));
+  }, []);
+
+  // 週排行榜
+  useEffect(() => {
+    fetch("/api/leaderboard?period=WEEKLY&limit=10", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => setWeeklyLB(d.items ?? []))
+      .catch(() => setWeeklyLB([]));
+  }, []);
+
   async function onLogout() {
     try {
       setLoggingOut(true);
-      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
-    } catch {}
-    window.location.href = "/login";
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch {
+      // ignore
+    } finally {
+      window.location.href = "/login";
+    }
   }
 
   return (
@@ -58,13 +97,11 @@ export default function LobbyPage() {
         </div>
 
         <div className="center">
-          <AnnouncementTicker
-            items={[
-              "🎉 新手禮包開放領取！",
-              "🔥 百家樂 R60 房間將於 21:00 開新局",
-              "💎 連續簽到 7 天可抽稀有徽章",
-            ]}
-          />
+          <AnnouncementTicker items={marquee.length ? marquee : [
+            "🎉 新手禮包開放領取！",
+            "🔥 百家樂 R60 房間將於 21:00 開新局",
+            "💎 連續簽到 7 天可抽稀有徽章",
+          ]}/>
         </div>
 
         <div className="right" style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -101,35 +138,17 @@ export default function LobbyPage() {
             panelTint={me?.panelTint ?? undefined}
           />
 
-          <div className="lb-card">
-            <div className="lb-card-title">功能入口</div>
-            <div className="lb-actions">
-              {/* ⬇️ 這裡改成 /bank */}
-              <Link href="/bank" className="lb-btn">🏦 銀行</Link>
-              <Link href="/shop" className="lb-btn">🛍 商店</Link>
-              <Link href="/admin" className="lb-btn">⚙️ 管理</Link>
-            </div>
-          </div>
-
-          <div className="lb-card">
-            <div className="lb-card-title">排行榜（週）</div>
-            <ol className="lb-list">
-              <li>#1 王牌玩家 <span>+12,400</span></li>
-              <li>#2 LuckyStar <span>+8,210</span></li>
-              <li>#3 黑桃A <span>+6,420</span></li>
-              <li>#4 Neon <span>+4,900</span></li>
-              <li>#5 Nova <span>+3,110</span></li>
-            </ol>
-          </div>
-
+          {/* 公告卡片：簡單把公告列出（你也可以做成彈窗） */}
           <div className="lb-card">
             <div className="lb-card-title">公告 / 活動</div>
-            <ul className="lb-list soft">
-              <li>🎁 回饋活動加碼至 120%</li>
-              <li>🧧 連續登入送紅包券</li>
-              <li>🛠 系統維護 02:00 - 03:00</li>
+            <ul className="lb-list soft" id="ann-list">
+              {/* 預留：你要的就緒狀態，或之後拉 API */}
+              {/* 若想要即時拉 API，也可以在這裡 fetch /api/announcements */}
             </ul>
           </div>
+
+          {/* 週排行榜：換成動態 */}
+          <Leaderboard title="排行榜（週）" items={weeklyLB} />
         </aside>
 
         {/* 中欄 */}
