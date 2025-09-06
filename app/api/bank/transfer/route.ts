@@ -1,3 +1,4 @@
+// app/api/bank/transfer/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getUserFromRequest } from "@/lib/auth";
@@ -17,14 +18,22 @@ export async function POST(req: NextRequest) {
     const auth = await getUserFromRequest(req);
     if (!auth?.id) return NextResponse.json({ ok: false }, { status: 401 });
 
-    const json = await req.json().catch(() => null);
-    const parsed = Body.safeParse(json);
+    const parsed = Body.safeParse(await req.json());
     if (!parsed.success) return NextResponse.json({ ok: false, error: "BAD_BODY" }, { status: 400 });
 
-    const { wallet, bank } = await transfer(auth.id, parsed.data.toUserId, parsed.data.amount, parsed.data.memo);
-    return NextResponse.json({ ok: true, wallet, bank });
-  } catch (e) {
+    const { wallet, bank, recipientBank } = await transfer(
+      auth.id,
+      parsed.data.toUserId,
+      parsed.data.amount,
+      parsed.data.memo
+    );
+    return NextResponse.json({ ok: true, wallet, bank, recipientBank });
+  } catch (e: any) {
     console.error("BANK_TRANSFER", e);
-    return NextResponse.json({ ok: false, error: String((e as Error).message || "INTERNAL") }, { status: 400 });
+    const msg = String(e?.message || "INTERNAL");
+    const code = ["AMOUNT_INVALID", "SELF_TRANSFER_NOT_ALLOWED", "BANK_NOT_ENOUGH", "DAILY_OUT_LIMIT"].includes(msg)
+      ? 400
+      : 500;
+    return NextResponse.json({ ok: false, error: msg }, { status: code });
   }
 }
