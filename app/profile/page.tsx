@@ -81,14 +81,13 @@ export default function ProfilePage() {
     }
   };
 
-  // 儲存（重點：空字串→省略，只送允許欄位）
+  // 儲存（空字串→省略，只送允許欄位）
   const onSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (saving) return;
     setSaving(true);
     setToast(null);
 
-    // 允許被更新的欄位白名單
     const ALLOWED: (keyof Me)[] = [
       "displayName",
       "nickname",
@@ -100,7 +99,6 @@ export default function ProfilePage() {
       "panelTint",
     ];
 
-    // 將空字串清空（避免後端 enum/格式 400）
     const normalize = (v: unknown) => {
       if (typeof v === "string") {
         const s = v.trim();
@@ -125,7 +123,6 @@ export default function ProfilePage() {
         body: JSON.stringify(payload),
       });
 
-      // 未登入直接回登入
       if (res.status === 401) {
         window.location.href = "/login?next=/profile";
         return;
@@ -138,7 +135,6 @@ export default function ProfilePage() {
         return;
       }
 
-      // 更新畫面資料
       if (d?.user) setMe(d.user);
       setToast({ type: "ok", text: "已更新 ✅" });
     } catch {
@@ -169,15 +165,9 @@ export default function ProfilePage() {
           <span className="pf-sub">PROFILE</span>
         </div>
         <nav className="right">
-          <Link className="pf-nav" href="/">
-            大廳
-          </Link>
-          <Link className="pf-nav" href="/wallet">
-            錢包
-          </Link>
-          <Link className="pf-nav" href="/shop">
-            商店
-          </Link>
+          <Link className="pf-nav" href="/">大廳</Link>
+          <Link className="pf-nav" href="/wallet">錢包</Link>
+          <Link className="pf-nav" href="/shop">商店</Link>
         </nav>
       </header>
 
@@ -294,9 +284,7 @@ export default function ProfilePage() {
             <button className="pf-btn" disabled={saving || loading}>
               {saving ? "儲存中…" : "儲存變更"}
             </button>
-            <Link className="pf-btn ghost" href="/">
-              回大廳
-            </Link>
+            <Link className="pf-btn ghost" href="/">回大廳</Link>
           </div>
         </form>
 
