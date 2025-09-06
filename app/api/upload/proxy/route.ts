@@ -1,3 +1,4 @@
+// app/api/upload/proxy/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { s3Client, R2_BUCKET } from "@/lib/r2";
@@ -17,8 +18,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "EMPTY_BODY" }, { status: 404 });
     }
 
-    // 取 bytes -> 安全轉成 ArrayBuffer
-    const bytes = await out.Body.transformToByteArray(); // Uint8Array
+    const bytes = await out.Body.transformToByteArray();
     const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 
     const contentType = out.ContentType || "application/octet-stream";
