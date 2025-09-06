@@ -1,21 +1,20 @@
 // components/lobby/ProfileCard.tsx
-"use client";
 import React from "react";
 import Link from "next/link";
 
-type Props = {
+type ProfileCardProps = {
   displayName: string;
   avatarUrl?: string;
   vipTier: number;
   wallet: number;
   bank: number;
-  /** 新增：頭框代碼（對應你的 CSS：hf-xxx） */
-  headframe?: string | null;
-  /** 新增：面板色（HEX 或 key），會掛在 CSS 變數 --pf-tint 上 */
-  panelTint?: string | null;
+  /** 新增：頭框代碼（用於加上對應 CSS 類名，例如 hf-gold / hf-neon） */
+  headframe?: string;
+  /** 新增：面板/霓虹色彩（傳 HEX 或預設 key），會寫到 CSS 變數 --pf-tint */
+  panelTint?: string;
 };
 
-const ProfileCard: React.FC<Props> = ({
+export default function ProfileCard({
   displayName,
   avatarUrl,
   vipTier,
@@ -23,29 +22,30 @@ const ProfileCard: React.FC<Props> = ({
   bank,
   headframe,
   panelTint,
-}) => {
-  const hfClass = headframe ? `hf-${String(headframe).toLowerCase()}` : "hf-none";
-  const styleVar = panelTint ? ({ ["--pf-tint" as any]: panelTint } as React.CSSProperties) : undefined;
+}: ProfileCardProps) {
+  // 準備頭框類名與 tint 變數（可不傳，樣式就走預設）
+  const frameClass = headframe ? `hf-${String(headframe).toLowerCase()}` : "hf-none";
+  const tintStyle = panelTint
+    ? ({ ["--pf-tint" as any]: panelTint } as React.CSSProperties)
+    : undefined;
 
   return (
-    <div className="lb-card">
-      <div className="lb-card-title">玩家資訊</div>
-
-      {/* 頭像 + 頭框（與個人頁同步命名） */}
-      <div className="lb-profile-row">
-        <div className={`pf-avatar ${hfClass}`} style={styleVar}>
-          <div className="pf-ava-core">
+    <div className="lb-card lb-profile" style={tintStyle}>
+      <div className="lb-profile-top">
+        <div className={`lb-avatar ${frameClass}`}>
+          <div className="lb-ava-core">
             {avatarUrl ? (
               <img src={avatarUrl} alt="avatar" />
             ) : (
-              <div className="pf-ava-fallback">👤</div>
+              <div className="lb-ava-fallback">👤</div>
             )}
           </div>
-          <div className="pf-ava-frame" />
-          <div className="pf-ava-glow" />
+          {/* 這兩層給頭框/光暈用；對應你的 CSS（若沒有會被忽略，不影響佈局） */}
+          <div className="lb-ava-frame" />
+          <div className="lb-ava-glow" />
         </div>
 
-        <div className="lb-user-meta">
+        <div className="lb-user">
           <div className="lb-name">{displayName}</div>
           <div className="lb-vip">VIP {vipTier}</div>
         </div>
@@ -62,11 +62,14 @@ const ProfileCard: React.FC<Props> = ({
         </div>
       </div>
 
-      <div className="lb-actions" style={{ marginTop: 12 }}>
-        <Link href="/profile" className="lb-btn">✏️ 編輯個人資料</Link>
+      <div className="lb-profile-actions">
+        <Link href="/profile" className="lb-btn small">
+          個人資料
+        </Link>
+        <Link href="/wallet" className="lb-btn small ghost">
+          錢包/銀行
+        </Link>
       </div>
     </div>
   );
-};
-
-export default ProfileCard;
+}
