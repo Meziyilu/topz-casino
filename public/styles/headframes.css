@@ -1,183 +1,41 @@
-/* =============== 動態頭框（CSS-only） ===============
- * 套用在 .pf-ava-frame 上：<div class="pf-ava-frame hf--neon"></div>
- * 每一款都用 ::before / ::after 畫環形 + 動畫
- * 已考慮效能：pointer-events: none; will-change; 降速偏好
- */
+/* 獨立的頭像/頭框樣式，供 Lobby & Profile 共用 */
+/* 可以和你現有的 profile.css 風格一致；命名使用 lb- 避免衝突 */
 
-/* 基底：你的 .pf-ava-frame 已存在，這裡補一些安全值 */
-.pf-ava-frame {
-  position: absolute;
-  inset: -8px;           /* 比頭像略大一圈 */
+.lb-avatar {
+  position: relative;
+  width: 72px;
+  aspect-ratio: 1;
   border-radius: 50%;
-  pointer-events: none;
-  z-index: 2;
-  overflow: visible;
+  overflow: hidden;
+  transform-style: preserve-3d;
+}
+.lb-ava-core { position: relative; width: 100%; height: 100%; border-radius: 50%; overflow: hidden; }
+.lb-ava-core img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.lb-ava-fallback {
+  width: 100%; height: 100%; display: grid; place-items: center;
+  background: rgba(255,255,255,.05); color: #cbd5e1; font-size: 26px;
 }
 
-/* 共用：做出「圓環遮罩」的工具層（透明中心、外圈可發光） */
-.hf--neon::before,
-.hf--aurora::before,
-.hf--pulse::before,
-.hf--circuit::before,
-.hf--stars::before,
-.hf--flame::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  /* 用遮罩把中心挖空，讓中間不蓋住頭像 */
-  --ring-thickness: 8px;
-  mask:
-    radial-gradient(farthest-side,
-      transparent calc(50% - var(--ring-thickness)),
-      #000 calc(50% - var(--ring-thickness) + 1px)); /* 1px 反鋸齒 */
-  -webkit-mask:
-    radial-gradient(farthest-side,
-      transparent calc(50% - var(--ring-thickness)),
-      #000 calc(50% - var(--ring-thickness) + 1px));
+/* 霓虹外框 & 燈光 */
+.lb-ava-frame {
+  position: absolute; inset: -6px; border-radius: 50%;
+  background: conic-gradient(from 0deg, rgba(90,200,250,.7), rgba(167,139,250,.8), rgba(52,211,153,.7), rgba(90,200,250,.7));
+  filter: blur(10px); opacity: .7; pointer-events: none;
+}
+.lb-ava-glow {
+  position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+  box-shadow: 0 0 24px rgba(96,165,250,.24), inset 0 0 18px rgba(255,255,255,.06);
 }
 
-/* 柔光層（可選）：為外圈增加柔和外擴光影 */
-.hf--neon::after,
-.hf--aurora::after,
-.hf--pulse::after,
-.hf--circuit::after,
-.hf--stars::after,
-.hf--flame::after {
-  content: "";
-  position: absolute;
-  inset: -8px; /* 外擴一點讓光暈出來 */
-  border-radius: 50%;
-  filter: blur(14px);
-  opacity: .55;
-  pointer-events: none;
-  z-index: -1;
-}
+/* 主色（面板色） */
+.lb-avatar { --pf-tint: #00d1ff; }
 
-/* 旋轉動畫（多款共用） */
-@keyframes hf-rot {
-  to { transform: rotate(360deg); }
-}
+/* 不同頭框外觀（可按需求擴充） */
+.hf-none .lb-ava-frame { display: none; }
+.hf-gold  .lb-ava-frame { background: conic-gradient(from 0deg,#ffd54a,#ffae00,#ff8a00,#ffd54a); }
+.hf-cyan  .lb-ava-frame { background: conic-gradient(from 0deg,#67e8f9,#60a5fa,#22d3ee,#67e8f9); }
+.hf-royal .lb-ava-frame { background: conic-gradient(from 0deg,#a78bfa,#60a5fa,#f0abfc,#a78bfa); }
+.hf-neon  .lb-ava-frame { background: conic-gradient(from 0deg,var(--pf-tint), #a78bfa, #34d399, var(--pf-tint)); }
 
-/* 脈衝（縮放 + 亮度） */
-@keyframes hf-pulse {
-  0%, 100% { transform: scale(1); filter: brightness(1); }
-  50%      { transform: scale(1.03); filter: brightness(1.22); }
-}
-
-/* 線段掃描（Aurora/Flame 使用） */
-@keyframes hf-sweep {
-  from { background-position: 0% 50%, 0% 50%; }
-  to   { background-position: 360% 50%, 360% 50%; }
-}
-
-/* 微閃爍（Stars 使用） */
-@keyframes hf-twinkle {
-  0%, 100% { opacity: .7; filter: brightness(1); }
-  50%      { opacity: 1;  filter: brightness(1.15); }
-}
-
-/* 使用者偏好減少動態：放慢所有動畫 */
-@media (prefers-reduced-motion: reduce) {
-  [class*="hf--"]::before, [class*="hf--"]::after {
-    animation-duration: 24s !important;
-  }
-}
-
-/* =============== 1) NEON 霓虹旋轉環 =============== */
-.hf--neon::before {
-  background:
-    conic-gradient(
-      from 0deg,
-      rgba(90,200,250,.0) 0deg,
-      rgba(90,200,250,.9) 60deg,
-      rgba(167,139,250,.9) 120deg,
-      rgba(52,211,153,.9) 180deg,
-      rgba(90,200,250,.9) 240deg,
-      rgba(167,139,250,.9) 300deg,
-      rgba(90,200,250,.0) 360deg
-    );
-  animation: hf-rot 6s linear infinite;
-  box-shadow:
-    0 0 28px rgba(90,200,250,.35),
-    inset 0 0 12px rgba(167,139,250,.25);
-  will-change: transform;
-}
-.hf--neon::after {
-  background: radial-gradient(closest-side, rgba(96,165,250,.45), transparent 70%);
-}
-
-/* =============== 2) AURORA 極光掃描 =============== */
-.hf--aurora::before {
-  /* 兩層在背景平移造成流光掃描 */
-  background:
-    radial-gradient(120% 60% at 0% 50%, rgba(96,165,250,.28), transparent 60%),
-    radial-gradient(120% 60% at 100% 50%, rgba(167,139,250,.26), transparent 60%);
-  background-repeat: no-repeat;
-  background-size: 200% 100%, 200% 100%;
-  animation: hf-sweep 4.5s linear infinite;
-  box-shadow: inset 0 0 10px rgba(255,255,255,.1);
-}
-.hf--aurora::after {
-  background: radial-gradient(closest-side, rgba(167,139,250,.36), transparent 70%);
-}
-
-/* =============== 3) PULSE 霓虹脈衝 =============== */
-.hf--pulse::before {
-  background:
-    conic-gradient(from 0deg,
-      rgba(99,102,241,.0) 0deg,
-      rgba(99,102,241,.7) 90deg,
-      rgba(56,189,248,.8) 180deg,
-      rgba(16,185,129,.7) 270deg,
-      rgba(99,102,241,.0) 360deg);
-  animation: hf-pulse 2.2s ease-in-out infinite, hf-rot 12s linear infinite;
-  box-shadow: 0 0 20px rgba(56,189,248,.35);
-}
-.hf--pulse::after {
-  background: radial-gradient(closest-side, rgba(56,189,248,.3), transparent 70%);
-}
-
-/* =============== 4) CIRCUIT 電路環（斷續線段旋轉） =============== */
-.hf--circuit::before {
-  --dash-color: rgba(148,163,184,.95);
-  background:
-    repeating-conic-gradient(
-      from 0deg,
-      var(--dash-color) 0deg 8deg,
-      transparent 8deg 18deg
-    );
-  filter: drop-shadow(0 0 12px rgba(148,163,184,.35));
-  animation: hf-rot 5.5s linear infinite;
-}
-.hf--circuit::after {
-  background: radial-gradient(closest-side, rgba(148,163,184,.3), transparent 70%);
-}
-
-/* =============== 5) STARS 星屑微閃（顆粒） =============== */
-.hf--stars::before {
-  background-image:
-    radial-gradient(circle at 30% 40%, rgba(255,255,255,.9) 0 1px, transparent 1px),
-    radial-gradient(circle at 60% 70%, rgba(255,255,255,.8) 0 1px, transparent 1px),
-    radial-gradient(circle at 80% 30%, rgba(255,255,255,.7) 0 1px, transparent 1px);
-  background-size: 140px 140px, 120px 120px, 160px 160px;
-  background-repeat: repeat;
-  animation: hf-twinkle 3.2s ease-in-out infinite;
-}
-.hf--stars::after {
-  background: radial-gradient(closest-side, rgba(255,255,255,.2), transparent 70%);
-}
-
-/* =============== 6) FLAME 熔光波紋（暖色流動） =============== */
-.hf--flame::before {
-  background:
-    radial-gradient(120% 60% at 0% 50%, rgba(251,146,60,.28), transparent 60%),
-    radial-gradient(120% 60% at 100% 50%, rgba(244,63,94,.28), transparent 60%);
-  background-size: 200% 100%, 200% 100%;
-  background-repeat: no-repeat;
-  animation: hf-sweep 3.6s linear infinite;
-  box-shadow: 0 0 18px rgba(244,63,94,.35);
-}
-.hf--flame::after {
-  background: radial-gradient(closest-side, rgba(251,146,60,.35), transparent 70%);
-}
+/* 小動畫（可選） */
+.lb-avatar:hover .lb-ava-frame { filter: blur(8px) brightness(1.1); }

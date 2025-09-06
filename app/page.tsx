@@ -11,6 +11,8 @@ import ProfileCard from "@/components/lobby/ProfileCard";
 import GameCard from "@/components/lobby/GameCard";
 import ChatBox from "@/components/lobby/ChatBox";
 import ServiceWidget from "@/components/lobby/ServiceWidget";
+import "@/public/styles/headframes.css";
+
 
 type Me = {
   id: string;
