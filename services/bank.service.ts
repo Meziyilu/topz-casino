@@ -1,22 +1,39 @@
-// services/bank.service.ts
-import { prisma } from "@/lib/prisma";
-import { LedgerKind, LedgerTarget } from "@prisma/client";
+// services/bank.service.ts  —— 無 Prisma enum 版本（用字串 union）
+// 如未來在 Prisma 新增 enum LedgerKind/LedgerTarget，再把最上方兩個 type 換回 Prisma 的 enum
 
-// 參數統一用「整數點數」，1 = 1 元（如需小數，請在 UI 層乘以 100）
+import { prisma } from "@/lib/prisma";
+
+// ===== 如果你日後在 Prisma 定義 enum，可改用：
+// import { Prisma } from "@prisma/client";
+// type Kind = Prisma.LedgerKind;
+// type Target = Prisma.LedgerTarget;
+// ===== 目前用字面字串，與資料庫中的文字對應 =====
+type Kind =
+  | "DEPOSIT"   // 錢包→銀行
+  | "WITHDRAW"  // 銀行→錢包
+  | "TRANSFER"  // 銀行→他人銀行
+  | "ADJUST"
+  | "BONUS"
+  | "WIN"
+  | "LOSE";
+
+type Target = "WALLET" | "BANK";
+
+// 參數統一用「整數點數」，1 = 1 元
 const envInt = (key: string, def: number) => {
   const v = process.env[key];
   const n = v ? parseInt(v, 10) : NaN;
   return Number.isFinite(n) ? n : def;
 };
 
-// 可改環境變數控制限制
+// 可用環境變數覆蓋
 const BANK_DEPOSIT_MIN   = envInt("BANK_DEPOSIT_MIN",   1);
 const BANK_DEPOSIT_MAX   = envInt("BANK_DEPOSIT_MAX",   1_000_000);
 const BANK_WITHDRAW_MIN  = envInt("BANK_WITHDRAW_MIN",  1);
 const BANK_WITHDRAW_MAX  = envInt("BANK_WITHDRAW_MAX",  1_000_000);
 const BANK_TRANSFER_MIN  = envInt("BANK_TRANSFER_MIN",  1);
 const BANK_TRANSFER_MAX  = envInt("BANK_TRANSFER_MAX",  1_000_000);
-const BANK_DAILY_OUT_MAX = envInt("BANK_DAILY_OUT_MAX", 2_000_000); // 每日銀行流出（提領+轉帳）上限
+const BANK_DAILY_OUT_MAX = envInt("BANK_DAILY_OUT_MAX", 2_000_000);
 
 export async function getBalances(userId: string) {
   const user = await prisma.user.findUnique({
@@ -28,13 +45,12 @@ export async function getBalances(userId: string) {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
 
-  // 今日銀行流出金額（WITHDRAW + TRANSFER，amount 為正/負不重要，我們取正值求和）
   const todayOut = await prisma.ledger.aggregate({
     _sum: { amount: true },
     where: {
       userId,
-      target: "BANK",
-      kind: { in: ["WITHDRAW", "TRANSFER"] },
+      target: "BANK" as Target,
+      kind: { in: ["WITHDRAW", "TRANSFER"] as Kind[] },
       createdAt: { gte: start },
     },
   });
@@ -68,8 +84,8 @@ export async function deposit(userId: string, amount: number, memo?: string) {
     await tx.ledger.create({
       data: {
         userId,
-        target: LedgerTarget.BANK,
-        kind: LedgerKind.DEPOSIT,
+        target: "BANK",
+        kind: "DEPOSIT",
         amount,
         walletAfter: upd.balance,
         bankAfter: upd.bankBalance,
@@ -87,21 +103,19 @@ export async function withdraw(userId: string, amount: number, memo?: string) {
   }
 
   return prisma.$transaction(async (tx) => {
-    const now = new Date();
-    const start = new Date(now);
+    const start = new Date();
     start.setHours(0, 0, 0, 0);
 
     const user = await tx.user.findUnique({ where: { id: userId }, select: { balance: true, bankBalance: true } });
     if (!user) throw new Error("USER_NOT_FOUND");
     if (user.bankBalance < amount) throw new Error("BANK_NOT_ENOUGH");
 
-    // 今日流出
     const todayOut = await tx.ledger.aggregate({
       _sum: { amount: true },
       where: {
         userId,
         target: "BANK",
-        kind: { in: ["WITHDRAW", "TRANSFER"] },
+        kind: { in: ["WITHDRAW", "TRANSFER"] as Kind[] },
         createdAt: { gte: start },
       },
     });
@@ -120,8 +134,8 @@ export async function withdraw(userId: string, amount: number, memo?: string) {
     await tx.ledger.create({
       data: {
         userId,
-        target: LedgerTarget.BANK,
-        kind: LedgerKind.WITHDRAW,
+        target: "BANK",
+        kind: "WITHDRAW",
         amount,
         walletAfter: upd.balance,
         bankAfter: upd.bankBalance,
@@ -140,8 +154,7 @@ export async function transfer(userId: string, toUserId: string, amount: number,
   }
 
   return prisma.$transaction(async (tx) => {
-    const now = new Date();
-    const start = new Date(now);
+    const start = new Date();
     start.setHours(0, 0, 0, 0);
 
     const [from, to] = await Promise.all([
@@ -152,13 +165,12 @@ export async function transfer(userId: string, toUserId: string, amount: number,
     if (!to) throw new Error("TARGET_NOT_FOUND");
     if (from.bankBalance < amount) throw new Error("BANK_NOT_ENOUGH");
 
-    // 今日流出
     const todayOut = await tx.ledger.aggregate({
       _sum: { amount: true },
       where: {
         userId,
         target: "BANK",
-        kind: { in: ["WITHDRAW", "TRANSFER"] },
+        kind: { in: ["WITHDRAW", "TRANSFER"] as Kind[] },
         createdAt: { gte: start },
       },
     });
@@ -179,8 +191,8 @@ export async function transfer(userId: string, toUserId: string, amount: number,
     await tx.ledger.create({
       data: {
         userId,
-        target: LedgerTarget.BANK,
-        kind: LedgerKind.TRANSFER,
+        target: "BANK",
+        kind: "TRANSFER",
         amount,
         walletAfter: fromUpd.balance,
         bankAfter: fromUpd.bankBalance,
@@ -191,10 +203,10 @@ export async function transfer(userId: string, toUserId: string, amount: number,
     await tx.ledger.create({
       data: {
         userId: toUserId,
-        target: LedgerTarget.BANK,
-        kind: LedgerKind.TRANSFER,
+        target: "BANK",
+        kind: "TRANSFER",
         amount,
-        walletAfter: 0, // 對方的 walletAfter 沒變（此欄只是展示用途），可填 0 或對方當前錢包
+        walletAfter: 0, // 對方錢包未變更（純展示）
         bankAfter: toUpd.bankBalance,
         memo: `FROM:${userId}`.slice(0, 120),
         refUserId: userId,
