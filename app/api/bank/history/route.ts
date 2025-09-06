@@ -1,4 +1,3 @@
-// app/api/bank/history/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth";
 import { getHistory } from "@/services/bank.service";
@@ -13,10 +12,10 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const cursor = searchParams.get("cursor");
-    const limit = Math.max(1, Math.min(50, Number(searchParams.get("limit") || 20)));
+    const limit  = parseInt(searchParams.get("limit") || "20", 10);
 
-    const r = await getHistory(auth.id, cursor, limit);
-    return NextResponse.json({ ok: true, ...r });
+    const data = await getHistory(auth.id, cursor, Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 100) : 20);
+    return NextResponse.json({ ok: true, ...data });
   } catch (e) {
     console.error("BANK_HISTORY", e);
     return NextResponse.json({ ok: false, error: "INTERNAL" }, { status: 500 });

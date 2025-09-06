@@ -1,4 +1,3 @@
-// app/api/bank/me/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth";
 import { getBalances } from "@/services/bank.service";
@@ -11,10 +10,10 @@ export async function GET(req: NextRequest) {
     const auth = await getUserFromRequest(req);
     if (!auth?.id) return NextResponse.json({ ok: false }, { status: 401 });
 
-    const q = await getBalances(auth.id);
-    return NextResponse.json({ ok: true, ...q });
+    const data = await getBalances(auth.id);
+    return NextResponse.json({ ok: true, ...data });
   } catch (e) {
-    console.error("BANK_ME", e);
+    console.error("BANK_ME_GET", e);
     return NextResponse.json({ ok: false, error: "INTERNAL" }, { status: 500 });
   }
 }
