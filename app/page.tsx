@@ -19,7 +19,7 @@ type Me = {
   bankBalance: number;
   vipTier: number;
   avatarUrl?: string | null;
-  // 對齊後端，預留頭框／面板色
+  // 對齊後端：頭框／面板色（和 Profile 頁同步）
   headframe?: string | null;
   panelTint?: string | null;
 };
@@ -40,11 +40,15 @@ export default function LobbyPage() {
       setLoggingOut(true);
       await fetch("/api/auth/logout", {
         method: "POST",
-        credentials: "include",
+        credentials: "include", // 需要帶 cookie
+        // 不要加 headers/Content-Type，避免 Edge 對 body 解析而報錯
       });
-    } catch {}
-    // 無論成功與否都導回登入
-    window.location.href = "/login";
+    } catch {
+      // 忽略
+    } finally {
+      // 無論成功與否都導回登入
+      window.location.href = "/login";
+    }
   }
 
   return (
@@ -99,6 +103,9 @@ export default function LobbyPage() {
             vipTier={me?.vipTier ?? 0}
             wallet={me?.balance ?? 0}
             bank={me?.bankBalance ?? 0}
+            // ✅ 新增：把頭框/面板色傳進去，讓大廳頭像特效和 Profile 一致
+            headframe={me?.headframe ?? undefined}
+            panelTint={me?.panelTint ?? undefined}
           />
 
           <div className="lb-card">

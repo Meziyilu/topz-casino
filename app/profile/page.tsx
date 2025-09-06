@@ -15,10 +15,13 @@ type Me = {
   vipTier: number;
   balance: number;
   bankBalance: number;
-  headframe?: string | null;  // 前端以字串呈現，後端會驗證/正規化
+  headframe?: string | null;  // 前端以字串呈現，後端驗證/正規化
   panelStyle?: string | null;
   panelTint?: string | null;
 };
+
+const CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "";
+const UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "";
 
 export default function ProfilePage() {
   const [me, setMe] = useState<Me | null>(null);
@@ -56,47 +59,41 @@ export default function ProfilePage() {
     setForm((s) => ({ ...s, [name]: value }));
   };
 
-  // 上傳頭像（改成前端直傳 R2：/api/upload/avatar-url -> PUT 到 R2）
+  // 上傳頭像（前端直傳 Cloudinary，無需經過自家後端）
   const onPickAvatar = async (f?: File | null) => {
     if (!f) return;
 
-    // 1) 先向後端拿到簽名 URL
-    let signed: { uploadUrl: string; publicUrl: string } | null = null;
+    if (!CLOUD_NAME || !UPLOAD_PRESET) {
+      setToast({ type: "err", text: "未設定 Cloudinary 環境變數" });
+      setTimeout(() => setToast(null), 1500);
+      return;
+    }
+
     try {
-      const r = await fetch("/api/upload/avatar-url", {
+      const fd = new FormData();
+      fd.append("file", f);
+      fd.append("upload_preset", UPLOAD_PRESET);
+      // 如需固定資料夾，可在這裡加：fd.append("folder", "avatars");
+
+      // 不要手動設定 Content-Type，交給瀏覽器處理
+      const r = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ fileName: f.name, contentType: f.type }),
+        body: fd,
       });
-      signed = r.ok ? await r.json() : null;
-    } catch {
-      signed = null;
-    }
-    if (!signed?.uploadUrl) {
-      setToast({ type: "err", text: "取得上傳連結失敗" });
-      setTimeout(() => setToast(null), 1500);
-      return;
-    }
 
-    // 2) 直接 PUT 檔案到 R2（瀏覽器完成 TLS，避開 EPROTO）
-    try {
-      const put = await fetch(signed.uploadUrl, {
-        method: "PUT",
-        headers: { "content-type": f.type || "application/octet-stream" },
-        body: f,
-      });
-      if (!put.ok) throw new Error("PUT_FAILED");
-    } catch {
-      setToast({ type: "err", text: "上傳失敗（網路或權限）" });
-      setTimeout(() => setToast(null), 1500);
-      return;
-    }
+      const json = await r.json();
+      if (!r.ok || !json.secure_url) {
+        throw new Error(json?.error?.message || "UPLOAD_FAILED");
+      }
 
-    // 3) 成功後更新表單的 avatarUrl（公開可讀 URL）
-    setForm((s) => ({ ...s, avatarUrl: signed!.publicUrl }));
-    setToast({ type: "ok", text: "頭像已上傳 ✅" });
-    setTimeout(() => setToast(null), 1500);
+      // 成功後將 URL 暫存到表單，點「儲存變更」才寫回資料庫
+      setForm((s) => ({ ...s, avatarUrl: json.secure_url as string }));
+      setToast({ type: "ok", text: "頭像已上傳 ✅" });
+    } catch (err: any) {
+      setToast({ type: "err", text: `上傳失敗：${err?.message || "未知錯誤"}` });
+    } finally {
+      setTimeout(() => setToast(null), 1500);
+    }
   };
 
   // 儲存（空字串→省略，只送允許欄位）
