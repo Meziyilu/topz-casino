@@ -4,30 +4,34 @@ import { z } from "zod";
 import { placeBets } from "@/services/baccarat.service";
 import { getUserFromRequest } from "@/lib/auth";
 import type { BetInput } from "@/services/baccarat.service";
+import { RoomCode } from "@prisma/client";
 
 export async function POST(req: NextRequest) {
   const auth = await getUserFromRequest(req);
   if (!auth) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 });
 
   const body = await req.json().catch(() => null);
+
   const schema = z.object({
-    room: z.string(),
+    room: z.nativeEnum(RoomCode), // ★ 這裡改成 Prisma enum，避免變成 string
     roundId: z.string(),
-    bets: z.array(
-      z.object({
-        side: z.enum([
-          "PLAYER",
-          "BANKER",
-          "TIE",
-          "PLAYER_PAIR",
-          "BANKER_PAIR",
-          "ANY_PAIR",
-          "PERFECT_PAIR",
-          "BANKER_SUPER_SIX",
-        ]),
-        amount: z.number().int().positive(),
-      })
-    ).min(1),
+    bets: z
+      .array(
+        z.object({
+          side: z.enum([
+            "PLAYER",
+            "BANKER",
+            "TIE",
+            "PLAYER_PAIR",
+            "BANKER_PAIR",
+            "ANY_PAIR",
+            "PERFECT_PAIR",
+            "BANKER_SUPER_SIX",
+          ]),
+          amount: z.number().int().positive(),
+        })
+      )
+      .min(1),
   });
 
   const parsed = schema.safeParse(body);
@@ -38,7 +42,7 @@ export async function POST(req: NextRequest) {
   try {
     const { wallet, accepted } = await placeBets(
       auth.id,
-      parsed.data.room,
+      parsed.data.room,                // ★ 現在型別就是 RoomCode
       parsed.data.roundId,
       parsed.data.bets as BetInput[]
     );
