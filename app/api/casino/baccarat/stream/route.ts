@@ -1,6 +1,6 @@
 // app/api/casino/baccarat/stream/route.ts
 import { NextRequest } from "next/server";
-import { getRoomInfo } from "@/services/baccarat.service";
+import { getRoomInfo } from "services/baccarat.service";
 import { z } from "zod";
 import { RoomCode } from "@prisma/client";
 
