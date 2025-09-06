@@ -109,7 +109,7 @@
   width:40%; height:100%;
   background: linear-gradient(115deg, transparent 0%, rgba(255,255,255,.18) 50%, transparent 100%);
   transform: skewX(-15deg);
-  animation: pf-sheen 2.8s ease-in-out infinite;
+  animation: pf-sheen 4.8s ease-in-out infinite;
 }
 @keyframes pf-sheen{
   0% { left:-120% } 60% { left:130% } 100% { left:130% }
