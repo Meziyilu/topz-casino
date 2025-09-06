@@ -1,15 +1,19 @@
 // app/api/casino/baccarat/my/recent/route.ts
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getMyRecentBets } from "@/services/baccarat.service";
 import { getUserFromRequest } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
+export async function GET(req: Request) {
   const auth = await getUserFromRequest(req);
-  if (!auth?.id) return NextResponse.json({ ok: false }, { status: 401 });
+  if (!auth) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 });
 
-  const items = await getMyRecentBets(auth.id, 20);
-  return NextResponse.json({ ok: true, items });
+  try {
+    const bets = await getMyRecentBets(auth.id);
+    return NextResponse.json({ ok: true, bets });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: String(e?.message ?? "RECENT_FAIL") }, { status: 500 });
+  }
 }

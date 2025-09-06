@@ -1,19 +1,24 @@
 // app/api/casino/baccarat/round/current/route.ts
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getCurrentWithMyBets } from "@/services/baccarat.service";
-import { getUserFromRequest } from "@/lib/auth";
 import { z } from "zod";
-import { RoomCode } from "@prisma/client";
+import { getUserFromRequest } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
-  const auth = await getUserFromRequest(req);
-  if (!auth?.id) return NextResponse.json({ ok: false }, { status: 401 });
-  const parsed = z.nativeEnum(RoomCode).safeParse(req.nextUrl.searchParams.get("room") as any);
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const schema = z.object({ room: z.string() });
+  const parsed = schema.safeParse({ room: url.searchParams.get("room") });
   if (!parsed.success) return NextResponse.json({ ok: false, error: "BAD_ROOM" }, { status: 400 });
 
-  const data = await getCurrentWithMyBets(auth.id, parsed.data);
-  return NextResponse.json({ ok: true, ...data });
+  const user = await getUserFromRequest(req).catch(() => null);
+
+  try {
+    const round = await getCurrentWithMyBets(parsed.data.room, user?.id ?? null);
+    return NextResponse.json({ ok: true, round });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: String(e?.message ?? "ROUND_FAIL") }, { status: 500 });
+  }
 }

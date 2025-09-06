@@ -2,15 +2,20 @@
 import { NextResponse } from "next/server";
 import { getRoomInfo } from "@/services/baccarat.service";
 import { z } from "zod";
-import { RoomCode } from "@prisma/client";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(_: Request, ctx: { params: { code: string } }) {
-  const parsed = z.nativeEnum(RoomCode).safeParse(ctx.params.code as any);
-  if (!parsed.success) return NextResponse.json({ ok: false, error: "BAD_ROOM" }, { status: 400 });
+  const parsed = z.object({ code: z.string() }).safeParse(ctx.params);
+  if (!parsed.success) {
+    return NextResponse.json({ ok: false, error: "BAD_CODE" }, { status: 400 });
+  }
 
-  const room = await getRoomInfo(parsed.data);
-  return NextResponse.json({ ok: true, room });
+  try {
+    const info = await getRoomInfo(parsed.data.code);
+    return NextResponse.json({ ok: true, info });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: String(e?.message ?? "ROOM_INFO_FAIL") }, { status: 500 });
+  }
 }

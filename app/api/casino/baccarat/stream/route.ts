@@ -1,54 +1,36 @@
 // app/api/casino/baccarat/stream/route.ts
-import { NextRequest } from "next/server";
-import { getRoomInfo } from "services/baccarat.service";
-import { z } from "zod";
-import { RoomCode } from "@prisma/client";
+import { NextResponse } from "next/server";
+import { getRoomInfo } from "@/services/baccarat.service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
-  const roomStr = req.nextUrl.searchParams.get("room");
-  const parsed = z.nativeEnum(RoomCode).safeParse(roomStr as any);
-  if (!parsed.success) return new Response("BAD_ROOM", { status: 400 });
+// 簡化版：這裡用 SSE，可以替換成 WebSocket
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const room = searchParams.get("room");
+  if (!room) return NextResponse.json({ ok: false, error: "NO_ROOM" }, { status: 400 });
 
+  const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
-      const enc = new TextEncoder();
-      const send = (evt: string, data: any) => {
-        controller.enqueue(enc.encode(`event: ${evt}\n`));
-        controller.enqueue(enc.encode(`data: ${JSON.stringify(data)}\n\n`));
-      };
+      controller.enqueue(encoder.encode(`event: ping\ndata: hello\n\n`));
 
-      // 初始
-      const first = await getRoomInfo(parsed.data);
-      send("ROOM_STATE", first);
+      // 每 3 秒推送一次房間狀態（模擬）
+      const interval = setInterval(async () => {
+        const info = await getRoomInfo(room);
+        controller.enqueue(encoder.encode(`event: update\ndata: ${JSON.stringify(info)}\n\n`));
+      }, 3000);
 
-      const t = setInterval(async () => {
-        try {
-          const info = await getRoomInfo(parsed.data);
-          send("TICK", { countdown: info.countdown, phase: info.phase, roundId: info.roundId });
-        } catch {}
-      }, 1000);
-
-      const ping = setInterval(() => controller.enqueue(enc.encode(`: ping\n\n`)), 15000);
-
-      const close = () => {
-        clearInterval(t);
-        clearInterval(ping);
-        controller.close();
-      };
-      // @ts-ignore
-      req.signal?.addEventListener?.("abort", close);
+      req.signal.addEventListener("abort", () => clearInterval(interval));
     },
   });
 
-  return new Response(stream, {
+  return new NextResponse(stream, {
     headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
       Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
     },
   });
 }

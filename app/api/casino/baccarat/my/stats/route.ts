@@ -1,15 +1,19 @@
 // app/api/casino/baccarat/my/stats/route.ts
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getMyStats } from "@/services/baccarat.service";
 import { getUserFromRequest } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
+export async function GET(req: Request) {
   const auth = await getUserFromRequest(req);
-  if (!auth?.id) return NextResponse.json({ ok: false }, { status: 401 });
+  if (!auth) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 });
 
-  const data = await getMyStats(auth.id);
-  return NextResponse.json({ ok: true, ...data });
+  try {
+    const stats = await getMyStats(auth.id);
+    return NextResponse.json({ ok: true, stats });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: String(e?.message ?? "STATS_FAIL") }, { status: 500 });
+  }
 }

@@ -6,6 +6,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const rooms = await getRooms();
-  return NextResponse.json({ ok: true, rooms });
+  try {
+    const rooms = await getRooms();
+    return NextResponse.json({ ok: true, rooms });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: String(e?.message ?? "ROOMS_FAIL") }, { status: 500 });
+  }
 }
