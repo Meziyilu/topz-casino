@@ -1,22 +1,16 @@
+// lib/r2.ts
 import { S3Client } from "@aws-sdk/client-s3";
 
-export const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID!;
-export const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY!;
-export const R2_ENDPOINT = process.env.R2_ENDPOINT!;
 export const R2_BUCKET = process.env.R2_BUCKET!;
-export const R2_PUBLIC_BASE_URL = (process.env.R2_PUBLIC_BASE_URL || "").replace(/\/$/, "");
+export const R2_PUBLIC_BASE_URL = process.env.R2_PUBLIC_BASE_URL!; // 例如 https://pub-xxxxxx.r2.dev
 
-if (!R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY || !R2_ENDPOINT || !R2_BUCKET) {
-  // 在 render log 看到就知道缺了什麼
-  console.error("R2 ENV MISSING", { R2_ACCESS_KEY_ID: !!R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY: !!R2_SECRET_ACCESS_KEY, R2_ENDPOINT, R2_BUCKET });
-}
-
-export const s3 = new S3Client({
+// 只做 presign，不會向 R2 打任何請求
+export const r2Client = new S3Client({
   region: "auto",
-  endpoint: R2_ENDPOINT,        // <= 僅帳號主機名
+  endpoint: process.env.R2_ENDPOINT, // 例如 https://<accountid>.r2.cloudflarestorage.com
   credentials: {
-    accessKeyId: R2_ACCESS_KEY_ID,
-    secretAccessKey: R2_SECRET_ACCESS_KEY,
+    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
   },
-  forcePathStyle: true,         // <= R2 必須
+  forcePathStyle: true,
 });

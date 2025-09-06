@@ -56,29 +56,47 @@ export default function ProfilePage() {
     setForm((s) => ({ ...s, [name]: value }));
   };
 
-  // 上傳頭像（走 /api/upload/avatar）
+  // 上傳頭像（改成前端直傳 R2：/api/upload/avatar-url -> PUT 到 R2）
   const onPickAvatar = async (f?: File | null) => {
     if (!f) return;
-    const fd = new FormData();
-    fd.append("file", f);
+
+    // 1) 先向後端拿到簽名 URL
+    let signed: { uploadUrl: string; publicUrl: string } | null = null;
     try {
-      const r = await fetch("/api/upload/avatar", {
+      const r = await fetch("/api/upload/avatar-url", {
         method: "POST",
-        body: fd,
+        headers: { "content-type": "application/json" },
         credentials: "include",
+        body: JSON.stringify({ fileName: f.name, contentType: f.type }),
       });
-      const d = await r.json().catch(() => ({}));
-      if (r.ok && d.url) {
-        setForm((s) => ({ ...s, avatarUrl: d.url }));
-        setToast({ type: "ok", text: "頭像已上傳 ✅" });
-      } else {
-        setToast({ type: "err", text: d?.error ?? "上傳失敗" });
-      }
+      signed = r.ok ? await r.json() : null;
     } catch {
-      setToast({ type: "err", text: "上傳失敗（網路錯誤）" });
-    } finally {
-      setTimeout(() => setToast(null), 1500);
+      signed = null;
     }
+    if (!signed?.uploadUrl) {
+      setToast({ type: "err", text: "取得上傳連結失敗" });
+      setTimeout(() => setToast(null), 1500);
+      return;
+    }
+
+    // 2) 直接 PUT 檔案到 R2（瀏覽器完成 TLS，避開 EPROTO）
+    try {
+      const put = await fetch(signed.uploadUrl, {
+        method: "PUT",
+        headers: { "content-type": f.type || "application/octet-stream" },
+        body: f,
+      });
+      if (!put.ok) throw new Error("PUT_FAILED");
+    } catch {
+      setToast({ type: "err", text: "上傳失敗（網路或權限）" });
+      setTimeout(() => setToast(null), 1500);
+      return;
+    }
+
+    // 3) 成功後更新表單的 avatarUrl（公開可讀 URL）
+    setForm((s) => ({ ...s, avatarUrl: signed!.publicUrl }));
+    setToast({ type: "ok", text: "頭像已上傳 ✅" });
+    setTimeout(() => setToast(null), 1500);
   };
 
   // 儲存（空字串→省略，只送允許欄位）
@@ -129,7 +147,6 @@ export default function ProfilePage() {
       }
 
       const d = await res.json().catch(() => ({}));
-
       if (!res.ok) {
         setToast({ type: "err", text: d?.error ?? "儲存失敗" });
         return;
@@ -153,15 +170,13 @@ export default function ProfilePage() {
       <div className="pf-bg" />
       <div className="pf-particles" aria-hidden />
 
-      {/* 載入 CSS */}
+      {/* 載入 CSS（玻璃＋流光） */}
       <link rel="stylesheet" href="/styles/profile.css" />
 
       {/* Header */}
       <header className="pf-header">
         <div className="left">
-          <Link href="/" className="pf-logo">
-            TOPZCASINO
-          </Link>
+          <Link href="/" className="pf-logo">TOPZCASINO</Link>
           <span className="pf-sub">PROFILE</span>
         </div>
         <nav className="right">
@@ -171,16 +186,12 @@ export default function ProfilePage() {
         </nav>
       </header>
 
-      {/* HERO 卡（留白加大、玻璃＋流光） */}
+      {/* HERO 卡（頭像／VIP／餘額） */}
       <section className="pf-hero pf-tilt">
         <div className="pf-hero-left">
           <div
             className={`pf-avatar ${form.headframe ? `hf-${String(form.headframe).toLowerCase()}` : "hf-none"}`}
-            style={
-              form.panelTint
-                ? ({ ["--pf-tint" as any]: form.panelTint } as React.CSSProperties)
-                : undefined
-            }
+            style={form.panelTint ? ({ ["--pf-tint" as any]: form.panelTint } as React.CSSProperties) : undefined}
           >
             <div className="pf-ava-core">
               {form.avatarUrl ? (
@@ -221,7 +232,7 @@ export default function ProfilePage() {
         <div className="pf-hero-sheen" />
       </section>
 
-      {/* 編輯卡（網格放大間距，避免擁擠） */}
+      {/* 編輯卡（網格留白，避免擁擠） */}
       <section className="pf-card pf-tilt">
         <form className="pf-grid" onSubmit={onSave}>
           <div className="pf-field">
