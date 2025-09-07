@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Leaderboard from "@/components/Leaderboard"; // 你現有元件
+import Leaderboard from "components/Leaderboard"; // 你現有元件
 
 /* ================= Types ================= */
 type Outcome = "PLAYER" | "BANKER" | "TIE" | null;
