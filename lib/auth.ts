@@ -2,9 +2,8 @@
 import jwt from "jsonwebtoken";
 import type { NextRequest } from "next/server";
 
-/** 你目前沿用的 cookie 名稱 */
+/** 統一的 cookie 名稱 */
 const COOKIE_NAME = "token";
-
 /** JWT 秘鑰（避免 undefined） */
 const JWT_SECRET = (process.env.JWT_SECRET || "dev_secret") as jwt.Secret;
 
@@ -14,24 +13,30 @@ export type AuthUser = {
   isAdmin: boolean;
 };
 
-/** 解析 Cookie 字串的小工具（支援原生 Request 使用） */
+/** 解析 Cookie 字串（支援原生 Request 使用） */
 function parseCookie(headerValue?: string | null): Record<string, string> {
   const out: Record<string, string> = {};
   if (!headerValue) return out;
-  headerValue.split(";").forEach((kv) => {
+  // 依據 RFC6265 以 ';' 分割，再取第一個 '=' 作為 key/value
+  for (const seg of headerValue.split(";")) {
+    const kv = seg.trim();
+    if (!kv) continue;
     const i = kv.indexOf("=");
-    if (i > -1) {
-      const k = kv.slice(0, i).trim();
-      const v = kv.slice(i + 1).trim();
+    if (i <= 0) continue;
+    const k = kv.slice(0, i).trim();
+    const v = kv.slice(i + 1).trim();
+    try {
       out[k] = decodeURIComponent(v);
+    } catch {
+      out[k] = v;
     }
-  });
+  }
   return out;
 }
 
 /**
  * 取得登入者（支援 NextRequest 或原生 Request）
- * - 百家樂/銀行/個資的所有 API 都可以直接用這個
+ * - 百家樂 / 銀行 / 個資的所有 API 都可以直接用這個
  */
 export async function getUserFromRequest(
   req: NextRequest | Request
@@ -67,6 +72,9 @@ export async function getUserFromRequest(
     return null;
   }
 }
+
+/** ✅ 舊 API 兼容：別名，讓既有程式可以 import { getUserFromNextRequest } 不用改 */
+export const getUserFromNextRequest = getUserFromRequest;
 
 /** 只拿使用者 id（可選），常用於「可未登入」的公開讀取 API */
 export async function getOptionalUserId(
