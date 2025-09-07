@@ -2,38 +2,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getUserFromRequest } from "@/lib/auth";
-import { transfer } from "@/services/bank.service";
+import { transferBankToOther } from "@/services/wallet.service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const Body = z.object({
-  toUserId: z.string().min(1),
+  toUserId: z.string().min(10),
   amount: z.number().int().positive(),
-  memo: z.string().max(120).optional(),
 });
 
 export async function POST(req: NextRequest) {
+  const auth = await getUserFromRequest(req);
+  if (!auth) return NextResponse.json({ ok: false }, { status: 401 });
+
+  const parsed = Body.safeParse(await req.json().catch(() => ({})));
+  if (!parsed.success) return NextResponse.json({ ok: false, error: "BAD_BODY" }, { status: 400 });
+
   try {
-    const auth = await getUserFromRequest(req);
-    if (!auth?.id) return NextResponse.json({ ok: false }, { status: 401 });
-
-    const parsed = Body.safeParse(await req.json());
-    if (!parsed.success) return NextResponse.json({ ok: false, error: "BAD_BODY" }, { status: 400 });
-
-    const { wallet, bank, recipientBank } = await transfer(
-      auth.id,
-      parsed.data.toUserId,
-      parsed.data.amount,
-      parsed.data.memo
-    );
-    return NextResponse.json({ ok: true, wallet, bank, recipientBank });
+    const { from } = await transferBankToOther(auth.id, parsed.data.toUserId, parsed.data.amount);
+    return NextResponse.json({ ok: true, wallet: from.wallet, bank: from.bank });
   } catch (e: any) {
-    console.error("BANK_TRANSFER", e);
-    const msg = String(e?.message || "INTERNAL");
-    const code = ["AMOUNT_INVALID", "SELF_TRANSFER_NOT_ALLOWED", "BANK_NOT_ENOUGH", "DAILY_OUT_LIMIT"].includes(msg)
-      ? 400
-      : 500;
-    return NextResponse.json({ ok: false, error: msg }, { status: code });
+    return NextResponse.json({ ok: false, error: String(e?.message ?? "TRANSFER_FAIL") }, { status: 400 });
   }
 }

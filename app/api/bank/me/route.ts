@@ -1,22 +1,28 @@
 // app/api/bank/me/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth";
-import { getBalances, getTodayOut } from "@/services/bank.service";
+import { getBalances, getDailyOutSum, listLedgers } from "@/services/wallet.service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
+  const auth = await getUserFromRequest(req);
+  if (!auth) return NextResponse.json({ ok: false }, { status: 401 });
+
   try {
-    const auth = await getUserFromRequest(req);
-    if (!auth?.id) return NextResponse.json({ ok: false }, { status: 401 });
-
     const { wallet, bank } = await getBalances(auth.id);
-    const dailyOut = await getTodayOut(auth.id);
+    const dailyOut = await getDailyOutSum(auth.id);
+    const { items } = await listLedgers(auth.id, { target: "BANK", limit: 20 });
 
-    return NextResponse.json({ ok: true, wallet, bank, dailyOut });
+    return NextResponse.json({
+      ok: true,
+      wallet,
+      bank,
+      dailyOut,
+      recentLedgers: items,
+    });
   } catch (e) {
-    console.error("BANK_ME", e);
-    return NextResponse.json({ ok: false, error: "INTERNAL" }, { status: 500 });
+    return NextResponse.json({ ok: false, error: "BANK_ME_FAIL" }, { status: 500 });
   }
 }

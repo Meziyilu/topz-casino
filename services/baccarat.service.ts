@@ -1,169 +1,215 @@
 // services/baccarat.service.ts
 import { prisma } from "@/lib/prisma";
-import { RoomCode, BetSide, RoundPhase } from "@prisma/client";
-import { ReadableStream } from "stream/web";
+import {
+  RoomCode,
+  RoundPhase,
+  BetSide,
+  LedgerType,
+  BalanceTarget,
+} from "@prisma/client";
 
-// ======================== 型別 ========================
-export type BetInput = {
-  side: BetSide;
-  amount: number;
+/** 請在 app/api 以外使用：用於 API 路由的核心邏輯 */
+export type PublicRoom = { code: RoomCode; name: string; minBet: number; maxBet: number; secondsPerRound: number };
+export type PublicRound = {
+  id: string;
+  room: RoomCode;
+  phase: RoundPhase;
+  startedAt: string;
+  endsAt?: string | null;
+  outcome?: string | null;
+  // 近十局（只給顏色/簡要）
+  recent?: { id: string; outcome: string | null }[];
+  // 自己本局下注匯總（前端顯示）
+  myBets?: { side: BetSide; amount: number }[];
 };
 
-// ======================== 房間清單 ========================
-export async function getRooms() {
-  // 回傳所有房間資訊（可以在這裡定義房間設定）
-  return [
-    { code: RoomCode.R30, name: "百家樂 R30", secondsPerRound: 30 },
-    { code: RoomCode.R60, name: "百家樂 R60", secondsPerRound: 60 },
-    { code: RoomCode.R90, name: "百家樂 R90", secondsPerRound: 90 },
-  ];
+export type BetInput = { side: BetSide; amount: number };
+
+const ROOM_CONFIG: Record<RoomCode, PublicRoom> = {
+  R30: { code: "R30", name: "R30 房", minBet: 10, maxBet: 10000, secondsPerRound: 30 },
+  R60: { code: "R60", name: "R60 房", minBet: 10, maxBet: 10000, secondsPerRound: 60 },
+  R90: { code: "R90", name: "R90 房", minBet: 10, maxBet: 10000, secondsPerRound: 90 },
+};
+
+function now() { return new Date(); }
+function sec(n: number) { return n * 1000; }
+
+/** 取所有公開房間（靜態配置） */
+export async function getRooms(): Promise<PublicRoom[]> {
+  return [ROOM_CONFIG.R30, ROOM_CONFIG.R60, ROOM_CONFIG.R90];
 }
 
-// ======================== 房間資訊 ========================
-export async function getRoomInfo(code: RoomCode) {
-  const rooms = await getRooms();
-  const room = rooms.find((r) => r.code === code);
-  if (!room) throw new Error("ROOM_NOT_FOUND");
-  return room;
+/** 取單一房間資訊（靜態配置） */
+export async function getRoomInfo(code: RoomCode): Promise<PublicRoom> {
+  const rc = ROOM_CONFIG[code];
+  if (!rc) throw new Error("ROOM_NOT_FOUND");
+  return rc;
 }
 
-// ======================== 當前局（含玩家下注） ========================
-export async function getCurrentWithMyBets(userId: string, room: RoomCode) {
-  const round = await prisma.round.findFirst({
-    where: { room, phase: { not: "SETTLED" } },
-    orderBy: { startedAt: "desc" },
-  });
-
-  if (!round) return { round: null, myBets: [] };
-
-  const myBets = await prisma.bet.findMany({
-    where: { roundId: round.id, userId },
-  });
-
-  return { round, myBets };
-}
-
-// ======================== 歷史局 ========================
-export async function getPublicRounds(
-  room: RoomCode,
-  limit: number,
-  cursor?: string
-) {
+/** 近十局（公開） */
+export async function getPublicRounds(room: RoomCode, limit = 10, cursor?: string | null) {
+  const where = { room } as const;
   const items = await prisma.round.findMany({
-    where: { room, phase: "SETTLED" },
+    where,
     orderBy: { startedAt: "desc" },
-    take: limit + 1,
-    skip: cursor ? 1 : 0,
-    ...(cursor ? { cursor: { id: cursor } } : {}),
+    take: limit,
+    ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+    select: { id: true, outcome: true, startedAt: true, phase: true },
   });
-
-  let nextCursor: string | undefined = undefined;
-  if (items.length > limit) {
-    const nextItem = items.pop();
-    nextCursor = nextItem?.id;
-  }
-
+  const nextCursor = items.length === limit ? items[items.length - 1].id : null;
   return { items, nextCursor };
 }
 
-// ======================== 玩家近期下注 ========================
-export async function getMyRecentBets(userId: string) {
-  return prisma.bet.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-    take: 20,
+/** 取該房最新一局；若最新局已結算則不自動開新局（由系統或之後管理工具開） */
+export async function getCurrentRound(room: RoomCode) {
+  return prisma.round.findFirst({
+    where: { room },
+    orderBy: { startedAt: "desc" },
   });
 }
 
-// ======================== 玩家統計 ========================
-export async function getMyStats(userId: string) {
-  const [bets, wins] = await Promise.all([
-    prisma.bet.count({ where: { userId } }),
-    prisma.bet.count({
-      where: {
-        userId,
-        round: { outcome: { not: null } },
-        // 簡化：假設只要押中 outcome 就算贏
-      },
-    }),
-  ]);
+/** 取該房最新一局 + 我在這局的下注彙總 & 近十局 */
+export async function getCurrentWithMyBets(room: RoomCode, userId: string | null): Promise<PublicRound | null> {
+  const cur = await getCurrentRound(room);
+  if (!cur) return null;
 
-  return { bets, wins };
+  // 我的本局下注
+  let my: { side: BetSide; amount: number }[] | undefined = undefined;
+  if (userId) {
+    const rows = await prisma.bet.groupBy({
+      by: ["side"],
+      where: { roundId: cur.id, userId },
+      _sum: { amount: true },
+    });
+    my = rows.map(r => ({ side: r.side, amount: r._sum.amount ?? 0 }));
+  }
+
+  // 近十局
+  const last10 = await prisma.round.findMany({
+    where: { room },
+    orderBy: { startedAt: "desc" },
+    take: 10,
+    select: { id: true, outcome: true },
+  });
+
+  const rc = ROOM_CONFIG[room];
+  const endsAt =
+    cur.phase === "BETTING"
+      ? new Date(cur.startedAt.getTime() + sec(rc.secondsPerRound)).toISOString()
+      : null;
+
+  return {
+    id: cur.id,
+    room: cur.room,
+    phase: cur.phase,
+    startedAt: cur.startedAt.toISOString(),
+    endsAt,
+    outcome: cur.outcome ?? null,
+    myBets: my,
+    recent: last10.map(i => ({ id: i.id, outcome: i.outcome ?? null })),
+  };
 }
 
-// ======================== 下註 ========================
+/** 下單下注（只允許 BETTING 期；扣款＝WALLET；寫 Bet + Ledger(BET_PLACED) ） */
 export async function placeBets(
   userId: string,
   room: RoomCode,
   roundId: string,
-  bets: BetInput[]
+  bets: BetInput[],
 ) {
-  const round = await prisma.round.findUnique({ where: { id: roundId } });
-  if (!round || round.room !== room) throw new Error("ROUND_NOT_FOUND");
-  if (round.phase !== "BETTING") throw new Error("ROUND_NOT_OPEN");
+  if (!bets?.length) throw new Error("NO_BETS");
 
-  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const rc = ROOM_CONFIG[room];
+  if (!rc) throw new Error("ROOM_NOT_FOUND");
+
+  const r = await prisma.round.findUnique({ where: { id: roundId } });
+  if (!r || r.room !== room) throw new Error("ROUND_NOT_FOUND");
+  if (r.phase !== "BETTING") throw new Error("ROUND_NOT_BETTING");
+
+  // 檢查下注金額
+  let total = 0;
+  for (const b of bets) {
+    if (!b || typeof b.amount !== "number" || b.amount <= 0) throw new Error("BAD_AMOUNT");
+    if (b.amount < rc.minBet || b.amount > rc.maxBet) throw new Error("BET_OUT_OF_RANGE");
+    total += b.amount;
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { balance: true } });
   if (!user) throw new Error("USER_NOT_FOUND");
+  if (user.balance < total) throw new Error("INSUFFICIENT_WALLET");
 
-  const total = bets.reduce((s, b) => s + b.amount, 0);
-  if (total > user.balance) throw new Error("INSUFFICIENT_FUNDS");
-
-  // 寫入下注 & 扣錢
-  const accepted: BetInput[] = [];
-  await prisma.$transaction(async (tx) => {
-    await tx.user.update({
+  // 交易：扣款（wallet）+ 新增 Bet 多筆 + Ledger: BET_PLACED
+  const tx = await prisma.$transaction(async (tx) => {
+    const upd = await tx.user.update({
       where: { id: userId },
       data: { balance: { decrement: total } },
+      select: { balance: true },
     });
 
-    for (const b of bets) {
-      await tx.bet.create({
-        data: {
-          userId,
-          roundId,
-          side: b.side,
-          amount: b.amount,
-        },
-      });
-      accepted.push(b);
-    }
+    await tx.bet.createMany({
+      data: bets.map(b => ({
+        userId,
+        roundId,
+        side: b.side,
+        amount: b.amount,
+      })),
+    });
 
-    // Ledger 記錄
     await tx.ledger.create({
       data: {
         userId,
         type: "BET_PLACED",
         target: "WALLET",
         amount: -total,
-        room,
-        roundId,
       },
     });
+
+    return { wallet: upd.balance };
   });
 
-  const updated = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { balance: true },
-  });
-
-  return { wallet: updated?.balance ?? 0, accepted };
+  return { wallet: tx.wallet, accepted: bets.length };
 }
 
-// ======================== 房間推播 (SSE) ========================
-export async function streamRoom(room: RoomCode) {
-  // 模擬推播資料，實際可接入 Redis pub/sub 或 DB 事件
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    start(controller) {
-      let i = 0;
-      const interval = setInterval(() => {
-        const data = { room, ts: Date.now(), tick: i++ };
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-      }, 1000);
+/** 小工具：派彩（之後管理/系統呼叫；這裡先保留邏輯） */
+export async function settleRound(roundId: string, outcome: "PLAYER" | "BANKER" | "TIE", payoutMap: Record<BetSide, number>) {
+  // 1) 將回合標記 REVEALING → SETTLED（你也可先寫 REVEALING 再結算）
+  const round = await prisma.round.findUnique({ where: { id: roundId } });
+  if (!round) throw new Error("ROUND_NOT_FOUND");
 
-      return () => clearInterval(interval);
-    },
+  // 2) 找出所有下注，計算派彩（示意：payout = amount * odds）
+  const bets = await prisma.bet.findMany({ where: { roundId } });
+
+  // 3) 聚合：每人贏得金額
+  const userPayout: Record<string, number> = {};
+  for (const b of bets) {
+    const odds = payoutMap[b.side] ?? 0;
+    const prize = Math.floor(b.amount * odds); // 可調整抽水
+    if (prize > 0) {
+      userPayout[b.userId] = (userPayout[b.userId] ?? 0) + prize;
+    }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    // round → outcome / phase
+    await tx.round.update({
+      where: { id: roundId },
+      data: { outcome, phase: "SETTLED" },
+    });
+
+    // 派彩
+    for (const [uid, inc] of Object.entries(userPayout)) {
+      await tx.user.update({
+        where: { id: uid },
+        data: { balance: { increment: inc } },
+      });
+      await tx.ledger.create({
+        data: {
+          userId: uid,
+          type: "PAYOUT",
+          target: "WALLET",
+          amount: inc,
+        },
+      });
+    }
   });
-
-  return { stream };
 }

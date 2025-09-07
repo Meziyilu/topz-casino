@@ -1,32 +1,58 @@
-import { NextRequest } from "next/server";
+// app/api/casino/baccarat/stream/route.ts
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { RoomCode } from "@prisma/client";
-import { streamRoom } from "@/services/baccarat.service";
+import { getCurrentRound } from "@/services/baccarat.service";
 
-// SSE：回傳的是 ReadableStream，框架會自動設置 Content-Type
-export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  const sp = req.nextUrl.searchParams;
-  const schema = z.object({ room: z.nativeEnum(RoomCode) });
-  const parsed = schema.safeParse({ room: sp.get("room") as any });
-  if (!parsed.success) {
-    return new Response('{"ok":false,"error":"BAD_ROOM"}', {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
+  const url = new URL(req.url);
+  const Schema = z.object({ room: z.nativeEnum(RoomCode) });
+  const parsed = Schema.safeParse({ room: url.searchParams.get("room") as unknown });
+  if (!parsed.success) return NextResponse.json({ ok: false, error: "BAD_ROOM" }, { status: 400 });
 
-  // 假設 service 會回傳 { stream: ReadableStream }
-  const { stream } = await streamRoom(parsed.data.room);
-  return new Response(stream, {
-    status: 200,
+  const stream = new ReadableStream({
+    async start(controller) {
+      const encoder = new TextEncoder();
+      let lastId: string | null = null;
+      let closed = false;
+
+      const send = (data: unknown) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+      };
+
+      // 心跳
+      const ping = setInterval(() => {
+        if (!closed) controller.enqueue(encoder.encode(": ping\n\n"));
+      }, 15000);
+
+      try {
+        while (!closed) {
+          const cur = await getCurrentRound(parsed.data.room);
+          if (cur && cur.id !== lastId) {
+            lastId = cur.id;
+            send({ type: "ROUND", id: cur.id, phase: cur.phase, outcome: cur.outcome ?? null, startedAt: cur.startedAt });
+          }
+          await new Promise(r => setTimeout(r, 1000)); // 1s 輪詢
+        }
+      } catch (e) {
+        // ignore
+      } finally {
+        clearInterval(ping);
+        controller.close();
+      }
+    },
+    cancel() { /* ignore */ },
+  });
+
+  return new NextResponse(stream, {
     headers: {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
+      "X-Accel-Buffering": "no", // nginx
     },
   });
 }

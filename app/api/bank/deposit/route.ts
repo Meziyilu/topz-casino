@@ -2,31 +2,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getUserFromRequest } from "@/lib/auth";
-import { deposit } from "@/services/bank.service";
+import { move } from "@/services/wallet.service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const Body = z.object({
   amount: z.number().int().positive(),
-  memo: z.string().max(120).optional(),
+  // memo: z.string().max(120).optional(), // schema 無 memo，不存
 });
 
 export async function POST(req: NextRequest) {
+  const auth = await getUserFromRequest(req);
+  if (!auth) return NextResponse.json({ ok: false }, { status: 401 });
+
+  const parsed = Body.safeParse(await req.json().catch(() => ({})));
+  if (!parsed.success) return NextResponse.json({ ok: false, error: "BAD_BODY" }, { status: 400 });
+
   try {
-    const auth = await getUserFromRequest(req);
-    if (!auth?.id) return NextResponse.json({ ok: false }, { status: 401 });
-
-    const parsed = Body.safeParse(await req.json());
-    if (!parsed.success) return NextResponse.json({ ok: false, error: "BAD_BODY" }, { status: 400 });
-
-    // service 第三參數 memo 可選且被忽略（Ledger 沒有 memo 欄位）
-    const { wallet, bank } = await deposit(auth.id, parsed.data.amount, parsed.data.memo);
+    const { wallet, bank } = await move(auth.id, "WALLET", "BANK", parsed.data.amount, "DEPOSIT");
     return NextResponse.json({ ok: true, wallet, bank });
   } catch (e: any) {
-    console.error("BANK_DEPOSIT", e);
-    const msg = String(e?.message || "INTERNAL");
-    const code = ["AMOUNT_INVALID", "WALLET_NOT_ENOUGH"].includes(msg) ? 400 : 500;
-    return NextResponse.json({ ok: false, error: msg }, { status: code });
+    return NextResponse.json({ ok: false, error: String(e?.message ?? "DEPOSIT_FAIL") }, { status: 400 });
   }
 }
