@@ -140,7 +140,7 @@ export default function LobbyPage() {
 
           {/* 公告卡片：簡單把公告列出（你也可以做成彈窗） */}
           <div className="lb-card">
-            <div className="lb-card-title">公告 / 活動</div>
+            <div className="lb-card-title">公告 / 目前尚未開放許多功能</div>
             <ul className="lb-list soft" id="ann-list">
               {/* 預留：你要的就緒狀態，或之後拉 API */}
               {/* 若想要即時拉 API，也可以在這裡 fetch /api/announcements */}
@@ -154,7 +154,7 @@ export default function LobbyPage() {
         {/* 中欄 */}
         <section className="lb-main">
           <div className="lb-games">
-            <GameCard title="百家樂" online={328} countdown={27} href="/casino/baccarat" />
+            <GameCard title="百家樂" online={328} countdown={27} href="@/casino/baccarat" />
             <GameCard title="骰寶" online={152} countdown={41} href="/casino/sicbo" />
             <GameCard title="樂透" online={93} href="/casino/lotto" />
             <GameCard title="21點" online={0} disabled href="/casino/blackjack" />
