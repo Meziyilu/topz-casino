@@ -154,7 +154,7 @@ export default function LobbyPage() {
         {/* 中欄 */}
         <section className="lb-main">
           <div className="lb-games">
-            <GameCard title="百家樂" online={328} countdown={27} href="@/casino/baccarat" />
+            <GameCard title="百家樂" online={328} countdown={27} href="/casino/baccarat" />
             <GameCard title="骰寶" online={152} countdown={41} href="/casino/sicbo" />
             <GameCard title="樂透" online={93} href="/casino/lotto" />
             <GameCard title="21點" online={0} disabled href="/casino/blackjack" />
