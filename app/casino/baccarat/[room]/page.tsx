@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Leaderboard from "components/Leaderboard"; // 你現有元件
+import Leaderboard from "@/components/Leaderboard";
 
-/* ================= Types ================= */
+// 外掛房間樣式（用 <link>，因 Next app router 不建議在 client component 直接 import global CSS）
+/* 若你比較喜歡 <link> 寫在頁面裡，請保留下方 <link rel="stylesheet" ...>，不要在這裡 import。 */
+
 type Outcome = "PLAYER" | "BANKER" | "TIE" | null;
 type Phase = "BETTING" | "REVEALING" | "SETTLED";
 type RoomCode = "R30" | "R60" | "R90";
@@ -20,25 +22,23 @@ type BetSide =
 
 type Card = { rank?: number | string; value?: number | string; suit?: any; s?: any } | string;
 
-// ※ 後端 /api/casino/baccarat/state 回傳 shape（你後端照這個給就好）
 type StateResp = {
   room: { code: RoomCode; name: string; durationSeconds: number };
-  day: string; // YYYY-MM-DD（台北）
-  roundId: string | null;                 // ★ 修正：下注要帶這個
-  roundSeq: number;                       // 當日局序
+  day: string;
+  roundId: string | null;
+  roundSeq: number;
   phase: Phase;
   secLeft: number;
   result: null | { outcome: Exclude<Outcome, null>; p: number; b: number };
-  cards?: { player: Card[]; banker: Card[] }; // REVEALING/SETTLED 建議帶
-  myBets: Partial<Record<BetSide, number>>;   // 這局我下注的匯總
-  balance: number | null;                // 目前錢包餘額
+  cards?: { player: Card[]; banker: Card[] };
+  myBets: Partial<Record<BetSide, number>>;
+  balance: number | null;
   recent: { roundSeq: number; outcome: Exclude<Outcome, null>; p: number; b: number }[];
-  status?: "CLOSED";                     // 房間被關閉時
+  status?: "CLOSED";
 };
 
 type MyBetsResp = { items: { side: BetSide; amount: number }[] };
 
-/* =============== Labels & Helpers =============== */
 const zhPhase: Record<Phase, string> = { BETTING: "下注中", REVEALING: "開牌中", SETTLED: "已結算" };
 const zhOutcome: Record<Exclude<Outcome, null>, string> = { PLAYER: "閒", BANKER: "莊", TIE: "和" };
 const PAYOUT_HINT: Record<BetSide, string> = {
@@ -55,7 +55,7 @@ const PAYOUT_HINT: Record<BetSide, string> = {
 const pad4 = (n: number) => n.toString().padStart(4, "0");
 const formatTime = (d = new Date()) =>
   `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(
-    d.getSeconds(),
+    d.getSeconds()
   ).padStart(2, "0")}`;
 
 function cardToLabel(c: Card): string {
@@ -76,7 +76,6 @@ function cardToLabel(c: Card): string {
 }
 const fmtOutcome = (o: Outcome) => (o ? zhOutcome[o] : "—");
 
-/** 從牌面/點數推導對子／完美對子／超級六 */
 function deriveFlags(state: StateResp) {
   const pc = (state.cards?.player ?? []) as any[];
   const bc = (state.cards?.banker ?? []) as any[];
@@ -92,7 +91,7 @@ function deriveFlags(state: StateResp) {
   return { playerPair, bankerPair, anyPair, perfectPair, super6 };
 }
 
-/* ================== Animation Components ================== */
+/* ================== 開牌動畫 ================== */
 function PlayingCard({ label, show, flip, delayMs = 0 }: { label: string; show: boolean; flip: boolean; delayMs?: number }) {
   return (
     <div
@@ -147,20 +146,15 @@ function useBaccaratReveal(params: {
     const stepGap = 180;
     const flipGap = 150;
 
-    // P1
     steps.push({ at: (t += stepGap), act: () => setShowP((s) => [true, s[1], s[2]]) });
     steps.push({ at: (t += flipGap), act: () => setFlipP((s) => [true, s[1], s[2]]) });
-    // B1
     steps.push({ at: (t += stepGap), act: () => setShowB((s) => [true, s[1], s[2]]) });
     steps.push({ at: (t += flipGap), act: () => setFlipB((s) => [true, s[1], s[2]]) });
-    // P2
     steps.push({ at: (t += stepGap), act: () => setShowP((s) => [s[0], true, s[2]]) });
     steps.push({ at: (t += flipGap), act: () => setFlipP((s) => [s[0], true, s[2]]) });
-    // B2
     steps.push({ at: (t += stepGap), act: () => setShowB((s) => [s[0], true, s[2]]) });
     steps.push({ at: (t += flipGap), act: () => setFlipB((s) => [s[0], true, s[2]]) });
 
-    // P3 / B3
     if (p3) {
       steps.push({ at: (t += stepGap + 200), act: () => setShowP((s) => [s[0], s[1], true]) });
       steps.push({ at: (t += flipGap), act: () => setFlipP((s) => [s[0], s[1], true]) });
@@ -204,7 +198,6 @@ export default function RoomPage() {
   const fixedRoom = (["R30", "R60", "R90"] as RoomCode[]).includes(roomCodeUpper) ? roomCodeUpper : undefined;
 
   const [data, setData] = useState<StateResp | null>(null);
-  const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
   // 現在時間
@@ -215,7 +208,6 @@ export default function RoomPage() {
   }, []);
 
   // 金額
-  const chipOptions = [50, 100, 200, 500, 1000, 5000];
   const [amount, setAmount] = useState<number>(100);
   const isAmountValid = Number.isFinite(amount) && amount > 0;
 
@@ -231,7 +223,6 @@ export default function RoomPage() {
     BANKER_SUPER_SIX: 0,
   };
   const [myBets, setMyBets] = useState<Record<BetSide, number>>(emptyAgg);
-
   const [placing, setPlacing] = useState<BetSide | null>(null);
 
   // 取 state
@@ -245,8 +236,6 @@ export default function RoomPage() {
       setErr("");
     } catch (e: any) {
       setErr(e?.message || "連線失敗");
-    } finally {
-      setLoading(false);
     }
   }, [roomCodeUpper]);
 
@@ -288,13 +277,12 @@ export default function RoomPage() {
     return () => clearInterval(t);
   }, [localSec]);
 
-  // ★ 修正：下注改成「帶 roundId + bets 陣列」對齊後端
   async function place(side: BetSide) {
     if (!data) return;
     if (data.phase !== "BETTING") return setErr("目前非下注時間");
     if (!isAmountValid) return setErr("請輸入正確的下注金額");
     if (data.status === "CLOSED") return setErr("該房間已關閉");
-    if (!data.roundId) return setErr("本局未建立，稍候再試"); // 防呆
+    if (!data.roundId) return setErr("本局未建立，稍候再試");
 
     setPlacing(side);
     try {
@@ -303,15 +291,14 @@ export default function RoomPage() {
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          room: roomCodeUpper,        // RoomCode
-          roundId: data.roundId,      // ★ 必帶
-          bets: [{ side, amount }],   // ★ 陣列 BetInput[]
+          room: roomCodeUpper,
+          roundId: data.roundId,
+          bets: [{ side, amount }],
         }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "下注失敗");
 
-      // 成功：刷新我的下注與 state（會更新餘額／倒數等）
       setErr("");
       fetchMyBets();
       fetchState();
@@ -324,13 +311,12 @@ export default function RoomPage() {
 
   const outcomeMark: Outcome = data?.result ? data.result.outcome : null;
 
-  // 對子/完美對/任一對/超6
   const flags = useMemo(
     () =>
       data
         ? deriveFlags(data)
         : { playerPair: false, bankerPair: false, anyPair: false, perfectPair: false, super6: false },
-    [data?.result, data?.cards],
+    [data?.result, data?.cards]
   );
 
   const myTotal = (Object.keys(myBets) as BetSide[]).reduce((s, k) => s + (myBets[k] || 0), 0);
@@ -349,7 +335,6 @@ export default function RoomPage() {
     return false;
   }, [data?.phase, data?.result, flags, myBets]);
 
-  /* ====== Animation binding ====== */
   const playerLabels = (data?.cards?.player ?? []).map(cardToLabel);
   const bankerLabels = (data?.cards?.banker ?? []).map(cardToLabel);
   const { animatedCards, winnerGlow } = useBaccaratReveal({
@@ -359,7 +344,6 @@ export default function RoomPage() {
     outcome: data?.result?.outcome ?? null,
   });
 
-  /* ====== UI ====== */
   const InfoPill = ({ title, value }: { title: string; value: string | number | undefined }) => (
     <div className="glass px-4 py-2 rounded-xl border border-white/10">
       <div className="text-sm opacity-80">{title}</div>
@@ -441,38 +425,19 @@ export default function RoomPage() {
         <div className="text-2xl font-extrabold">{label}</div>
         <div className="opacity-80 text-sm mt-1">{rate}</div>
         {!!note && <div className="text-xs opacity-80 mt-2">我本局：{note}</div>}
-        {goldPulse && (
-          <div
-            className="pointer-events-none absolute -inset-1 animate-[goldSweep_1.2s_ease-in-out]"
-            style={{
-              background:
-                "linear-gradient(120deg, transparent 0%, rgba(255,255,255,.35) 15%, rgba(255,215,0,.5) 30%, rgba(255,255,255,.25) 45%, transparent 60%)",
-              maskImage: "linear-gradient(90deg, transparent 0%, black 25%, black 75%, transparent 100%)",
-            }}
-          />
-        )}
+        {goldPulse && <div className="pointer-events-none absolute -inset-1 gold-sweep" />}
         <div className="sheen absolute inset-0 pointer-events-none" />
       </button>
     );
   };
 
   const GoldWinOverlay = () =>
-    isWinnerPred ? (
-      <div
-        className="pointer-events-none fixed inset-0 animate-[softGlow_1.2s_ease-in-out] z-10"
-        style={{
-          background:
-            "radial-gradient(ellipse at center, rgba(255,215,0,.16) 0%, rgba(255,215,0,.10) 30%, rgba(255,215,0,.05) 55%, transparent 70%)",
-        }}
-      />
-    ) : null;
+    isWinnerPred ? <div className="pointer-events-none fixed inset-0 soft-glow z-10" /> : null;
 
-  /* ================= Render ================= */
   return (
     <div className="min-h-screen bg-casino-bg text-white relative">
       <GoldWinOverlay />
 
-      {/* 頂部列 */}
       <div className="max-w-7xl mx-auto px-4 py-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button className="btn glass tilt" onClick={() => router.push("/casino/baccarat")} title="回百家樂大廳">
@@ -491,12 +456,10 @@ export default function RoomPage() {
         </div>
       </div>
 
-      {/* 內容 */}
       <div className="max-w-7xl mx-auto px-4 grid lg:grid-cols-3 gap-6 pb-16">
-        {/* 左：動畫區 + 下注 */}
         <div className="lg:col-span-2">
           <div className="glass glow-ring p-6 rounded-2xl sheen border border-white/10">
-            {/* ======= 動畫區（固定在下注面板上方） ======= */}
+            {/* 動畫區 */}
             <div className="mb-6 relative rounded-2xl border border-white/10 p-4 bg-white/5">
               <div className="flex items-center justify-between mb-3">
                 <span className="font-bold">開牌動畫</span>
@@ -522,9 +485,9 @@ export default function RoomPage() {
                     <span className="opacity-80 text-sm">合計 {data?.result?.p ?? 0} 點</span>
                   </div>
                   <div className="flex gap-3 justify-center items-center min-h-[88px]">
-                    {animatedCards.player.length > 0 ? (
-                      animatedCards.player.map((c, i) => (
-                        <PlayingCard key={`p-${i}`} label={c.label} show={c.show} flip={c.flip} delayMs={0} />
+                    {(data?.cards?.player ?? []).length > 0 ? (
+                      (data!.cards!.player as Card[]).map((c, i) => (
+                        <PlayingCard key={`p-${i}`} label={cardToLabel(c)} show={true} flip={true} delayMs={0} />
                       ))
                     ) : (
                       <>
@@ -558,9 +521,9 @@ export default function RoomPage() {
                     <span className="opacity-80 text-sm">合計 {data?.result?.b ?? 0} 點</span>
                   </div>
                   <div className="flex gap-3 justify-center items-center min-h-[88px]">
-                    {animatedCards.banker.length > 0 ? (
-                      animatedCards.banker.map((c, i) => (
-                        <PlayingCard key={`b-${i}`} label={c.label} show={c.show} flip={c.flip} delayMs={0} />
+                    {(data?.cards?.banker ?? []).length > 0 ? (
+                      (data!.cards!.banker as Card[]).map((c, i) => (
+                        <PlayingCard key={`b-${i}`} label={cardToLabel(c)} show={true} flip={true} delayMs={0} />
                       ))
                     ) : (
                       <>
@@ -583,15 +546,7 @@ export default function RoomPage() {
                 結果：<span className="font-bold">{fmtOutcome(data?.result?.outcome ?? null)}</span>
               </div>
 
-              {isWinnerPred && (
-                <div
-                  className="pointer-events-none absolute -inset-2 animate-[goldSweep_1.2s_ease-in-out]"
-                  style={{
-                    background:
-                      "linear-gradient(120deg, transparent 0%, rgba(255,255,255,.22) 20%, rgba(255,215,0,.35) 40%, rgba(255,255,255,.18) 60%, transparent 80%)",
-                  }}
-                />
-              )}
+              {isWinnerPred && <div className="pointer-events-none absolute -inset-2 gold-sweep" />}
             </div>
 
             {/* ======= 下注面板 ======= */}
@@ -702,7 +657,7 @@ export default function RoomPage() {
                     disabled={placing === b.side || data?.phase !== "BETTING" || !isAmountValid || data?.status === "CLOSED"}
                     note={myBets[b.side] ?? 0}
                     goldPulse={(myBets[b.side] ?? 0) > 0 && !!won}
-                    onClick={() => place(b.side)} // ★ 修正：內部已改 bets[] 送出
+                    onClick={() => place(b.side)}
                   />
                 );
               })}
@@ -714,7 +669,6 @@ export default function RoomPage() {
 
         {/* 右：路子＋排行榜 */}
         <div>
-          {/* 色塊路子 */}
           <div className="glass glow-ring p-6 rounded-2xl mb-6 border border-white/10">
             <div className="text-xl font-bold mb-4">路子（近 20 局）</div>
             <div className="grid grid-cols-10 gap-2">
@@ -776,60 +730,12 @@ export default function RoomPage() {
             </div>
           </div>
 
-          {/* 表情路子（簡化 6x6） */}
-          <div className="glass glow-ring p-6 rounded-2xl mb-6 border border-white/10">
-            <div className="text-xl font-bold mb-4">表情路子</div>
-            <div className="grid grid-cols-6 gap-3">
-              {(data?.recent || []).slice(0, 36).map((r, i) => (
-                <div
-                  key={`emo-${i}`}
-                  className="w-8 h-8 rounded-md flex items-center justify-center text-xs"
-                  style={{
-                    background:
-                      r.outcome === "PLAYER"
-                        ? "rgba(103,232,249,.22)"
-                        : r.outcome === "BANKER"
-                        ? "rgba(253,164,175,.22)"
-                        : "rgba(253,230,138,.22)",
-                    border:
-                      r.outcome === "PLAYER"
-                        ? "1px solid rgba(103,232,249,.6)"
-                        : r.outcome === "BANKER"
-                        ? "1px solid rgba(253,164,175,.6)"
-                        : "1px solid rgba(253,230,138,.6)",
-                  }}
-                  title={`${zhOutcome[r.outcome]} 閒${r.p} / 莊${r.b}`}
-                >
-                  {r.outcome === "PLAYER" ? "🔵" : r.outcome === "BANKER" ? "🔴" : "🟡"}
-                </div>
-              ))}
-              {(!data || (data && data.recent.length === 0)) &&
-                Array.from({ length: 12 }).map((_, i) => (
-                  <div key={`ghost-${i}`} className="w-8 h-8 rounded-md bg-white/5 border border-white/10" />
-                ))}
-            </div>
-          </div>
-
-          {/* 房內排行榜（固定房，不顯示房間選單） */}
           {fixedRoom && <Leaderboard fixedRoom={fixedRoom} showRoomSelector={false} />}
         </div>
       </div>
 
-      {/* 動畫 keyframes（限本頁） */}
-      <style jsx global>{`
-        @keyframes goldSweep {
-          0% { transform: translateX(-120%); opacity: 0; }
-          40% { opacity: 0.9; }
-          100% { transform: translateX(120%); opacity: 0; }
-        }
-        @keyframes softGlow {
-          0% { opacity: 0; }
-          40% { opacity: 1; }
-          100% { opacity: 0; }
-        }
-        .rotate-y-0 { transform: rotateY(0deg); }
-        .rotate-y-180 { transform: rotateY(180deg); }
-      `}</style>
+      {/* 這裡掛上獨立 CSS */}
+      <link rel="stylesheet" href="/styles/baccarat-room.css" />
     </div>
   );
 }
