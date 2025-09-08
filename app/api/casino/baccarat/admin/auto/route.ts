@@ -1,133 +1,225 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { BetSide, RoomCode } from "@prisma/client";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import type { RoomCode, RoundPhase, BetSide } from "@prisma/client";
 import { getRoomInfo, getCurrentRound, settleRound } from "@/services/baccarat.service";
-
-function assertAdmin(req: NextRequest) {
-  const env = process.env.ADMIN_TOKEN?.trim();
-  const fromHeader = req.headers.get("x-admin-token")?.trim();
-  const fromQuery = new URL(req.url).searchParams.get("token")?.trim();
-  if (!env) return;
-  if (fromHeader !== env && fromQuery !== env) throw new Error("UNAUTHORIZED");
-}
-
-function pickOutcome(): "PLAYER" | "BANKER" | "TIE" {
-  const r = Math.random();
-  if (r < 0.456) return "BANKER";
-  if (r < 0.456 + 0.446) return "PLAYER";
-  return "TIE";
-}
-function genPoints(outcome: "PLAYER" | "BANKER" | "TIE") {
-  let p = Math.floor(Math.random() * 10);
-  let b = Math.floor(Math.random() * 10);
-  if (outcome === "PLAYER") { if (p <= b) p = (b + 1) % 10; }
-  else if (outcome === "BANKER") { if (b <= p) b = (p + 1) % 10; }
-  else { b = p; }
-  return { p, b };
-}
-
-const REVEAL_SECONDS = 2;
-const GRACE_SECONDS = 1;
 
 export const dynamic = "force-dynamic";
 
+/** ========= 可調參數（避免字面量型別） ========= */
+const REVEAL_SECONDS: number = Number(process.env.BACCARAT_REVEAL_SECONDS ?? 2);  // 開牌展示秒數（0 = 立即結算）
+const GRACE_SECONDS: number  = Number(process.env.BACCARAT_GRACE_SECONDS  ?? 1);  // 安全緩衝（避免抖動）
+const ADMIN_TOKEN: string | undefined = process.env.ADMIN_TOKEN;                  // 管理金鑰（可選）
+
+/** ========= 驗證 ========= */
+const Q = z.object({
+  room: z
+    .string()
+    .transform((s) => s.toUpperCase())
+    .pipe(z.enum(["R30", "R60", "R90"] as const)),
+});
+
+/** ========= 小工具 ========= */
+function sec(ms: number) {
+  return ms * 1000;
+}
+const now = () => new Date();
+
+function hasAdminAuth(req: NextRequest) {
+  if (!ADMIN_TOKEN) return true; // 未設定金鑰 → 不檢查
+  const token = req.headers.get("x-admin-token") || new URL(req.url).searchParams.get("token");
+  return token === ADMIN_TOKEN;
+}
+
+/** 隨機結果（示範用；實務請依真實發牌/算點） */
+type Outcome = "PLAYER" | "BANKER" | "TIE";
+function randomOutcome(): { outcome: Outcome; p: number; b: number } {
+  // 假裝九成不和局，1 成和局
+  const r = Math.random();
+  if (r < 0.1) {
+    const v = Math.floor(Math.random() * 10);
+    return { outcome: "TIE", p: v, b: v };
+  }
+  // PLAYER / BANKER 隨機、點數 0–9
+  const p = Math.floor(Math.random() * 10);
+  const b = Math.floor(Math.random() * 10);
+  if (p === b) {
+    // 避免撞到和局
+    return p > 0 ? { outcome: "PLAYER", p, b: Math.max(0, (p - 1)) } : { outcome: "BANKER", p: 1, b: 0 };
+  }
+  return p > b ? { outcome: "PLAYER", p, b } : { outcome: "BANKER", p, b };
+}
+
+/** 判斷是否超時（用 round.startedAt 當該階段開始時間） */
+function isExpired(phase: RoundPhase, startedAt: Date, limitSec: number) {
+  const elapsed = Date.now() - startedAt.getTime();
+  return elapsed >= sec(limitSec + GRACE_SECONDS);
+}
+
+/** 建新局（BETTING） */
+async function startNewRound(room: RoomCode, secondsPerRound: number) {
+  const r = await prisma.round.create({
+    data: {
+      room,
+      phase: "BETTING",
+      startedAt: now(),
+      outcome: null,
+    },
+    select: { id: true, phase: true, startedAt: true },
+  });
+  return {
+    action: "START_ROUND",
+    roundId: r.id,
+    phase: r.phase,
+    startedAt: r.startedAt,
+    secondsPerRound,
+  };
+}
+
+/** 進入 REVEALING（或直接結算） */
+async function moveToRevealingOrSettle(roundId: string) {
+  if (REVEAL_SECONDS === 0) {
+    // 直接結算（示範）
+    const { outcome, p, b } = randomOutcome();
+
+    // 超六：若莊家 6 點可給 12 倍
+    const payoutMap: Record<BetSide, number> = {
+      PLAYER: 1,
+      BANKER: 1,
+      TIE: 8,
+      PLAYER_PAIR: 0,
+      BANKER_PAIR: 0,
+      ANY_PAIR: 0,
+      PERFECT_PAIR: 0,
+      BANKER_SUPER_SIX: outcome === "BANKER" && b === 6 ? 12 : 0,
+    };
+
+    // 設為結算（把點數存進 outcome 以外的欄位若你有；若沒有，就只存 outcome）
+    await prisma.round.update({
+      where: { id: roundId },
+      data: { phase: "SETTLED", outcome },
+    });
+
+    await settleRound(roundId, outcome, payoutMap);
+
+    return { action: "SETTLE", roundId, outcome, p, b };
+  }
+
+  // 先切到 REVEALING，並將 startedAt 設為現在（方便用 startedAt 當 REVEALING 計時點）
+  const r = await prisma.round.update({
+    where: { id: roundId },
+    data: { phase: "REVEALING", startedAt: now() },
+    select: { id: true, phase: true, startedAt: true },
+  });
+
+  return { action: "TO_REVEALING", roundId: r.id, phase: r.phase, revealSeconds: REVEAL_SECONDS };
+}
+
+/** 對 REVEALING 做結算 */
+async function settleRevealing(roundId: string) {
+  const { outcome, p, b } = randomOutcome();
+
+  const payoutMap: Record<BetSide, number> = {
+    PLAYER: 1,
+    BANKER: 1,
+    TIE: 8,
+    PLAYER_PAIR: 0,
+    BANKER_PAIR: 0,
+    ANY_PAIR: 0,
+    PERFECT_PAIR: 0,
+    BANKER_SUPER_SIX: outcome === "BANKER" && b === 6 ? 12 : 0,
+  };
+
+  await prisma.round.update({
+    where: { id: roundId },
+    data: { phase: "SETTLED", outcome },
+  });
+
+  await settleRound(roundId, outcome, payoutMap);
+
+  return { action: "SETTLE", roundId, outcome, p, b };
+}
+
+/** ========= 主流程（GET/POST 皆可觸發） ========= */
+async function handleAuto(req: NextRequest) {
+  if (!hasAdminAuth(req)) {
+    return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 });
+  }
+
+  const url = new URL(req.url);
+  const parsed = Q.safeParse({ room: url.searchParams.get("room") ?? "" });
+  if (!parsed.success) {
+    return NextResponse.json({ ok: false, error: "BAD_ROOM" }, { status: 400 });
+  }
+  const room = parsed.data.room as RoomCode;
+
+  // 房間秒數
+  const roomInfo = await getRoomInfo(room);
+  const secondsPerRound = Number(roomInfo.secondsPerRound ?? 60);
+
+  // 取得目前最新一局
+  const cur = await getCurrentRound(room);
+
+  // 無任何一局 → 開新局
+  if (!cur) {
+    const created = await startNewRound(room, secondsPerRound);
+    return NextResponse.json({ ok: true, step: created });
+  }
+
+  // 有局：依階段處理
+  if (cur.phase === "BETTING") {
+    // 倒數是否超時
+    if (isExpired(cur.phase, cur.startedAt, secondsPerRound)) {
+      const step = await moveToRevealingOrSettle(cur.id);
+      return NextResponse.json({ ok: true, step });
+    }
+    // 尚未超時 → 不動
+    return NextResponse.json({
+      ok: true,
+      step: "BETTING_WAIT",
+      roundId: cur.id,
+      secLeft: Math.max(0, Math.ceil((cur.startedAt.getTime() + sec(secondsPerRound) - Date.now()) / 1000)),
+    });
+  }
+
+  if (cur.phase === "REVEALING") {
+    // REVEALING 是否超時
+    if (isExpired(cur.phase, cur.startedAt, REVEAL_SECONDS)) {
+      const step = await settleRevealing(cur.id);
+      return NextResponse.json({ ok: true, step });
+    }
+    return NextResponse.json({
+      ok: true,
+      step: "REVEALING_WAIT",
+      roundId: cur.id,
+      secLeft: Math.max(0, Math.ceil((cur.startedAt.getTime() + sec(REVEAL_SECONDS) - Date.now()) / 1000)),
+    });
+  }
+
+  // 已結算 → 直接開下一局
+  if (cur.phase === "SETTLED") {
+    const created = await startNewRound(room, secondsPerRound);
+    return NextResponse.json({ ok: true, step: created });
+  }
+
+  // 不預期狀態（保底）
+  return NextResponse.json({ ok: true, step: "NOOP", roundId: cur.id, phase: cur.phase });
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    return await handleAuto(req);
+  } catch (e) {
+    console.error(e);
+    return NextResponse.json({ ok: false, error: "SERVER_ERROR" }, { status: 500 });
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
-    assertAdmin(req);
-    const url = new URL(req.url);
-    const room = (url.searchParams.get("room") || "R30").toUpperCase() as RoomCode;
-    const info = await getRoomInfo(room);
-    const secs = info.secondsPerRound || 60;
-    const now = new Date();
-
-    let cur = await getCurrentRound(room);
-
-    // 沒回合 → 開局
-    if (!cur) {
-      const created = await prisma.round.create({
-        data: { room, phase: "BETTING", startedAt: now, endsAt: new Date(now.getTime() + secs * 1000) } as any,
-        select: { id: true },
-      });
-      return NextResponse.json({ ok: true, action: "STARTED", id: created.id });
-    }
-
-    if (cur.phase === "BETTING") {
-      const endsAt: Date =
-        (cur as any).endsAt instanceof Date ? (cur as any).endsAt : new Date(cur.startedAt.getTime() + secs * 1000);
-      if (now >= endsAt) {
-        const outcome = pickOutcome();
-        const { p, b } = genPoints(outcome);
-        await prisma.round.update({
-          where: { id: cur.id },
-          data: {
-            phase: REVEAL_SECONDS > 0 ? "REVEALING" : "SETTLED",
-            outcome: REVEAL_SECONDS > 0 ? null : outcome,
-            playerPoint: p as any,
-            bankerPoint: b as any,
-          } as any,
-        });
-
-        if (REVEAL_SECONDS === 0) {
-          const payoutMap: Record<BetSide, number> = {
-            PLAYER: 1, BANKER: 1, TIE: 8,
-            PLAYER_PAIR: 0, BANKER_PAIR: 0, ANY_PAIR: 0, PERFECT_PAIR: 0, BANKER_SUPER_SIX: 0,
-          } as any;
-          await settleRound(cur.id, outcome, payoutMap);
-          const t = new Date(Date.now() + GRACE_SECONDS * 1000);
-          const next = await prisma.round.create({
-            data: { room, phase: "BETTING", startedAt: t, endsAt: new Date(t.getTime() + secs * 1000) } as any,
-            select: { id: true },
-          });
-          return NextResponse.json({ ok: true, action: "SETTLED_NEXT_STARTED", settledId: cur.id, nextId: next.id, outcome, p, b });
-        }
-        return NextResponse.json({ ok: true, action: "REVEALING", id: cur.id });
-      }
-      const left = Math.ceil( ( ((cur as any).endsAt instanceof Date ? (cur as any).endsAt : new Date(cur.startedAt.getTime()+secs*1000)).getTime() - now.getTime()) / 1000 );
-      return NextResponse.json({ ok: true, action: "BETTING_WAIT", id: cur.id, secLeft: left });
-    }
-
-    if (cur.phase === "REVEALING") {
-      const revealUntil = new Date(cur.startedAt.getTime() + (secs + REVEAL_SECONDS) * 1000);
-      if (now >= revealUntil) {
-        const outcome = (cur as any).outcome ?? pickOutcome();
-        const { p, b } = genPoints(outcome);
-        await prisma.round.update({
-          where: { id: cur.id },
-          data: {
-            outcome,
-            playerPoint: (cur as any).playerPoint ?? (p as any),
-            bankerPoint: (cur as any).bankerPoint ?? (b as any),
-            phase: "SETTLED",
-          } as any,
-        });
-        const payoutMap: Record<BetSide, number> = {
-          PLAYER: 1, BANKER: 1, TIE: 8,
-          PLAYER_PAIR: 0, BANKER_PAIR: 0, ANY_PAIR: 0, PERFECT_PAIR: 0, BANKER_SUPER_SIX: 0,
-        } as any;
-        await settleRound(cur.id, outcome, payoutMap);
-
-        const t = new Date(Date.now() + GRACE_SECONDS * 1000);
-        const next = await prisma.round.create({
-          data: { room, phase: "BETTING", startedAt: t, endsAt: new Date(t.getTime() + secs * 1000) } as any,
-          select: { id: true },
-        });
-        return NextResponse.json({ ok: true, action: "REVEALING_SETTLED_NEXT", settledId: cur.id, nextId: next.id, outcome, p, b });
-      }
-      return NextResponse.json({ ok: true, action: "REVEALING_WAIT", id: cur.id });
-    }
-
-    if (cur.phase === "SETTLED") {
-      const t = new Date(Date.now() + GRACE_SECONDS * 1000);
-      const next = await prisma.round.create({
-        data: { room, phase: "BETTING", startedAt: t, endsAt: new Date(t.getTime() + secs * 1000) } as any,
-        select: { id: true },
-      });
-      return NextResponse.json({ ok: true, action: "NEXT_STARTED", nextId: next.id });
-    }
-
-    return NextResponse.json({ ok: true, action: "UNKNOWN_PHASE", id: cur.id, phase: cur.phase });
-  } catch (e: any) {
-    const msg = e?.message || "SERVER_ERROR";
-    return NextResponse.json({ ok: false, error: msg }, { status: msg === "UNAUTHORIZED" ? 401 : 500 });
+    return await handleAuto(req);
+  } catch (e) {
+    console.error(e);
+    return NextResponse.json({ ok: false, error: "SERVER_ERROR" }, { status: 500 });
   }
 }
