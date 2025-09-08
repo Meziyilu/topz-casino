@@ -1,59 +1,42 @@
 // app/api/casino/baccarat/my-bets/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
-import type { RoomCode, BetSide } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import { getUserFromRequest } from "@/lib/auth";
-import { getCurrentWithMyBets } from "@/services/baccarat.service";
+import type { BetSide, RoomCode } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
-const Q = z.object({
-  room: z
-    .string()
-    .transform((s) => s.toUpperCase())
-    .pipe(z.enum(["R30", "R60", "R90"] as const)),
-});
-
 export async function GET(req: NextRequest) {
   try {
-    // 1) 解析查詢
-    const url = new URL(req.url);
-    const parsed = Q.safeParse({ room: url.searchParams.get("room") ?? "" });
-    if (!parsed.success) {
-      return NextResponse.json({ ok: false, error: "BAD_ROOM" }, { status: 400 });
-    }
-    const room = parsed.data.room as RoomCode;
+    const { searchParams } = new URL(req.url);
+    const room = searchParams.get("room") as RoomCode | null;
+    if (!room) return NextResponse.json({ error: "ROOM_REQUIRED" }, { status: 400 });
 
-    // 2) 需要登入（拿我的下注）
-    const auth = await getUserFromRequest(req);
-    if (!auth?.id) {
-      return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 });
-    }
+    const user = await getUserFromRequest(req);
+    if (!user) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
 
-    // 3) 從同一個 service 取「當前局 + 我的下注」
-    const current = await getCurrentWithMyBets(room, auth.id);
+    // 找該房最新一局
+    const cur = await prisma.round.findFirst({
+      where: { room },
+      orderBy: { startedAt: "desc" },
+      select: { id: true },
+    });
+    if (!cur) return NextResponse.json({ items: [] });
 
-    // 容錯：如果 service 回的是「彙總物件」，我轉成 items 陣列；
-    //       如果已經是 items 陣列，直接回傳。
-    let items: { side: BetSide; amount: number }[] = [];
+    // 彙總我在這局的下注
+    const rows = await prisma.bet.groupBy({
+      by: ["side"],
+      where: { userId: user.id, roundId: cur.id },
+      _sum: { amount: true },
+    });
 
-    if (Array.isArray(current?.myBets)) {
-      items = (current!.myBets as any[]).map((b: any) => ({
-        side: b.side as BetSide,
-        amount: Number(b.amount ?? 0),
-      }));
-    } else if (current?.myBets && typeof current.myBets === "object") {
-      for (const k of Object.keys(current.myBets)) {
-        const amt = Number((current.myBets as any)[k] ?? 0);
-        if (amt > 0) items.push({ side: k as BetSide, amount: amt });
-      }
-    }
+    const items = rows.map(r => ({
+      side: r.side as BetSide,
+      amount: r._sum.amount || 0,
+    }));
 
-    return NextResponse.json({ ok: true, items });
+    return NextResponse.json({ items });
   } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, error: String(e?.message ?? "MY_BETS_FAIL") },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: e?.message || "SERVER_ERROR" }, { status: 500 });
   }
 }
