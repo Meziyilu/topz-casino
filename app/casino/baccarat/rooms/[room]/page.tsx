@@ -671,7 +671,7 @@ export default function RoomPage() {
       </section>
 
       {/* 掛上你的獨立 CSS（對齊你給的路徑） */}
-      <link rel="stylesheet" href="/styles/baccarat/baccarat-room.css" />
+      <link rel="stylesheet" href="/styles/baccarat-room.css" />
     </main>
   );
 }
