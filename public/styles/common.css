@@ -1,0 +1,84 @@
+@layer utilities {
+  /* 深色宇宙背景 */
+  .bg-casino-bg {
+    @apply min-h-screen bg-bg-deep text-white;
+    background-image: theme("backgroundImage.cosmic-noise"), theme("backgroundImage.glass-radial");
+    background-color: theme("colors.bg.deep");
+  }
+
+  /* 玻璃卡片：深色 + 微霧 */
+  .glass {
+    @apply bg-bg-panel shadow-glass shadow-glass-inner border border-glass backdrop-blur-md;
+  }
+
+  /* 淡亮邊光圈 */
+  .glow-ring {
+    box-shadow: 0 0 0 1px rgba(255,255,255,.06), 0 0 34px rgba(139,92,246,.20);
+  }
+
+  /* 斜掃亮膜（配合 animate-goldSweep） */
+  .sheen::after {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    pointer-events: none;
+    background: linear-gradient(
+      120deg,
+      transparent 0%,
+      rgba(255,255,255,.18) 18%,
+      rgba(255,215,0,.30) 35%,
+      rgba(255,255,255,.14) 55%,
+      transparent 75%
+    );
+    mask-image: linear-gradient(90deg, transparent 0%, black 25%, black 75%, transparent 100%);
+    opacity: 0;
+    transition: opacity .2s ease;
+  }
+  .sheen:hover::after { opacity: 1; }
+
+  /* 勝利金光覆蓋 */
+  .gold-overlay {
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at center,
+      rgba(255,215,0,.16) 0%,
+      rgba(255,215,0,.10) 30%,
+      rgba(255,215,0,.05) 55%,
+      transparent 72%);
+  }
+
+  /* 卡片浮動 */
+  .tilt { transform: perspective(900px) rotateX(0.5deg) rotateY(-0.8deg); }
+
+  /* 3D 翻面需要的 class（你頁面已使用） */
+  .rotate-y-0   { transform: rotateY(0deg); }
+  .rotate-y-180 { transform: rotateY(180deg); }
+
+  /* 金光掃過條（可放在按鈕內） */
+  .gold-sweep {
+    background: linear-gradient(120deg,
+      transparent 0%,
+      rgba(255,255,255,.22) 20%,
+      rgba(255,215,0,.35) 40%,
+      rgba(255,255,255,.18) 60%,
+      transparent 80%);
+    mask-image: linear-gradient(90deg, transparent 0%, black 25%, black 75%, transparent 100%);
+    animation: goldSweep 1.4s ease-in-out;
+  }
+
+  /* 勝利柔光鋪滿（搭配 .gold-overlay 可擇一） */
+  .soft-glow { animation: softGlow 1.2s ease-in-out; }
+}
+
+/* 若想不用 Tailwind 的 animation 名稱，也保留原生 keyframes */
+@keyframes goldSweep {
+  0%   { transform: translateX(-120%); opacity: 0; }
+  40%  { opacity: .9; }
+  100% { transform: translateX(120%); opacity: 0; }
+}
+@keyframes softGlow {
+  0%   { opacity: 0; }
+  40%  { opacity: 1; }
+  100% { opacity: 0; }
+}
