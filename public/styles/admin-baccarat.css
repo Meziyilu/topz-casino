@@ -1,0 +1,5 @@
+/* 可加強百家樂管理頁的細節 */
+.admin-bk .head { display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px; }
+.admin-bk .title { font-weight: 800; letter-spacing:.3px; }
+.admin-bk .sub { color: var(--muted); font-size: 13px; }
+.admin-bk .cards { display:flex; gap: 6px; flex-wrap:wrap; }

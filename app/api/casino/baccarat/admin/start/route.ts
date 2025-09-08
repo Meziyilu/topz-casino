@@ -1,43 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { getUserOrThrow } from "@/lib/auth";
 import type { RoomCode } from "@prisma/client";
-import { getRoomInfo, settleRound } from "@/services/baccarat.service";
+import { prisma } from "@/lib/prisma";
+import { getRoomInfo } from "@/services/baccarat.service";
 
 export const dynamic = "force-dynamic";
 
+function assertAdmin(req: NextRequest) {
+  const env = process.env.ADMIN_TOKEN?.trim();
+  const fromHeader = req.headers.get("x-admin-token")?.trim();
+  const fromQuery = new URL(req.url).searchParams.get("token")?.trim();
+  if (!env) return;
+  if (fromHeader !== env && fromQuery !== env) throw new Error("UNAUTHORIZED");
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const u = await getUserOrThrow(req);
-    if (!u.isAdmin) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
-
+    assertAdmin(req);
     const url = new URL(req.url);
     const room = (url.searchParams.get("room") || "R30").toUpperCase() as RoomCode;
-    const seconds = Number(url.searchParams.get("seconds") || 30);
+    const seconds = Number(url.searchParams.get("seconds") || 0);
+    const info = await getRoomInfo(room);
+    const secs = seconds > 0 ? seconds : info.secondsPerRound || 60;
 
-    const rc = await getRoomInfo(room); // 取靜態資訊
-    const exists = await prisma.round.findFirst({
-      where: { room },
-      orderBy: { startedAt: "desc" },
+    const now = new Date();
+    const created = await prisma.round.create({
+      data: { room, phase: "BETTING", startedAt: now, endsAt: new Date(now.getTime() + secs * 1000) } as any,
+      select: { id: true },
     });
-
-    // 若上一局還在 BETTING，直接回傳避免重複開
-    if (exists?.phase === "BETTING") {
-      return NextResponse.json({ ok: true, warn: "EXISTING_BETTING", id: exists.id });
-    }
-
-    const r = await prisma.round.create({
-      data: {
-        room,
-        phase: "BETTING",
-        startedAt: new Date(),
-      },
-      select: { id: true, room: true, phase: true, startedAt: true },
-    });
-
-    // 可選：把秒數記在哪（如果你的 schema 沒欄位，前端用 roomInfo.secondsPerRound 即可）
-    return NextResponse.json({ ok: true, id: r.id, secondsPerRound: seconds || rc.secondsPerRound });
-  } catch (e:any) {
-    return NextResponse.json({ error: e?.message || "SERVER_ERROR" }, { status: 500 });
+    return NextResponse.json({ ok: true, id: created.id, secs });
+  } catch (e: any) {
+    const msg = e?.message || "SERVER_ERROR";
+    return NextResponse.json({ ok: false, error: msg }, { status: msg === "UNAUTHORIZED" ? 401 : 500 });
   }
 }

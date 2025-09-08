@@ -1,160 +1,120 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type RoomCode = "R30" | "R60" | "R90";
-type Phase = "BETTING" | "REVEALING" | "SETTLED";
-type StateResp = {
-  ok: boolean;
-  room: { code: RoomCode; name: string; durationSeconds: number };
-  roundId: string | null;
-  phase: Phase;
-  secLeft: number;
-  result: null | { outcome: "PLAYER" | "BANKER" | "TIE"; p: number; b: number };
-};
 
 export default function AdminBaccaratPage() {
   const [room, setRoom] = useState<RoomCode>("R30");
   const [seconds, setSeconds] = useState<number>(30);
-  const [status, setStatus] = useState<string>("");
-  const [state, setState] = useState<StateResp | null>(null);
-  const [settleOutcome, setSettleOutcome] = useState<"PLAYER" | "BANKER" | "TIE">("PLAYER");
+  const [token, setToken] = useState<string>("");
+  const [busy, setBusy] = useState(false);
+  const [log, setLog] = useState<string>("尚未操作");
+  const [autoOn, setAutoOn] = useState(false);
+  const autoTimer = useRef<any>(null);
 
-  // 載入目前房間狀態
-  const load = async () => {
-    try {
-      const r = await fetch(`/api/casino/baccarat/state?room=${room}`, {
-        credentials: "include",
-        cache: "no-store",
-      });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j?.error || "LOAD_FAIL");
-      setState(j);
-      setStatus("");
-    } catch (e: any) {
-      setStatus(`載入失敗：${e?.message || e}`);
-    }
-  };
-
+  // 讀取/儲存 token
   useEffect(() => {
-    load();
-    const t = setInterval(load, 1000);
-    return () => clearInterval(t);
-  }, [room]);
+    const t = localStorage.getItem("ADMIN_TOKEN") || "";
+    setToken(t);
+  }, []);
+  useEffect(() => {
+    localStorage.setItem("ADMIN_TOKEN", token || "");
+  }, [token]);
 
-  // 呼叫後端 API
-  async function call(path: string, init?: RequestInit) {
+  async function call(path: string, method = "POST", qs?: Record<string, any>) {
+    const u = new URL(path, location.origin);
+    if (qs) Object.entries(qs).forEach(([k, v]) => u.searchParams.set(k, String(v)));
+    const res = await fetch(u.toString(), { method, headers: { "x-admin-token": token || "" } });
+    const json = await res.json().catch(() => ({}));
+    return { ok: res.ok, json };
+  }
+
+  async function startNow() {
+    setBusy(true);
     try {
-      setStatus("執行中…");
-      const r = await fetch(path, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        ...(init || {}),
-      });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(j?.error || `HTTP ${r.status}`);
-      setStatus("成功 ✅");
-      await load();
-    } catch (e: any) {
-      setStatus(`失敗：${e?.message || e} ❌`);
+      const r = await call("/api/casino/baccarat/admin/start", "POST", { room, seconds });
+      setLog(`START → ${JSON.stringify(r.json)}`);
+    } finally { setBusy(false); }
+  }
+
+  async function tickOnce() {
+    setBusy(true);
+    try {
+      const r = await call("/api/casino/baccarat/admin/auto", "POST", { room });
+      setLog(`AUTO → ${JSON.stringify(r.json)}`);
+    } finally { setBusy(false); }
+  }
+
+  function toggleAuto() {
+    if (autoOn) {
+      clearInterval(autoTimer.current);
+      autoTimer.current = null;
+      setAutoOn(false);
+      setLog("已停止本頁自動輪轉");
+    } else {
+      autoTimer.current = setInterval(() => {
+        call("/api/casino/baccarat/admin/auto", "POST", { room })
+          .then((r) => setLog((s) => `AUTO(${room}) → ${JSON.stringify(r.json)}\n` + s))
+          .catch((e) => setLog((s) => `AUTO error: ${e?.message || e}\n` + s));
+      }, 5000); // 每 5 秒
+      setAutoOn(true);
+      setLog("已啟用本頁自動輪轉（視窗開著時有效）");
     }
   }
 
-  return (
-    <main className="mx-auto max-w-3xl px-5 py-8 text-white">
-      <h1 className="text-2xl font-bold mb-4">百家樂控制台</h1>
+  async function settleNow(which: "PLAYER" | "BANKER" | "TIE") {
+    setBusy(true);
+    try {
+      const r = await call("/api/casino/baccarat/admin/settle", "POST", { room, outcome: which });
+      setLog(`SETTLE → ${JSON.stringify(r.json)}`);
+    } finally { setBusy(false); }
+  }
 
-      {/* 控制列 */}
-      <div className="rounded-xl border border-white/15 p-4 bg-white/5 mb-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <label>房間：</label>
-          <select
-            value={room}
-            onChange={(e) => setRoom(e.target.value as RoomCode)}
-            className="bg-transparent border border-white/20 rounded px-2 py-1"
-          >
+  useEffect(() => () => { if (autoTimer.current) clearInterval(autoTimer.current); }, []);
+
+  return (
+    <main className="admin-wrap admin-bk stack">
+      <div className="panel stack">
+        <div className="h1">百家樂管理</div>
+
+        <div className="row">
+          <label>房間</label>
+          <select className="input" value={room} onChange={(e) => setRoom(e.target.value as RoomCode)}>
             <option value="R30">R30</option>
             <option value="R60">R60</option>
             <option value="R90">R90</option>
           </select>
 
-          <label className="ml-4">每局秒數：</label>
-          <input
-            type="number"
-            min={10}
-            value={seconds}
-            onChange={(e) => setSeconds(Math.max(10, Number(e.target.value || 30)))}
-            className="bg-transparent border border-white/20 rounded px-2 py-1 w-24"
-          />
+          <label>每局秒數</label>
+          <input className="input" type="number" min={10} value={seconds} onChange={(e) => setSeconds(Math.max(10, Number(e.target.value||0)))} />
 
-          <button
-            onClick={() => call(`/api/casino/baccarat/admin/start?room=${room}&seconds=${seconds}`)}
-            className="ml-2 px-3 py-1 rounded bg-emerald-500/80 hover:bg-emerald-400 text-black font-semibold"
-          >
-            開新局（START）
-          </button>
+          <label>ADMIN_TOKEN</label>
+          <input className="input" type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="輸入後會存 localStorage" style={{minWidth:260}} />
+        </div>
 
-          <button
-            onClick={() => call(`/api/casino/baccarat/admin/tick?room=${room}`)}
-            className="px-3 py-1 rounded bg-cyan-400/90 hover:bg-cyan-300 text-black font-semibold"
-          >
-            手動 Tick
-          </button>
+        <div className="row">
+          <button className="btn" onClick={startNow} disabled={busy}>立即開局</button>
+          <button className="btn warn" onClick={tickOnce} disabled={busy}>執行一次 Auto</button>
+          <button className="btn good" onClick={toggleAuto} disabled={busy}>{autoOn ? "停止本頁自動" : "啟用本頁自動 (5s)"}</button>
+          <span className="muted">（正式請用 Cron 打 /admin/auto）</span>
+        </div>
 
-          <span className="ml-auto text-sm opacity-80">{status}</span>
+        <div className="row">
+          <button className="btn bad" onClick={() => settleNow("PLAYER")} disabled={busy}>強制結算：閒</button>
+          <button className="btn bad" onClick={() => settleNow("BANKER")} disabled={busy}>強制結算：莊</button>
+          <button className="btn bad" onClick={() => settleNow("TIE")} disabled={busy}>強制結算：和</button>
         </div>
       </div>
 
-      {/* 強制結算 */}
-      <div className="rounded-xl border border-white/15 p-4 bg-white/5 mb-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <label>強制結算為：</label>
-          <select
-            value={settleOutcome}
-            onChange={(e) => setSettleOutcome(e.target.value as any)}
-            className="bg-transparent border border-white/20 rounded px-2 py-1"
-          >
-            <option value="PLAYER">PLAYER（閒）</option>
-            <option value="BANKER">BANKER（莊）</option>
-            <option value="TIE">TIE（和）</option>
-          </select>
-          <button
-            onClick={() =>
-              call(`/api/casino/baccarat/admin/settle?room=${room}`, {
-                body: JSON.stringify({ outcome: settleOutcome }),
-              })
-            }
-            className="px-3 py-1 rounded bg-rose-400/90 hover:bg-rose-300 text-black font-semibold"
-          >
-            強制結算（SETTLE）
-          </button>
-        </div>
+      <div className="panel stack">
+        <div className="h1">操作結果</div>
+        <div className="status" style={{whiteSpace:"pre-wrap"}}>{log}</div>
+        <div className="muted">前端玩家頁每秒會拉 /api/casino/baccarat/state，這裡輪轉後，玩家端就會看到倒數/開牌/結算與下一把。</div>
       </div>
 
-      {/* 狀態檢視 */}
-      <div className="rounded-xl border border-white/15 p-4 bg-white/5">
-        <div className="text-lg font-semibold mb-2">目前狀態</div>
-        {state ? (
-          <ul className="space-y-1 text-sm">
-            <li>
-              房間：<b>{state.room.name}</b>
-            </li>
-            <li>回合ID：{state.roundId ?? "—"}</li>
-            <li>
-              階段：<b>{state.phase}</b>
-            </li>
-            <li>
-              倒數：<b>{state.secLeft}s</b>
-            </li>
-            <li>
-              結果：<b>{state.result ? state.result.outcome : "—"}</b>
-            </li>
-          </ul>
-        ) : (
-          <div className="text-sm opacity-80">載入中…</div>
-        )}
-      </div>
+      {/* 可選，如果你想分開的樣式 */}
+      <link rel="stylesheet" href="/style/admin-baccarat.css" />
     </main>
   );
 }

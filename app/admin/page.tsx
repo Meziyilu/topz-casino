@@ -4,19 +4,22 @@ import Link from "next/link";
 
 export default function AdminHome() {
   return (
-    <main className="mx-auto max-w-3xl px-6 py-10 text-white">
-      <h1 className="text-2xl font-bold mb-6">管理總面板</h1>
+    <main className="admin-wrap stack">
+      <div className="panel stack">
+        <div className="h1">管理主控台</div>
+        <div className="muted">在這裡進入各功能面板。</div>
+        <div className="row">
+          <Link href="/admin/baccarat" className="btn">百家樂管理</Link>
+        </div>
+      </div>
 
-      <div className="grid gap-4">
-        <Link
-          href="/admin/baccarat"
-          className="block rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 transition p-4"
-        >
-          <div className="text-lg font-semibold">百家樂控制台</div>
-          <div className="text-sm opacity-80 mt-1">開新局、結算、手動 tick、觀察房況</div>
-        </Link>
-
-        {/* 之後有其它遊戲／系統設定，就照樣新增更多卡片連結 */}
+      <div className="panel">
+        <div className="h1" style={{marginBottom:8}}>Cron 說明</div>
+        <div className="stack">
+          <div>建議用 Render Cron/UptimeRobot 每 5–10 秒打：</div>
+          <div className="code">POST /api/casino/baccarat/admin/auto?room=R30&token=YOUR_ADMIN_TOKEN</div>
+          <div className="muted">（R60/R90 另行設定各自 cron）</div>
+        </div>
       </div>
     </main>
   );
