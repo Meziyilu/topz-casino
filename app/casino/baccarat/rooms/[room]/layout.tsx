@@ -1,13 +1,10 @@
-export default function RoomLayout({ children }: { children: React.ReactNode }) {
+export default function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="zh-Hant" className="dark">
+    <html lang="zh-Hant">
       <head>
-        {/* 這裡放你的房間專用 CSS（public 目錄對應網站根目錄） */}
-        <link rel="stylesheet" href="/styles/baccarat/baccarat/baccarat-room.css" />
-        {/* 如果上面多了一層 baccarat，改成正確的：/styles/baccarat/baccarat-room.css */}
-        <meta name="robots" content="noindex" />
+        <link rel="stylesheet" href="/styles/baccarat/baccarat-room.css" />
       </head>
-      <body>{children}</body>
+      <body className="dark">{children}</body>
     </html>
   );
 }
