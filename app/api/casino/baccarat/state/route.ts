@@ -1,13 +1,12 @@
 // app/api/casino/baccarat/state/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import type { RoomCode, BetSide } from "@prisma/client";
+import type { BetSide, RoomCode } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import { getOptionalUserId } from "@/lib/auth";
 import {
-  // 這些名稱請對上你 services 的實際 export（之前我們已經用過）
   getRoomInfo,
   getCurrentWithMyBets,
-  getPublicRounds,
 } from "@/services/baccarat.service";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +23,6 @@ type Card = { rank?: number | string; value?: number | string; suit?: any; s?: a
 
 export async function GET(req: NextRequest) {
   try {
-    // 1) 解析查詢參數
     const url = new URL(req.url);
     const parsed = Q.safeParse({ room: url.searchParams.get("room") ?? "" });
     if (!parsed.success) {
@@ -32,84 +30,77 @@ export async function GET(req: NextRequest) {
     }
     const room = parsed.data.room as RoomCode;
 
-    // 2) 取可選使用者（未登入也可）
+    // 取登入者（可為 null）
     const userId = await getOptionalUserId(req);
 
-    // 3) 撈資料（用你現有的 services）
-    //    - roomInfo: 房間名稱/秒數/是否關閉
-    //    - current: 當前局狀態 + 我的下注彙總 + 餘額
-    //    - recent: 近 20 局路子
-    const [roomInfo, current, recentRaw] = await Promise.all([
-      getRoomInfo(room),
-      getCurrentWithMyBets(room, userId),
-      getPublicRounds(room, 20, null),
-    ]);
+    // 房間靜態資訊（service 裡是 secondsPerRound）
+    const roomInfo = await getRoomInfo(room);
+    const durationSeconds = Number(roomInfo?.secondsPerRound ?? 60); // ← 修正重點
+    const roomName = roomInfo?.name ?? room;
 
-    // roomInfo 容錯
-    const roomName = roomInfo?.name ?? String(room);
-    const durationSeconds = Number(roomInfo?.durationSeconds ?? 60);
-    const status: "CLOSED" | undefined = roomInfo?.closed ? "CLOSED" : undefined;
+    // 目前回合 + 我的下注（service 版）
+    const current = await getCurrentWithMyBets(room, userId);
 
-    // current 容錯（services 沒給就設預設）
-    const roundId: string | null = current?.roundId ?? null;
-    const roundSeq: number = Number(current?.roundSeq ?? 0);
-    const phase: "BETTING" | "REVEALING" | "SETTLED" = (current?.phase as any) ?? "BETTING";
-    const secLeft: number = Number(current?.secLeft ?? 0);
-    const result:
-      | null
-      | { outcome: Outcome; p: number; b: number } = current?.result
-      ? {
-          outcome: current.result.outcome as Outcome,
-          p: Number(current.result.p ?? 0),
-          b: Number(current.result.b ?? 0),
-        }
-      : null;
+    // 倒數：若 service 有 endsAt，用它；否則依 phase=BETTING 用 startedAt + secondsPerRound 推
+    let secLeft = 0;
+    if (current?.phase === "BETTING") {
+      const endsAt = current.endsAt
+        ? new Date(current.endsAt)
+        : new Date(new Date(current.startedAt).getTime() + durationSeconds * 1000);
+      secLeft = Math.max(0, Math.ceil((endsAt.getTime() - Date.now()) / 1000));
+    }
 
-    const cards:
-      | { player: Card[]; banker: Card[] }
-      | undefined = current?.cards
-      ? {
-          player: (current.cards.player ?? []) as Card[],
-          banker: (current.cards.banker ?? []) as Card[],
-        }
-      : undefined;
+    // 我的錢包餘額（可未登入）
+    let balance: number | null = null;
+    if (userId) {
+      const me = await prisma.user.findUnique({ where: { id: userId }, select: { balance: true } });
+      balance = me?.balance ?? 0;
+    }
 
-    const myBets: Partial<Record<BetSide, number>> =
-      (current?.myBets as any) ??
-      {}; // 後端若傳陣列你也可以在 service 先彙總；這裡先容錯
+    // 把 service 的 myBets 陣列轉成彙總物件
+    const myAgg: Partial<Record<BetSide, number>> = {};
+    if (current?.myBets?.length) {
+      for (const it of current.myBets) {
+        myAgg[it.side] = (myAgg[it.side] ?? 0) + (it.amount ?? 0);
+      }
+    }
 
-    const balance: number | null = current?.balance ?? null;
-
-    // recent: 近 20 局
+    // recent：service 只有 id/outcome；先把 p/b、roundSeq 補 0
     const recent =
-      (recentRaw?.items ?? recentRaw ?? []).map((r: any) => ({
-        roundSeq: Number(r.roundSeq ?? 0),
-        outcome: (r.outcome || r.result || "TIE") as Outcome,
-        p: Number(r.p ?? r.player ?? 0),
-        b: Number(r.b ?? r.banker ?? 0),
+      current?.recent?.map((r, i) => ({
+        roundSeq: 0, // 你若之後在 round 表加欄位就改這裡
+        outcome: (r.outcome ?? null) as Exclude<Outcome, null> | null,
+        p: 0,
+        b: 0,
       })) ?? [];
 
-    // 4) 組合成前端要的 shape
+    // result：service 只有 outcome，沒有 p/b 點數，先補 0
+    const result =
+      current?.outcome
+        ? ({
+            outcome: current.outcome as Exclude<Outcome, null>,
+            p: 0,
+            b: 0,
+          } as const)
+        : null;
+
     return NextResponse.json({
       ok: true,
       room: { code: room, name: roomName, durationSeconds },
-      day: current?.day ?? current?.tzDay ?? current?.date ?? "", // 盡量對齊；不行就給空字串
-      roundId,
-      roundSeq,
-      phase,
+      day: new Date().toISOString().slice(0, 10), // YYYY-MM-DD
+      roundId: current?.id ?? null,
+      roundSeq: 0, // 之後若有欄位再回真值
+      phase: (current?.phase ?? "BETTING") as "BETTING" | "REVEALING" | "SETTLED",
       secLeft,
       result,
-      cards,
-      myBets,
+      // cards: 可等你有開牌資料時再補
+      myBets: myAgg,
       balance,
       recent,
-      status,
+      // status: 你的 PublicRoom 沒有 closed，就先不回
     });
-  } catch (e: any) {
-    // 防止回傳 HTML 造成前端 "Unexpected token '<'"
-    return NextResponse.json(
-      { ok: false, error: String(e?.message ?? "STATE_FAIL") },
-      { status: 500 }
-    );
+  } catch (e) {
+    console.error(e);
+    return NextResponse.json({ ok: false, error: "SERVER_ERROR" }, { status: 500 });
   }
 }
