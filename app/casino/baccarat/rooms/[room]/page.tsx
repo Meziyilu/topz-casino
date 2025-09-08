@@ -735,7 +735,7 @@ export default function RoomPage() {
       </div>
 
       {/* 這裡掛上獨立 CSS */}
-      <link rel="stylesheet" href="/styles/baccarat-room.css" />
+      <link rel="stylesheet" href="@/public/styles/baccarat-room.css" />
     </div>
   );
 }
