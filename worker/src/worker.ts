@@ -11,13 +11,15 @@ const ROOM_SECONDS: Record<RoomCode, number> = {
   R90: 90,
 };
 
-// REVEALING 停留秒數；設 0 代表立刻結算（本檔預設 0）
+// REVEALING 停留秒數；0 = 下注期結束就立刻結算並開新局
 const REVEAL_SECONDS = 0;
 
 // 若要讓 worker 自己跑迴圈，設 WORKER_LOOP_SEC（秒）；不設就由外部 cron 觸發
 const LOOP_INTERVAL_SEC = Number(process.env.WORKER_LOOP_SEC ?? 0);
 
-/* ================== 型別 ================== */
+// 建議在 Render 環境變數加上：TZ=Asia/Taipei
+const TAIPEI_OFFSET_MIN = 8 * 60;
+
 type Outcome = "PLAYER" | "BANKER" | "TIE";
 type BetSide =
   | "PLAYER"
@@ -32,6 +34,34 @@ type BetSide =
 type SimpleCard = { r: number; s: number }; // r:1..13, s:0..3
 
 const now = () => new Date();
+
+/* ================== 台北時間工具 ================== */
+function toTaipeiDate(d: Date) {
+  // 以 UTC 偏移方式計算 yyyy-mm-dd
+  const utc = d.getTime() + d.getTimezoneOffset() * 60000;
+  return new Date(utc + TAIPEI_OFFSET_MIN * 60000);
+}
+
+function ymdTaipei(d = new Date()) {
+  const t = toTaipeiDate(d);
+  const y = t.getFullYear();
+  const m = String(t.getMonth() + 1).padStart(2, "0");
+  const day = String(t.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function startOfTodayTaipei(d = new Date()) {
+  const t = toTaipeiDate(d);
+  t.setHours(0, 0, 0, 0);
+  // 轉回系統時區的絕對時間
+  const utc = t.getTime() - t.getTimezoneOffset() * 60000;
+  return new Date(utc);
+}
+
+function startOfTomorrowTaipei(d = new Date()) {
+  const s = startOfTodayTaipei(d);
+  return new Date(s.getTime() + 24 * 60 * 60 * 1000);
+}
 
 /* ================== 可重現 RNG + 百家樂發牌 ================== */
 function rng(seedStr: string) {
@@ -49,8 +79,8 @@ function rng(seedStr: string) {
 }
 
 const draw = (rand: () => number): SimpleCard => ({
-  r: Math.floor(rand() * 13) + 1, // 1..13
-  s: Math.floor(rand() * 4),      // 0..3
+  r: Math.floor(rand() * 13) + 1,
+  s: Math.floor(rand() * 4),
 });
 const pt = (r: number) => (r >= 10 ? 0 : r === 1 ? 1 : r); // A=1, 10/J/Q/K=0
 
@@ -97,7 +127,7 @@ function dealBaccarat(seed: string) {
   };
 }
 
-/** 判斷對子 / 任一對 / 完美對 */
+/** 對子 / 任一對 / 完美對 */
 function pairFlags(P: SimpleCard[], B: SimpleCard[]) {
   const pPair = P[0] && P[1] && P[0].r === P[1].r;
   const bPair = B[0] && B[1] && B[0].r === B[1].r;
@@ -109,7 +139,6 @@ function pairFlags(P: SimpleCard[], B: SimpleCard[]) {
 }
 
 /* ================== PostgreSQL Advisory Lock（DB 鎖） ================== */
-/** 給每個房一個固定整數 key（也能改成 hash(room)） */
 const ROOM_LOCK_KEY: Record<RoomCode, number> = { R30: 1001, R60: 1002, R90: 1003 };
 
 async function acquireRoomLock(room: RoomCode): Promise<boolean> {
@@ -137,9 +166,9 @@ async function ensureCurrentRound(room: RoomCode) {
 }
 
 async function tickRoom(room: RoomCode) {
-  // 先嘗試拿鎖，拿不到就跳過（避免多副本搶同一房）
   const got = await acquireRoomLock(room);
   if (!got) return;
+
   try {
     let current = await ensureCurrentRound(room);
 
@@ -155,7 +184,7 @@ async function tickRoom(room: RoomCode) {
     }
 
     if (current.phase === "REVEALING") {
-      // 本版 REVEAL_SECONDS=0 ⇒ 立即結算；若 >0 可在 round 增加 revealAt 判斷是否到期
+      // REVEAL_SECONDS=0 ⇒ 立即結算
       await settleAndSpawnNext(room, current.id);
       return;
     }
@@ -177,21 +206,59 @@ async function tickRoom(room: RoomCode) {
   }
 }
 
-/* ================== 結算 + 開下一局 ================== */
-async function settleAndSpawnNext(room: RoomCode, roundId: string) {
-  // 冪等：避免重複結算
+/* ================== 每日 00:00（台北）自動重置 ================== */
+/**
+ * 規則：
+ * - 若「今天（台北時間）這個房」尚未有任何 round.startedAt，代表剛跨日：
+ *   1) 取上一局（可能仍在 BETTING/REVEALING），直接正常結算（不取消、不退注）；
+ *   2) 開出新的一天第一局（BETTING），startedAt=now()；
+ * - 具體行為在房鎖內做，確保單房單執行緒。
+ */
+async function dailyResetIfNeeded(room: RoomCode) {
+  const got = await acquireRoomLock(room);
+  if (!got) return;
+  try {
+    const startToday = startOfTodayTaipei();
+    const startTomorrow = startOfTomorrowTaipei();
+
+    // 今天是否已有局
+    const todayHasRound = await prisma.round.findFirst({
+      where: { room, startedAt: { gte: startToday, lt: startTomorrow } },
+      select: { id: true },
+    });
+
+    if (todayHasRound) return; // 已有，不需重置
+
+    // 沒有 ⇒ 剛跨日。把最後一局補結算（若未結算），然後開新局
+    const last = await prisma.round.findFirst({
+      where: { room },
+      orderBy: { startedAt: "desc" },
+    });
+
+    if (last && last.phase !== "SETTLED") {
+      await settleRoundById(room, last.id); // 只結算，不自動開局（避免兩次開局）
+    }
+
+    // 開新的一天第一局
+    await prisma.round.create({
+      data: { room, phase: "BETTING", startedAt: now() },
+    });
+  } finally {
+    await releaseRoomLock(room);
+  }
+}
+
+/* ================== 結算工具 ================== */
+async function settleRoundById(room: RoomCode, roundId: string) {
   const round = await prisma.round.findUnique({ where: { id: roundId } });
   if (!round) return;
   if (round.phase === "SETTLED") return;
 
-  // 發牌（以 roundId 為 seed）
   const sim = dealBaccarat(round.id);
   const outcome: Outcome = sim.outcome;
 
-  // 讀下注
   const bets = await prisma.bet.findMany({ where: { roundId } });
 
-  // 賠率
   const payoutMap: Record<BetSide, number> = {
     PLAYER: 1,
     BANKER: 1,
@@ -203,20 +270,18 @@ async function settleAndSpawnNext(room: RoomCode, roundId: string) {
     BANKER_SUPER_SIX: 12,
   };
 
-  // 旗標（對子/完美對/任一對）
   const { playerPair, bankerPair, anyPair, perfectPair } = sim.flags;
   const bankerSuperSix = outcome === "BANKER" && sim.bPts === 6;
 
-  // 聚合派彩
   const userPayout: Record<string, number> = {};
   for (const b of bets) {
     let prize = 0;
 
-    // 基本三門
+    // 三門：和局退本
     if (b.side === "PLAYER" || b.side === "BANKER" || b.side === "TIE") {
       if (outcome === "TIE") {
         if (b.side === "TIE") prize = Math.floor(b.amount * payoutMap.TIE);
-        else prize = b.amount; // 和局：閒/莊退本
+        else prize = b.amount; // 退本
       } else if (outcome === "PLAYER" && b.side === "PLAYER") {
         prize = Math.floor(b.amount * payoutMap.PLAYER);
       } else if (outcome === "BANKER" && b.side === "BANKER") {
@@ -225,28 +290,15 @@ async function settleAndSpawnNext(room: RoomCode, roundId: string) {
     }
 
     // 旁注
-    if (b.side === "PLAYER_PAIR" && playerPair) {
-      prize += Math.floor(b.amount * payoutMap.PLAYER_PAIR);
-    }
-    if (b.side === "BANKER_PAIR" && bankerPair) {
-      prize += Math.floor(b.amount * payoutMap.BANKER_PAIR);
-    }
-    if (b.side === "ANY_PAIR" && anyPair) {
-      prize += Math.floor(b.amount * payoutMap.ANY_PAIR);
-    }
-    if (b.side === "PERFECT_PAIR" && perfectPair) {
-      prize += Math.floor(b.amount * payoutMap.PERFECT_PAIR);
-    }
-    if (b.side === "BANKER_SUPER_SIX" && bankerSuperSix) {
-      prize += Math.floor(b.amount * payoutMap.BANKER_SUPER_SIX);
-    }
+    if (b.side === "PLAYER_PAIR" && playerPair) prize += Math.floor(b.amount * payoutMap.PLAYER_PAIR);
+    if (b.side === "BANKER_PAIR" && bankerPair) prize += Math.floor(b.amount * payoutMap.BANKER_PAIR);
+    if (b.side === "ANY_PAIR" && anyPair) prize += Math.floor(b.amount * payoutMap.ANY_PAIR);
+    if (b.side === "PERFECT_PAIR" && perfectPair) prize += Math.floor(b.amount * payoutMap.PERFECT_PAIR);
+    if (b.side === "BANKER_SUPER_SIX" && bankerSuperSix) prize += Math.floor(b.amount * payoutMap.BANKER_SUPER_SIX);
 
-    if (prize > 0) {
-      userPayout[b.userId] = (userPayout[b.userId] ?? 0) + prize;
-    }
+    if (prize > 0) userPayout[b.userId] = (userPayout[b.userId] ?? 0) + prize;
   }
 
-  // 交易：寫入結果、派彩、Ledger
   await prisma.$transaction(async (tx) => {
     await tx.round.update({
       where: { id: roundId },
@@ -254,10 +306,7 @@ async function settleAndSpawnNext(room: RoomCode, roundId: string) {
         phase: "SETTLED",
         outcome,
         endedAt: now(),
-        // 如果你 schema 有以下欄位，建議一起寫入（供前端顯示）：
-        // pointP: sim.pPts, pointB: sim.bPts,
-        // cardsPlayer: sim.P3 ? [sim.P[0], sim.P[1], sim.P3] : [sim.P[0], sim.P[1]],
-        // cardsBanker: sim.B3 ? [sim.B[0], sim.B[1], sim.B3] : [sim.B[0], sim.B[1]],
+        // （若你的 schema 有 pointP/pointB 或 cards 欄位，可在此一起寫入）
       },
     });
 
@@ -271,8 +320,11 @@ async function settleAndSpawnNext(room: RoomCode, roundId: string) {
       });
     }
   });
+}
 
-  // 直接開下一局
+async function settleAndSpawnNext(room: RoomCode, roundId: string) {
+  await settleRoundById(room, roundId);
+  // 再開下一局
   await prisma.round.create({
     data: { room, phase: "BETTING", startedAt: now() },
   });
@@ -280,11 +332,21 @@ async function settleAndSpawnNext(room: RoomCode, roundId: string) {
 
 /* ================== Worker 入口 ================== */
 export async function runTick() {
+  // 先做每日重置：每房檢查「今天」是否已開局；沒有則補結算上一局並開第一局
+  for (const room of ROOMS) {
+    try {
+      await dailyResetIfNeeded(room);
+    } catch (e) {
+      console.error(`[worker] daily reset room ${room} error:`, e);
+    }
+  }
+
+  // 再跑房內狀態機
   for (const room of ROOMS) {
     try {
       await tickRoom(room);
     } catch (e) {
-      console.error(`[worker] room ${room} error:`, e);
+      console.error(`[worker] tick room ${room} error:`, e);
     }
   }
 }
