@@ -8,7 +8,7 @@ import { getRoomInfo, getCurrentWithMyBets } from "@/services/baccarat.service";
 
 export const dynamic = "force-dynamic";
 
-/** --------- Query 解析 --------- */
+// --------- Query 解析 ---------
 const Q = z.object({
   room: z
     .string()
@@ -19,7 +19,7 @@ const Q = z.object({
 type Outcome = "PLAYER" | "BANKER" | "TIE";
 type SimpleCard = { r: number; s: number }; // r:1~13, s:0~3
 
-/** --------- 可重現的發牌器（用 roundId 作為種子） --------- */
+// --------- 可重現的發牌器（用 roundId 作為種子） ---------
 function rng(seedStr: string) {
   let h = 2166136261 >>> 0;
   for (let i = 0; i < seedStr.length; i++) {
@@ -27,13 +27,16 @@ function rng(seedStr: string) {
     h = Math.imul(h, 16777619);
   }
   return () => {
-    h += 0x6D2B79F5;
+    h += 0x6d2b79f5;
     let t = Math.imul(h ^ (h >>> 15), 1 | h);
     t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-const draw = (rand: () => number): SimpleCard => ({ r: Math.floor(rand() * 13) + 1, s: Math.floor(rand() * 4) });
+const draw = (rand: () => number): SimpleCard => ({
+  r: Math.floor(rand() * 13) + 1,
+  s: Math.floor(rand() * 4),
+});
 const point = (r: number) => (r >= 10 ? 0 : r === 1 ? 1 : r); // A=1, 10/J/Q/K=0
 
 function dealBaccarat(seed: string) {
@@ -47,7 +50,7 @@ function dealBaccarat(seed: string) {
   let p3: SimpleCard | undefined;
   let b3: SimpleCard | undefined;
 
-  // 簡化的第三張規則（足夠前端動畫與測試派彩）
+  // 簡化第三張規則（足夠前端動畫與測試派彩）
   if (p2 <= 5) p3 = draw(rand);
   const pPts = (p2 + (p3 ? point(p3.r) : 0)) % 10;
 
@@ -72,12 +75,14 @@ function dealBaccarat(seed: string) {
   };
 }
 
-/** --------- API 主體 --------- */
+// --------- API 主體 ---------
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
     const parsed = Q.safeParse({ room: url.searchParams.get("room") ?? "" });
-    if (!parsed.success) return NextResponse.json({ ok: false, error: "BAD_ROOM" }, { status: 400 });
+    if (!parsed.success) {
+      return NextResponse.json({ ok: false, error: "BAD_ROOM" }, { status: 400 });
+    }
     const room = parsed.data.room as RoomCode;
 
     // 可未登入
@@ -103,7 +108,10 @@ export async function GET(req: NextRequest) {
     // 錢包
     let balance: number | null = null;
     if (userId) {
-      const me = await prisma.user.findUnique({ where: { id: userId }, select: { balance: true } });
+      const me = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { balance: true },
+      });
       balance = me?.balance ?? 0;
     }
 
@@ -116,7 +124,9 @@ export async function GET(req: NextRequest) {
     }
 
     // 生成本局的可重現牌面與點數（僅 REVEALING/SETTLED 會曝光）
-    let cards: { player: { rank: number; suit: number }[]; banker: { rank: number; suit: number }[] } | undefined;
+    let cards:
+      | { player: { rank: number; suit: number }[]; banker: { rank: number; suit: number }[] }
+      | undefined;
     let pPts = 0;
     let bPts = 0;
 
@@ -140,14 +150,14 @@ export async function GET(req: NextRequest) {
           } as const)
         : null;
 
-    // recent（把 services 的最近 10 局用各自 id 模擬點數，純展示用）
+    // recent：用各回合 id 做可重現點數（純展示，不影響真實結算）
     const recent =
-      current?.recent?.map((r, idx) => {
+      current?.recent?.map((r) => {
         if (!r.id) return { roundSeq: 0, outcome: (r.outcome ?? null) as Outcome | null, p: 0, b: 0 };
         const sim = dealBaccarat(r.id);
         return {
-          roundSeq: 0, // 你之後如果在 DB 加欄位就填真值
-          outcome: (r.outcome ?? sim.outcome) as Outcome,
+          roundSeq: 0, // 之後 DB 若有欄位再帶真值
+          outcome: (r.outcome ?? sim.outcome) as Outcome | null,
           p: sim.pPts,
           b: sim.bPts,
         };
@@ -161,14 +171,14 @@ export async function GET(req: NextRequest) {
       roundSeq: 0, // 之後若有欄位再帶真值
       phase: (current?.phase ?? "BETTING") as "BETTING" | "REVEALING" | "SETTLED",
       secLeft,
-      result,        // { outcome, p, b } 或 null
-      cards,         // 只有在 REVEALING/SETTLED 才會帶
+      result, // { outcome, p, b } 或 null
+      cards,  // 只有在 REVEALING/SETTLED 才會帶
       myBets: myAgg,
       balance,
       recent,
     });
   } catch (e) {
-    console.error(e);
+    console.error("[baccarat/state] error:", e);
     return NextResponse.json({ ok: false, error: "SERVER_ERROR" }, { status: 500 });
   }
 }
