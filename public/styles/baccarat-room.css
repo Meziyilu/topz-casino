@@ -1,0 +1,84 @@
+/* 背景 */
+.bg-casino-bg {
+  background:
+    radial-gradient(1200px 600px at 20% -10%, rgba(59,130,246,.15), transparent 60%),
+    radial-gradient(900px 500px at 120% 10%, rgba(236,72,153,.12), transparent 65%),
+    radial-gradient(800px 400px at 50% 110%, rgba(16,185,129,.10), transparent 60%),
+    #0b0f1a;
+}
+
+/* 玻璃卡 */
+.glass {
+  background: linear-gradient(135deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* 外框光暈 */
+.glow-ring {
+  box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset, 0 10px 30px rgba(0,0,0,.35);
+}
+
+/* 鏡面掃光覆層（穩定的不影響點擊） */
+.sheen::after {
+  content: "";
+  position: absolute; inset: 0;
+  background: linear-gradient(120deg, transparent 0%, rgba(255,255,255,.08) 30%, transparent 60%);
+  transform: translateX(-120%);
+  pointer-events: none;
+  animation: sheenSlide 6s linear infinite;
+}
+@keyframes sheenSlide {
+  0% { transform: translateX(-120%); }
+  35% { transform: translateX(120%); }
+  100% { transform: translateX(120%); }
+}
+
+/* 金色掃描（獲勝強調用） */
+.gold-sweep {
+  background: linear-gradient(120deg, transparent 0%, rgba(255,255,255,.22) 20%, rgba(255,215,0,.35) 40%, rgba(255,255,255,.18) 60%, transparent 80%);
+  position: absolute; inset: -6px; pointer-events: none;
+  animation: goldSweep 1.2s ease-in-out;
+  mask-image: linear-gradient(90deg, transparent 0%, black 25%, black 75%, transparent 100%);
+}
+@keyframes goldSweep {
+  0% { transform: translateX(-120%); opacity: 0; }
+  40% { opacity: .9; }
+  100% { transform: translateX(120%); opacity: 0; }
+}
+
+/* 全螢幕柔光（中獎） */
+.soft-glow {
+  background: radial-gradient(ellipse at center, rgba(255,215,0,.16) 0%, rgba(255,215,0,.10) 30%, rgba(255,215,0,.05) 55%, transparent 70%);
+  animation: softGlow 1.2s ease-in-out;
+}
+@keyframes softGlow {
+  0% { opacity: 0; }
+  40% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* 小工具類 */
+.rotate-y-0 { transform: rotateY(0deg); }
+.rotate-y-180 { transform: rotateY(180deg); }
+.tilt { transform: perspective(1200px) rotateX(0.5deg) rotateY(-0.5deg); }
+
+/* 泛用按鈕（玻璃） */
+.btn.glass {
+  border: 1px solid rgba(255,255,255,.16);
+  background: linear-gradient(135deg, rgba(255,255,255,.12), rgba(255,255,255,.06));
+  backdrop-filter: blur(10px);
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 12px;
+  transition: transform .12s ease, border-color .2s ease, box-shadow .2s ease;
+}
+.btn.glass:hover {
+  border-color: rgba(255,255,255,.35);
+  box-shadow: 0 8px 24px rgba(0,0,0,.35);
+}
+.btn.glass:active { transform: scale(.97); }
+
+/* 卡片內的表格微透明線條 */
+table { border-collapse: collapse; }
+th, td { border-color: rgba(255,255,255,.10); }
