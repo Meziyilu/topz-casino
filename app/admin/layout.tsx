@@ -1,8 +1,9 @@
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="zh-Hant">
-      <body style={{ background:"#0b0f1a", color:"#fff", minHeight:"100vh" }}>
+    <html>
+      <body>
         {children}
+        <link rel="stylesheet" href="/style/admin/baccarat.css" />
       </body>
     </html>
   );

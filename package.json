@@ -16,7 +16,8 @@
     "db:push": "prisma db push",
     "db:reset": "prisma migrate reset --force",
     "validate:structure": "ts-node --transpile-only scripts/validate-structure.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "baccarat:daemon": "node -r ts-node/register/transpile-only scripts/baccarat-daemon.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.883.0",
