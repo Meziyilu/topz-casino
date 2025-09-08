@@ -1,84 +1,188 @@
-/* 背景 */
-.bg-casino-bg {
+/* ===== Baccarat Room — dark glass look ===== */
+
+:root{
+  --glass-bg: rgba(255,255,255,.06);
+  --glass-stroke: rgba(255,255,255,.10);
+  --glass-hover: rgba(255,255,255,.14);
+  --gold: #ffd700;
+  --cyan: #67e8f9;
+  --rose: #fda4af;
+  --amber: #fde68a;
+  --violet: #c4b5fd;
+  --emerald: #6ee7b7;
+}
+
+/* wrapper */
+.bk-room-wrap{
+  min-height:100vh;
   background:
-    radial-gradient(1200px 600px at 20% -10%, rgba(59,130,246,.15), transparent 60%),
-    radial-gradient(900px 500px at 120% 10%, rgba(236,72,153,.12), transparent 65%),
-    radial-gradient(800px 400px at 50% 110%, rgba(16,185,129,.10), transparent 60%),
-    #0b0f1a;
+    radial-gradient(1000px 700px at 110% 10%, rgba(167,139,250,.12), transparent 60%),
+    radial-gradient(1200px 600px at 10% -10%, rgba(96,165,250,.12), transparent 60%),
+    radial-gradient(800px 700px at 50% 110%, rgba(253,164,175,.10), transparent 60%),
+    #0b0f18;
+  color:#fff;
 }
 
-/* 玻璃卡 */
-.glass {
-  background: linear-gradient(135deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+/* header */
+.bk-header{
+  display:flex; align-items:center; justify-content:space-between;
+  gap:16px; padding:18px 24px; margin:0 auto; max-width:1120px;
+  border-bottom:1px solid var(--glass-stroke);
+  background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,0));
+  position: sticky; top:0; z-index:20; backdrop-filter:saturate(140%) blur(6px);
+}
+.bk-header .left, .bk-header .right{ display:flex; align-items:center; gap:12px; }
+.bk-header .center{ font-weight:700; opacity:.9; }
+.bk-room-name{ font-weight:700; padding-left:6px; }
+
+.bk-btn{
+  padding:8px 12px; border-radius:10px;
+  background:var(--glass-bg); border:1px solid var(--glass-stroke);
+  color:#fff; transition:all .2s ease;
+}
+.bk-btn:hover{ border-color: var(--glass-hover); transform: translateY(-1px); }
+
+/* layout grid */
+.bk-content{
+  max-width:1120px; margin:24px auto 64px; padding:0 16px;
+  display:grid; grid-template-columns: 1.8fr 1fr; gap:20px;
+}
+@media (max-width: 1024px){
+  .bk-content{ grid-template-columns: 1fr; }
 }
 
-/* 外框光暈 */
-.glow-ring {
-  box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset, 0 10px 30px rgba(0,0,0,.35);
+.bk-left, .bk-right{ display:flex; flex-direction:column; gap:20px; }
+
+/* panel */
+.bk-panel{
+  border:1px solid var(--glass-stroke);
+  background:linear-gradient(135deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+  border-radius:16px; padding:16px; position:relative;
+  box-shadow: 0 8px 32px rgba(0,0,0,.37);
 }
 
-/* 鏡面掃光覆層（穩定的不影響點擊） */
-.sheen::after {
-  content: "";
-  position: absolute; inset: 0;
-  background: linear-gradient(120deg, transparent 0%, rgba(255,255,255,.08) 30%, transparent 60%);
-  transform: translateX(-120%);
-  pointer-events: none;
-  animation: sheenSlide 6s linear infinite;
+/* reveal */
+.bk-reveal .bk-reveal-head{
+  display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;
 }
-@keyframes sheenSlide {
-  0% { transform: translateX(-120%); }
-  35% { transform: translateX(120%); }
-  100% { transform: translateX(120%); }
+.bk-reveal .title{ font-weight:700; }
+.bk-reveal .sub{ font-size:14px; opacity:.8; }
+
+.bk-reveal-grid{
+  display:grid; grid-template-columns: 1fr 1fr; gap:16px;
+}
+@media (max-width:640px){ .bk-reveal-grid{ grid-template-columns: 1fr; } }
+
+.side{
+  position:relative; border:1px solid var(--glass-stroke); border-radius:14px; padding:12px;
+  background: linear-gradient(135deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+  transition:border-color .2s ease, box-shadow .2s ease;
+}
+.side-player{ background:linear-gradient(135deg, rgba(103,232,249,.10), rgba(255,255,255,.04)); }
+.side-banker{ background:linear-gradient(135deg, rgba(253,164,175,.10), rgba(255,255,255,.04)); }
+.side.win{ border-color: rgba(255,215,0,.7); box-shadow:0 0 24px rgba(255,215,0,.35); }
+
+.side-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.side-head .name{ font-weight:700; }
+.side-head .pts{ font-size:13px; opacity:.8; }
+
+.cards{ display:flex; gap:12px; justify-content:center; align-items:center; min-height:96px; }
+
+.badges{ position:absolute; left:12px; bottom:10px; display:flex; gap:8px; }
+
+/* reveal result */
+.bk-reveal-result{ margin-top:10px; font-size:18px; }
+
+/* bet panel */
+.bk-bet-panel .panel-head{
+  display:flex; align-items:center; justify-content:space-between; gap:12px; margin:10px 0 14px;
+}
+.bk-bet-panel .title{ font-weight:700; }
+.bk-bet-panel .amount{ font-size:14px; opacity:.9; }
+.bk-bet-panel .amount input{
+  width:110px; margin:0 8px; padding:6px 8px; color:#fff;
+  background:transparent; border:1px solid var(--glass-stroke); border-radius:8px;
+  outline:none;
+}
+.bk-bet-panel .amount input:focus{ border-color:var(--glass-hover); }
+
+.chips{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
+.chips button{
+  padding:6px 10px; border-radius:999px; background:transparent; color:#fff;
+  border:1px solid var(--glass-stroke); transition: all .18s ease;
+}
+.chips button:hover{ border-color:var(--glass-hover); }
+.chips button:disabled{ opacity:.5; cursor:not-allowed; }
+.chips button.active{ border-color:#fff; background:rgba(255,255,255,.12); }
+
+/* info cards grid */
+.mybets.grid{
+  display:grid;
+  grid-template-columns: repeat(4, minmax(0,1fr));
+  gap:12px; margin-bottom:14px;
+}
+@media (max-width: 920px){ .mybets.grid{ grid-template-columns: repeat(2, minmax(0,1fr)); } }
+
+/* bet grid */
+.bet-grid{
+  display:grid;
+  grid-template-columns: repeat(4, minmax(0,1fr));
+  gap:12px;
+}
+@media (max-width: 920px){ .bet-grid{ grid-template-columns: repeat(2, minmax(0,1fr)); } }
+
+.err{ color:#fca5a5; font-size:13px; margin-top:8px; }
+
+/* streaks */
+.streak-grid{
+  display:grid; grid-template-columns: repeat(10, minmax(0,1fr)); gap:6px;
+}
+.streak{
+  height:24px; border-radius:6px; display:flex; align-items:center; justify-content:center;
+  font-size:10px; opacity:.95; border:1px solid transparent;
+}
+.streak.p{ background: rgba(103,232,249,.25); border-color: rgba(103,232,249,.6); }
+.streak.b{ background: rgba(253,164,175,.25); border-color: rgba(253,164,175,.6); }
+.streak.t{ background: rgba(253,230,138,.25); border-color: rgba(253,230,138,.6); }
+
+.table-wrap{ margin-top:12px; max-height:260px; overflow:auto; font-size:14px; opacity:.95; }
+.table-wrap table{ width:100%; border-collapse:collapse; }
+.table-wrap thead{ opacity:.7; }
+.table-wrap tbody tr{ border-top:1px solid var(--glass-stroke); }
+.table-wrap th, .table-wrap td{ padding:6px 8px; text-align:left; }
+.muted{ opacity:.6; }
+
+/* gold sweep / soft glow */
+@keyframes goldSweep{
+  0%{ transform: translateX(-120%); opacity:0; }
+  40%{ opacity:.9; }
+  100%{ transform: translateX(120%); opacity:0; }
+}
+@keyframes softGlow{
+  0%{ opacity:0; }
+  40%{ opacity:1; }
+  100%{ opacity:0; }
 }
 
-/* 金色掃描（獲勝強調用） */
-.gold-sweep {
-  background: linear-gradient(120deg, transparent 0%, rgba(255,255,255,.22) 20%, rgba(255,215,0,.35) 40%, rgba(255,255,255,.18) 60%, transparent 80%);
-  position: absolute; inset: -6px; pointer-events: none;
+.gold-sweep{
   animation: goldSweep 1.2s ease-in-out;
+  background: linear-gradient(
+    120deg,
+    transparent 0%,
+    rgba(255,255,255,.22) 20%,
+    rgba(255,215,0,.35) 40%,
+    rgba(255,255,255,.18) 60%,
+    transparent 80%
+  );
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, black 25%, black 75%, transparent 100%);
   mask-image: linear-gradient(90deg, transparent 0%, black 25%, black 75%, transparent 100%);
 }
-@keyframes goldSweep {
-  0% { transform: translateX(-120%); opacity: 0; }
-  40% { opacity: .9; }
-  100% { transform: translateX(120%); opacity: 0; }
-}
 
-/* 全螢幕柔光（中獎） */
-.soft-glow {
-  background: radial-gradient(ellipse at center, rgba(255,215,0,.16) 0%, rgba(255,215,0,.10) 30%, rgba(255,215,0,.05) 55%, transparent 70%);
+.soft-glow{
   animation: softGlow 1.2s ease-in-out;
+  background: radial-gradient(ellipse at center,
+              rgba(255,215,0,.16) 0%,
+              rgba(255,215,0,.10) 30%,
+              rgba(255,215,0,.05) 55%,
+              transparent 70%);
 }
-@keyframes softGlow {
-  0% { opacity: 0; }
-  40% { opacity: 1; }
-  100% { opacity: 0; }
-}
-
-/* 小工具類 */
-.rotate-y-0 { transform: rotateY(0deg); }
-.rotate-y-180 { transform: rotateY(180deg); }
-.tilt { transform: perspective(1200px) rotateX(0.5deg) rotateY(-0.5deg); }
-
-/* 泛用按鈕（玻璃） */
-.btn.glass {
-  border: 1px solid rgba(255,255,255,.16);
-  background: linear-gradient(135deg, rgba(255,255,255,.12), rgba(255,255,255,.06));
-  backdrop-filter: blur(10px);
-  color: #fff;
-  padding: 8px 14px;
-  border-radius: 12px;
-  transition: transform .12s ease, border-color .2s ease, box-shadow .2s ease;
-}
-.btn.glass:hover {
-  border-color: rgba(255,255,255,.35);
-  box-shadow: 0 8px 24px rgba(0,0,0,.35);
-}
-.btn.glass:active { transform: scale(.97); }
-
-/* 卡片內的表格微透明線條 */
-table { border-collapse: collapse; }
-th, td { border-color: rgba(255,255,255,.10); }
