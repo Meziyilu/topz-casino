@@ -24,6 +24,7 @@ const REVEAL_SECONDS = 5; // 開牌動畫等待秒數（要配合 /admin/settle?
 export default function BaccaratAdminPage() {
   const [room, setRoom] = useState<RoomCode>("R60");
   const [state, setState] = useState<StateResp | null>(null);
+  const stateRef = useRef<StateResp | null>(null); // 供自動輪播讀取最新狀態
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string>("");
   const [logs, setLogs] = useState<string[]>([]);
@@ -33,16 +34,22 @@ export default function BaccaratAdminPage() {
 
   const secs = useMemo(() => ROOM_SECONDS[room], [room]);
 
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
   const log = useCallback((s: string) => {
     setLogs((L) => [`${new Date().toLocaleTimeString()}  ${s}`, ...L].slice(0, 200));
-    // 也順便在 console
     // eslint-disable-next-line no-console
     console.log("[ADMIN]", s);
   }, []);
 
   const fetchState = useCallback(async () => {
     try {
-      const res = await fetch(`/api/casino/baccarat/state?room=${room}`, { cache: "no-store", credentials: "include" });
+      const res = await fetch(`/api/casino/baccarat/state?room=${room}`, {
+        cache: "no-store",
+        credentials: "include",
+      });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "STATE_ERROR");
       setState(json as StateResp);
@@ -61,10 +68,10 @@ export default function BaccaratAdminPage() {
   async function startRound() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/casino/baccarat/admin/start?room=${room}&seconds=${secs}`, {
-        method: "POST",
-        credentials: "include",
-      });
+      const res = await fetch(
+        `/api/casino/baccarat/admin/start?room=${room}&seconds=${secs}`,
+        { method: "POST", credentials: "include" }
+      );
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "START_FAIL");
       log(`開始新局（${room}，${secs}s） roundId=${json.roundId}, roundSeq=${json.roundSeq}`);
@@ -80,10 +87,10 @@ export default function BaccaratAdminPage() {
   async function settleRound() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/casino/baccarat/admin/settle?room=${room}&reveal=${REVEAL_SECONDS}`, {
-        method: "POST",
-        credentials: "include",
-      });
+      const res = await fetch(
+        `/api/casino/baccarat/admin/settle?room=${room}&reveal=${REVEAL_SECONDS}`,
+        { method: "POST", credentials: "include" }
+      );
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "SETTLE_FAIL");
       log(`結算完成：${json.outcome}（P:${json.points?.p ?? "-"} / B:${json.points?.b ?? "-"})`);
@@ -96,27 +103,26 @@ export default function BaccaratAdminPage() {
     }
   }
 
-  // 自動輪播：只要頁面開著就會「開始 → 倒數 → 結算（等動畫）→ 下一局」
+  // 自動輪播（使用 stateRef 取得最新 state；避免閉包舊值）
   const autoLoop = useCallback(async () => {
     abortAutoRef.current.stop = false;
 
     while (!abortAutoRef.current.stop) {
+      // 先拉一次最新狀態
       await fetchState();
-
-      const s = (await (async () => state)) || null; // 用現有 state 初值（很快就被輪詢覆蓋）
-      const phase = s?.phase ?? "SETTLED";
+      const cur = stateRef.current;
+      const phase: Phase = cur?.phase ?? "SETTLED";
 
       if (phase === "BETTING") {
-        const left = state?.secLeft ?? secs;
-        log(`下注中… 倒數 ${left}s`);
-        // 等到下注期結束（或接近）
-        let t = left;
+        let t = Math.max(0, cur?.secLeft ?? secs);
+        log(`下注中… 倒數 ${t}s`);
         while (t > 1 && !abortAutoRef.current.stop) {
           await sleep(1000);
           t--;
         }
         if (abortAutoRef.current.stop) break;
         await settleRound();
+        // 等待開牌動畫時間
         await sleep((REVEAL_SECONDS + 1) * 1000);
       } else if (phase === "REVEALING") {
         log("開牌中… 等待結束後自動進下一步");
@@ -124,17 +130,19 @@ export default function BaccaratAdminPage() {
       } else {
         // SETTLED 或沒有開局 → 直接開新局
         await startRound();
-        await sleep(1000);
+        await sleep(600);
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [room, secs, state]);
+  }, [room, secs]);
 
   useEffect(() => {
     if (autoRun) {
       log(`🔁 已啟用【自動輪播】（房間：${room}，${secs}s，揭示 ${REVEAL_SECONDS}s）`);
       autoLoop();
-      return () => { abortAutoRef.current.stop = true; };
+      return () => {
+        abortAutoRef.current.stop = true;
+      };
     } else {
       abortAutoRef.current.stop = true;
       log("⏹️ 已停止【自動輪播】");
