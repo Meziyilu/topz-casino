@@ -74,7 +74,7 @@ export default function BaccaratRoomsPage() {
           <span className="bk-room">Baccarat</span>
         </div>
         <div className="center">
-          <div className="bk-phase betting">SELECT ROOM</div>
+          <div className="bk-phase betting">百家樂大廳</div>
         </div>
         <div className="right">
           <Link href="/" className="bk-btn ghost">返回大廳</Link>
