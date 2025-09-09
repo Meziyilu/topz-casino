@@ -17,6 +17,7 @@
     "db:reset": "prisma migrate reset --force",
     "validate:structure": "ts-node --transpile-only scripts/validate-structure.ts",
     "postinstall": "prisma generate",
+    "cron": "ts-node worker/cron.ts",
     "auto:baccarat": "node --require esbuild-register scripts/auto-baccarat.ts"
   },
   "dependencies": {
