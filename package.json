@@ -18,7 +18,9 @@
     "validate:structure": "ts-node --transpile-only scripts/validate-structure.ts",
     "postinstall": "prisma generate",
     "cron": "ts-node worker/cron.ts",
-    "auto:baccarat": "node --require esbuild-register scripts/auto-baccarat.ts"
+    "auto:baccarat": "node --require esbuild-register scripts/auto-baccarat.ts",
+    "cron:tick": "node worker/cron.mjs tick",
+    "cron:daily": "node worker/cron.mjs daily"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.883.0",
@@ -53,9 +55,7 @@
     "prisma": "6.15.0",
     "tailwindcss": "3.4.7",
     "ts-node": "10.9.2",
-    "typescript": "5.9.2",
-    "cron:tick": "node worker/cron.mjs tick",
-    "cron:daily": "node worker/cron.mjs daily"
+    "typescript": "5.9.2"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
