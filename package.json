@@ -17,10 +17,7 @@
     "db:reset": "prisma migrate reset --force",
     "validate:structure": "ts-node --transpile-only scripts/validate-structure.ts",
     "postinstall": "prisma generate",
-    "cron": "ts-node worker/cron.ts",
-    "auto:baccarat": "node --require esbuild-register scripts/auto-baccarat.ts",
-    "cron:tick": "node worker/cron.mjs tick",
-    "cron:daily": "node worker/cron.mjs daily"
+    "auto:baccarat": "node --require esbuild-register scripts/auto-baccarat.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.883.0",
