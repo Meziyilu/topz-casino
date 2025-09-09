@@ -1,27 +1,62 @@
 // worker/cron.mjs
-const BASE = process.env.CRON_BASE_URL || "https://你的域名";
-const KEY  = process.env.CRON_SECRET   || "dev_secret";
 
-async function hit(path) {
-  const res = await fetch(`${BASE}${path}`, {
-    method: "POST",
-    headers: { "x-cron-key": KEY }
-  });
+function normalizeBaseUrl(u) {
+  if (!u) throw new Error("BASE_URL is empty. Set env BASE_URL to your site, e.g. https://topz-casino.onrender.com");
+  u = u.trim();
+
+  // 如果像 "topz-casino.onrender.com" 沒有協定，就補 https://
+  if (!/^https?:\/\//i.test(u)) u = "https://" + u;
+
+  // 轉成 URL 檢查是否合法，並移除尾端斜線
+  const parsed = new URL(u);
+  parsed.pathname = parsed.pathname.replace(/\/+$/, "");
+  return parsed.toString();
+}
+
+async function hit(path, body = null) {
+  const raw = process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || "";
+  const CRON_SECRET = process.env.CRON_SECRET || "";
+  const base = normalizeBaseUrl(raw);
+  const url = new URL(path, base).toString();
+
+  const headers = { "x-cron-key": CRON_SECRET };
+  const opts = body
+    ? { method: "POST", headers, body: JSON.stringify(body) }
+    : { method: "POST", headers };
+
+  // debug 輸出
+  console.log(`[worker] Hitting: ${url}`);
+  console.log(`[worker] Headers:`, headers);
+
+  const res = await fetch(url, opts);
   const text = await res.text();
   if (!res.ok) {
-    console.error(`[worker] ${path} -> ${res.status} ${res.statusText} :: ${text}`);
-    process.exit(1);
+    console.error(`[worker] ${res.status} ${res.statusText} -> ${text.slice(0, 300)}`);
+    throw new Error(`HTTP ${res.status}`);
   }
-  console.log(`[worker] ${path} -> ${text}`);
+  console.log(`[worker] OK -> ${text.slice(0, 300)}`);
 }
 
-const mode = process.argv[2];
-if (mode === "tick") {
-  // 只跑一次 auto（給你在 Render 的 cron job 用：*/5 * * * * *）
-  hit("/api/casino/baccarat/admin/auto").then(()=>process.exit(0));
-} else if (mode === "daily") {
-  hit("/api/casino/baccarat/admin/daily-task").then(()=>process.exit(0));
-} else {
-  console.log("Usage: node worker/cron.mjs <tick|daily>");
-  process.exit(1);
+async function main() {
+  const cmd = process.argv[2] || "tick";
+
+  if (cmd === "tick") {
+    // 每 5~10 秒跑的自動流程
+    await hit("/api/casino/baccarat/admin/auto");
+    return;
+  }
+
+  if (cmd === "daily") {
+    // 每日 00:00 的整包任務（清理 + 歸零 + 開新局）
+    await hit("/api/casino/baccarat/admin/daily-reset");
+    return;
+  }
+
+  // 其他自訂子命令也可放在這裡
+  throw new Error(`Unknown command: ${cmd}`);
 }
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
