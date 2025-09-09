@@ -1,0 +1,58 @@
+/* public/styles/admin/baccarat-admin.css */
+
+.bk-admin {
+  background: #1e293b;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+}
+
+.bk-admin h1 {
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.bk-admin-actions {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.bk-admin-actions .btn {
+  padding: 0.6rem 1.2rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.1s ease;
+}
+
+.bk-admin-actions .btn.start {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+}
+.bk-admin-actions .btn.start:hover {
+  transform: scale(1.05);
+}
+
+.bk-admin-actions .btn.settle {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: white;
+}
+.bk-admin-actions .btn.settle:hover {
+  transform: scale(1.05);
+}
+
+.bk-admin-actions .btn.reset {
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+  color: white;
+}
+.bk-admin-actions .btn.reset:hover {
+  transform: scale(1.05);
+}
+
+.bk-admin-status {
+  font-size: 0.95rem;
+  background: rgba(255,255,255,0.05);
+  padding: 1rem;
+  border-radius: 8px;
+}

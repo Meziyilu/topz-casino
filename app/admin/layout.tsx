@@ -1,9 +1,13 @@
-export default function Layout({ children }: { children: React.ReactNode }) {
+import "@/../public/styles/admin/admin.css";
+
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html>
+    <html lang="zh-Hant">
       <body>
-        {children}
-        <link rel="stylesheet" href="/style/admin/baccarat.css" />
+        <div className="admin-layout">
+          <aside className="admin-sidebar"> … </aside>
+          <main className="admin-content">{children}</main>
+        </div>
       </body>
     </html>
   );

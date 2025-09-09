@@ -1,90 +1,78 @@
 // app/api/leaderboard/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { StatPeriod } from "@prisma/client";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const room = searchParams.get("room") as "R30" | "R60" | "R90" | null;
-    const range = (searchParams.get("range") || "week").toLowerCase(); // week | day | all
+    const periodParam = (searchParams.get("period") || "WEEKLY").toUpperCase();
+    const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "10"), 1), 50);
 
-    // 時間範圍
-    const now = new Date();
-    let since: Date | undefined;
-    if (range === "week") {
-      since = new Date(now);
-      since.setDate(since.getDate() - 7);
-    } else if (range === "day") {
-      since = new Date(now);
-      since.setDate(since.getDate() - 1);
-    }
+    const period: StatPeriod =
+      periodParam === "DAILY" ? "DAILY" :
+      periodParam === "ALL_TIME" ? "ALL_TIME" :
+      "WEEKLY";
 
-    // 聚合：以投注淨贏(派彩-下注) 或單純投注額，這裡示範以「派彩總額」排序
-    // 依你的資料表：ledger.type = 'PAYOUT' 作為派彩入帳
-    const whereLedger: any = {
-      type: "PAYOUT",
-      ...(since ? { createdAt: { gte: since } } : {}),
-    };
-
-    // 若要限定房間，可從 round 反查，這裡示例用 bet -> round.room 做條件
-    // 但 ledger 沒 roundId，若你要精準到房間，建議改以 bet 聚合：
-    // 下方提供 bet 聚合版本（依「本房間投注總額」排序），比較直觀。
-
-    if (room) {
-      const top = await prisma.bet.groupBy({
-        by: ["userId"],
-        where: {
-          ...(since ? { createdAt: { gte: since } } : {}),
-          round: { room },
-        },
-        _sum: { amount: true },
-        orderBy: { _sum: { amount: "desc" } },
-        take: 20,
-      });
-
-      // 取暱稱
-      const userIds = top.map((t) => t.userId);
-      const users = await prisma.user.findMany({
-        where: { id: { in: userIds } },
-        select: { id: true, nickname: true },
-      });
-      const nameMap = Object.fromEntries(users.map((u) => [u.id, u.nickname || u.id.slice(0, 6)]));
-
-      const items = top.map((t, i) => ({
-        rank: i + 1,
-        nickname: nameMap[t.userId] ?? t.userId.slice(0, 6),
-        amount: t._sum.amount ?? 0,
-      }));
-
-      return NextResponse.json({ ok: true, items });
-    }
-
-    // 全站週榜（以派彩金額排序）
-    const payout = await prisma.ledger.groupBy({
-      by: ["userId"],
-      where: whereLedger,
-      _sum: { amount: true },
-      orderBy: { _sum: { amount: "desc" } },
-      take: 20,
+    // 找出該期間最新的一個窗口（盡量用 windowEnd，其次 updatedAt）
+    const latest = await prisma.userStatSnapshot.findFirst({
+      where: { period },
+      orderBy: [{ windowEnd: "desc" }, { updatedAt: "desc" }],
+      select: { windowStart: true, windowEnd: true }
     });
 
-    const userIds = payout.map((t) => t.userId);
-    const users = await prisma.user.findMany({
-      where: { id: { in: userIds } },
-      select: { id: true, nickname: true },
-    });
-    const nameMap = Object.fromEntries(users.map((u) => [u.id, u.nickname || u.id.slice(0, 6)]));
+    const where = latest
+      ? { period, windowStart: latest.windowStart, windowEnd: latest.windowEnd }
+      : { period };
 
-    const items = payout.map((t, i) => ({
-      rank: i + 1,
-      nickname: nameMap[t.userId] ?? t.userId.slice(0, 6),
-      amount: Math.max(0, t._sum.amount ?? 0),
+    // 以 netProfit 由大到小（贏最多）排列
+    const rows = await prisma.userStatSnapshot.findMany({
+      where,
+      orderBy: [{ netProfit: "desc" }],
+      take: limit,
+      select: {
+        userId: true,
+        netProfit: true,
+        winsCount: true,
+        lossesCount: true,
+        betsCount: true,
+        user: {
+          select: {
+            displayName: true,
+            avatarUrl: true,
+            vipTier: true,
+            headframe: true,
+            panelTint: true,
+          }
+        }
+      }
+    });
+
+    const items = rows.map((r, idx) => ({
+      rank: idx + 1,
+      userId: r.userId,
+      netProfit: Number(r.netProfit), // BigInt -> number（若超大可改字串）
+      wins: r.winsCount,
+      losses: r.lossesCount,
+      bets: r.betsCount,
+      displayName: r.user?.displayName || "玩家",
+      avatarUrl: r.user?.avatarUrl || null,
+      vipTier: r.user?.vipTier || 0,
+      headframe: r.user?.headframe || null,
+      panelTint: r.user?.panelTint || null,
     }));
 
-    return NextResponse.json({ ok: true, items });
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message || "INTERNAL_ERROR" }, { status: 500 });
+    return NextResponse.json({
+      ok: true,
+      period,
+      window: latest ? { start: latest.windowStart, end: latest.windowEnd } : null,
+      items
+    });
+  } catch (e) {
+    console.error("LEADERBOARD_GET", e);
+    return NextResponse.json({ ok: false, error: "INTERNAL" }, { status: 500 });
   }
 }
