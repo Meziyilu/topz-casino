@@ -2,22 +2,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import type { BetSide, RoomCode, RoundPhase } from "@prisma/client";
+import { getRoomInfo } from "@/services/baccarat.service";
 
-// 你 service 裡定義的靜態房間秒數
-const ROOM_SECONDS: Record<RoomCode, number> = {
-  R30: 30, R60: 60, R90: 90,
-};
+export const dynamic = "force-dynamic";
 
-// --- 小工具：校驗 Cron 金鑰 ---
+// 你的房間清單
+const ROOMS: RoomCode[] = ["R30", "R60", "R90"];
+
+// —— 安全驗證（跟 Cron 一樣的密鑰）——
 function assertCronAuth(req: NextRequest) {
+  const secret = process.env.CRON_SECRET || "dev_secret";
   const key = req.headers.get("x-cron-key");
-  const ok = key && process.env.CRON_SECRET && key === process.env.CRON_SECRET;
-  if (!ok) throw new Error("UNAUTHORIZED_CRON");
+  if (!key || key !== secret) {
+    throw Object.assign(new Error("UNAUTHORIZED"), { status: 401 });
+  }
 }
 
-// --- 小工具：算點 / 隨牌（seed 用 roundId，確保重現） ---
-type SimpleCard = { r: number; s: number }; // r:1~13, s:0~3
+// ====== 簡易可重現發牌（用 roundId 當 seed；不寫入卡牌欄位） ======
 type Outcome = "PLAYER" | "BANKER" | "TIE";
+type SimpleCard = { r: number; s: number };
+const point = (r: number) => (r >= 10 ? 0 : r === 1 ? 1 : r);
 
 function rng(seedStr: string) {
   let h = 2166136261 >>> 0;
@@ -33,7 +37,6 @@ function rng(seedStr: string) {
   };
 }
 const draw = (rand: () => number): SimpleCard => ({ r: Math.floor(rand() * 13) + 1, s: Math.floor(rand() * 4) });
-const point = (r: number) => (r >= 10 ? 0 : r === 1 ? 1 : r); // A=1, 10/J/Q/K=0
 
 function dealBaccarat(seed: string) {
   const rand = rng(seed);
@@ -46,7 +49,7 @@ function dealBaccarat(seed: string) {
   let p3: SimpleCard | undefined;
   let b3: SimpleCard | undefined;
 
-  // 第三張（簡化版，但符合常見節奏）
+  // 符合大多數場館的第三張規則（簡化版，但可用於派彩旗標判定）
   if (p2 <= 5) p3 = draw(rand);
   const pPts = (p2 + (p3 ? point(p3.r) : 0)) % 10;
 
@@ -60,9 +63,10 @@ function dealBaccarat(seed: string) {
 
   const outcome: Outcome = pPts === bPts ? "TIE" : pPts > bPts ? "PLAYER" : "BANKER";
 
-  // 牌面旗標（對子/完美/任一對/超6）
+  // 對子 / 完美對 / 任一對 / 超級六（莊 6）
   const sameRank = (a?: SimpleCard, b?: SimpleCard) => !!(a && b && a.r === b.r);
   const sameSuit = (a?: SimpleCard, b?: SimpleCard) => !!(a && b && a.s === b.s);
+
   const playerPair = sameRank(P[0], P[1]);
   const bankerPair = sameRank(B[0], B[1]);
   const perfectPair = (playerPair && sameSuit(P[0], P[1])) || (bankerPair && sameSuit(B[0], B[1]));
@@ -71,166 +75,163 @@ function dealBaccarat(seed: string) {
 
   return {
     outcome, pPts, bPts,
-    flags: { playerPair, bankerPair, perfectPair, anyPair, super6 },
+    flags: { playerPair, bankerPair, perfectPair, anyPair, super6 }
   };
 }
 
-// --- 賠率（可依你規則調整；此處：莊 1:1 不抽水，超6另算） ---
-const ODDS: Record<BetSide, number> = {
-  PLAYER: 1,
-  BANKER: 1, // 常見是 0.95，這裡先 1（你要抽水再改）
-  TIE: 8,
-  PLAYER_PAIR: 11,
-  BANKER_PAIR: 11,
-  ANY_PAIR: 5,
-  PERFECT_PAIR: 25,
-  BANKER_SUPER_SIX: 12,
-};
+// ====== 主要流程（每個房間各自處理） ======
+const REVEAL_SECONDS = 2; // 開牌顯示時間（秒）
 
-// --- 主流程：每個房間自動跑 ---
-async function autoForRoom(room: RoomCode) {
-  const seconds = ROOM_SECONDS[room] ?? 60;
-  const now = new Date();
+async function runForRoom(room: RoomCode) {
+  // 用 advisory lock 避免多實例同時處理同一房
+  const LOCK_KEY = 60000 + (room === "R30" ? 30 : room === "R60" ? 60 : 90);
+  await prisma.$executeRawUnsafe(`SELECT pg_advisory_lock(${LOCK_KEY});`);
+  try {
+    const info = await getRoomInfo(room);
+    const secondsPerRound = Number(info.secondsPerRound ?? 60);
 
-  await prisma.$transaction(async (tx) => {
     // 取最新一局
-    const cur = await tx.round.findFirst({
+    let round = await prisma.round.findFirst({
       where: { room },
       orderBy: { startedAt: "desc" },
     });
 
-    // 沒局 → 開局
-    if (!cur) {
-      await tx.round.create({
-        data: { room, phase: "BETTING", startedAt: now },
+    // 沒有就立刻開第一局
+    if (!round) {
+      await prisma.round.create({
+        data: { room, phase: "BETTING", startedAt: new Date() },
       });
-      return;
+      return { room, action: "OPEN_FIRST" as const };
     }
 
-    // 依 phase 處理
-    if (cur.phase === "BETTING") {
-      const endAt = new Date(cur.startedAt.getTime() + seconds * 1000);
-      if (now >= endAt) {
-        // 結束下注 → 直接結算（也可中間插 REVEALING 幾秒）
-        const sim = dealBaccarat(cur.id);
+    const now = Date.now();
 
-        // 寫入 outcome/結束
-        await tx.round.update({
-          where: { id: cur.id },
-          data: { phase: "SETTLED", outcome: sim.outcome, endedAt: now },
+    if (round.phase === "BETTING") {
+      const endTs = new Date(round.startedAt).getTime() + secondsPerRound * 1000;
+      if (now >= endTs) {
+        // 到點 → 先進 REVEALING 並決定 outcome
+        const sim = dealBaccarat(round.id);
+        round = await prisma.round.update({
+          where: { id: round.id },
+          data: { phase: "REVEALING", outcome: sim.outcome, endedAt: new Date() },
+        });
+        return { room, action: "TO_REVEAL", outcome: sim.outcome };
+      }
+      return { room, action: "BETTING" as const };
+    }
+
+    if (round.phase === "REVEALING") {
+      const revealStart = round.endedAt ? new Date(round.endedAt).getTime() : new Date(round.startedAt).getTime();
+      if (now >= revealStart + REVEAL_SECONDS * 1000) {
+        // 要結算
+        const sim = dealBaccarat(round.id);
+
+        // 讀取全部下注
+        const bets = await prisma.bet.findMany({
+          where: { roundId: round.id },
+          select: { userId: true, side: true, amount: true },
         });
 
-        // 取下注
-        const bets = await tx.bet.findMany({ where: { roundId: cur.id } });
+        // 派彩係數（主注 + 邊注）
+        const ODDS: Record<BetSide, number> = {
+          PLAYER: 1,
+          BANKER: 1,         // 但莊 6 只賠 0.5（下面另外處理）
+          TIE: 8,
+          PLAYER_PAIR: 11,
+          BANKER_PAIR: 11,
+          ANY_PAIR: 5,
+          PERFECT_PAIR: 25,
+          BANKER_SUPER_SIX: 12,
+        };
 
-        // 聚合派彩（含主注 & 各種對子/超6）
-        const userPayout: Record<string, number> = {};
-        const userRefund: Record<string, number> = {}; // TIE 時退主注
-
+        // 計算每位玩家派彩（含 TIE 退還主注，莊 6 半賠）
+        const payoutByUser: Record<string, number> = {};
         for (const b of bets) {
-          const side = b.side as BetSide;
+          let won = false;
+          let odds = 0;
 
-          // 主注三門
-          if (side === "PLAYER" || side === "BANKER" || side === "TIE") {
-            if (sim.outcome === "TIE") {
-              // 平局：退主注（閒/莊）本金
-              if (side === "PLAYER" || side === "BANKER") {
-                userRefund[b.userId] = (userRefund[b.userId] ?? 0) + b.amount;
-              }
-              if (side === "TIE") {
-                userPayout[b.userId] = (userPayout[b.userId] ?? 0) + Math.floor(b.amount * ODDS.TIE);
-              }
-            } else {
-              const hit =
-                (sim.outcome === "PLAYER" && side === "PLAYER") ||
-                (sim.outcome === "BANKER" && side === "BANKER");
-              if (hit) {
-                userPayout[b.userId] = (userPayout[b.userId] ?? 0) + Math.floor(b.amount * ODDS[side]);
-              }
-            }
-            continue;
+          // 主注
+          if (b.side === "PLAYER") {
+            won = sim.outcome === "PLAYER";
+            odds = ODDS.PLAYER;
+          } else if (b.side === "BANKER") {
+            won = sim.outcome === "BANKER";
+            odds = sim.flags.super6 ? 0.5 : ODDS.BANKER; // 莊 6 半賠
+          } else if (b.side === "TIE") {
+            won = sim.outcome === "TIE";
+            odds = ODDS.TIE;
+          } else {
+            // 邊注
+            if (b.side === "PLAYER_PAIR") { won = sim.flags.playerPair; odds = ODDS.PLAYER_PAIR; }
+            if (b.side === "BANKER_PAIR") { won = sim.flags.bankerPair; odds = ODDS.BANKER_PAIR; }
+            if (b.side === "ANY_PAIR")    { won = sim.flags.anyPair;    odds = ODDS.ANY_PAIR; }
+            if (b.side === "PERFECT_PAIR"){ won = sim.flags.perfectPair; odds = ODDS.PERFECT_PAIR; }
+            if (b.side === "BANKER_SUPER_SIX"){ won = sim.flags.super6;  odds = ODDS.BANKER_SUPER_SIX; }
           }
 
-          // 旁注
-          if (side === "PLAYER_PAIR" && sim.flags.playerPair) {
-            userPayout[b.userId] = (userPayout[b.userId] ?? 0) + Math.floor(b.amount * ODDS.PLAYER_PAIR);
+          let credit = 0;
+          if (won) credit += Math.floor(b.amount * odds);
+
+          // TIE 時，主注的 PLAYER/BANKER 要退本金
+          if (sim.outcome === "TIE" && (b.side === "PLAYER" || b.side === "BANKER")) {
+            credit += b.amount; // 退回本金
           }
-          if (side === "BANKER_PAIR" && sim.flags.bankerPair) {
-            userPayout[b.userId] = (userPayout[b.userId] ?? 0) + Math.floor(b.amount * ODDS.BANKER_PAIR);
-          }
-          if (side === "ANY_PAIR" && sim.flags.anyPair) {
-            userPayout[b.userId] = (userPayout[b.userId] ?? 0) + Math.floor(b.amount * ODDS.ANY_PAIR);
-          }
-          if (side === "PERFECT_PAIR" && sim.flags.perfectPair) {
-            userPayout[b.userId] = (userPayout[b.userId] ?? 0) + Math.floor(b.amount * ODDS.PERFECT_PAIR);
-          }
-          if (side === "BANKER_SUPER_SIX" && sim.flags.super6) {
-            userPayout[b.userId] = (userPayout[b.userId] ?? 0) + Math.floor(b.amount * ODDS.BANKER_SUPER_SIX);
+
+          if (credit > 0) {
+            payoutByUser[b.userId] = (payoutByUser[b.userId] ?? 0) + credit;
           }
         }
 
-        // 寫錢包 & 帳本（派彩）
-        for (const [uid, inc] of Object.entries(userPayout)) {
-          if (inc > 0) {
+        // 交易：標記 SETTLED + 派彩入錢包 + Ledger（全部記為 PAYOUT，避免造成未知型別）
+        await prisma.$transaction(async (tx) => {
+          await tx.round.update({
+            where: { id: round!.id },
+            data: { phase: "SETTLED", outcome: sim.outcome, endedAt: new Date() },
+          });
+
+          for (const [uid, inc] of Object.entries(payoutByUser)) {
             await tx.user.update({ where: { id: uid }, data: { balance: { increment: inc } } });
             await tx.ledger.create({
               data: { userId: uid, type: "PAYOUT", target: "WALLET", amount: inc },
             });
           }
-        }
-        // 退主注（TIE）
-        for (const [uid, inc] of Object.entries(userRefund)) {
-          if (inc > 0) {
-            await tx.user.update({ where: { id: uid }, data: { balance: { increment: inc } } });
-            await tx.ledger.create({
-             data: { userId: uid, type: "PAYOUT", target: "WALLET", amount: inc },
-            });
-          }
-        }
+        });
 
-        // 直接開下一局
-        await tx.round.create({
+        return { room, action: "SETTLED", outcome: sim.outcome };
+      }
+      return { room, action: "REVEALING" as const };
+    }
+
+    if (round.phase === "SETTLED") {
+      // 開下一局（若上一局結束超過 1 秒）
+      const ended = round.endedAt?.getTime() ?? round.startedAt.getTime();
+      if (now >= ended + 1000) {
+        await prisma.round.create({
           data: { room, phase: "BETTING", startedAt: new Date() },
         });
+        return { room, action: "OPEN_NEXT" as const };
       }
-      return;
+      return { room, action: "IDLE_AFTER_SETTLED" as const };
     }
 
-    // 若是已結算 → 確保下一局存在（避免卡住）
-    if (cur.phase === "SETTLED") {
-      const newer = await tx.round.findFirst({
-        where: { room, startedAt: { gt: cur.startedAt } },
-        orderBy: { startedAt: "desc" },
-      });
-      if (!newer) {
-        await tx.round.create({
-          data: { room, phase: "BETTING", startedAt: now },
-        });
-      }
-      return;
-    }
-
-    // 若是 REVEALING（你如果保留中場動畫可來這處理）
-    if (cur.phase === "REVEALING") {
-      // 這版直接略過（我們上面在 BETTING 到點就一次做完結算）
-      return;
-    }
-  });
+    return { room, action: "UNKNOWN_PHASE", phase: round.phase as RoundPhase };
+  } finally {
+    await prisma.$executeRawUnsafe(`SELECT pg_advisory_unlock(${LOCK_KEY});`);
+  }
 }
 
 export async function POST(req: NextRequest) {
   try {
     assertCronAuth(req);
 
-    // 跑三個房間
-    for (const room of ["R30", "R60", "R90"] as RoomCode[]) {
-      await autoForRoom(room);
+    const results = [];
+    for (const room of ROOMS) {
+      const r = await runForRoom(room);
+      results.push(r);
     }
-
-    return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    const msg = e?.message || "SERVER_ERROR";
-    const code = msg === "UNAUTHORIZED_CRON" ? 401 : 500;
-    return NextResponse.json({ ok: false, error: msg }, { status: code });
+    return NextResponse.json({ ok: true, results });
+  } catch (err: any) {
+    const status = err?.status ?? 500;
+    return NextResponse.json({ ok: false, error: err?.message ?? "SERVER_ERROR" }, { status });
   }
 }
