@@ -1,9 +1,23 @@
 "use client";
 
+import { Suspense } from "react";
+
+// 這行避免被預產生（prerender）導致 useSearchParams 錯誤
+export const dynamic = "force-dynamic";
+
+// 外層只負責提供 Suspense 邊界
+export default function Page() {
+  return (
+    <Suspense fallback={<div style={{padding:16}}>載入管理面板中…</div>}>
+      <AdminBaccaratInner />
+    </Suspense>
+  );
+}
+
+/* ===== 內層元件才使用 useSearchParams / 其餘全部沿用 ===== */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-/* ================= Types (與前端 room 頁一致的最小需求) ================= */
 type Outcome = "PLAYER" | "BANKER" | "TIE";
 type Phase = "BETTING" | "REVEALING" | "SETTLED";
 type RoomCode = "R30" | "R60" | "R90";
@@ -11,61 +25,53 @@ type RoomCode = "R30" | "R60" | "R90";
 type StateResp = {
   ok: boolean;
   room: { code: RoomCode; name: string; durationSeconds: number };
-  day: string;                              // YYYY-MM-DD
+  day: string;
   roundId: string | null;
-  roundSeq: number;                         // 若你暫時沒有，就可能是 0
+  roundSeq: number;
   phase: Phase;
-  secLeft: number;                          // BETTING 倒數
+  secLeft: number;
   result: null | { outcome: Outcome; p: number; b: number };
   cards?: { player: any[]; banker: any[] };
-  myBets: Record<string, number>;           // admin 這邊不一定會用到
-  balance: number | null;                   // admin 不用
+  myBets: Record<string, number>;
+  balance: number | null;
   recent: { roundSeq: number; outcome: Outcome; p: number; b: number }[];
 };
 
 type LogItem = { ts: string; msg: string; kind?: "ok" | "err" | "info" };
-
-/* ================= Helpers ================= */
-const ro = (v: any) => (typeof v === "object" ? JSON.stringify(v) : String(v));
 const pad4 = (n: number) => String(Math.max(0, n || 0)).padStart(4, "0");
 
-/* ================= Page ================= */
-export default function BaccaratAdminPage() {
+function AdminBaccaratInner() {
   const search = useSearchParams();
   const router = useRouter();
 
-  // 房間（用 ?room=R30|R60|R90 記住）
   const initialRoom = ((search.get("room") || "R60").toUpperCase() as RoomCode);
   const [room, setRoom] = useState<RoomCode>(initialRoom);
 
-  // 本地控制：下注期秒數、揭示秒數、自動輪播開關
   const [bettingSeconds, setBettingSeconds] = useState<number>(Number(search.get("bet") || 60));
   const [revealSeconds, setRevealSeconds]   = useState<number>(Number(search.get("reveal") || 5));
   const [autoOn, setAutoOn] = useState(false);
 
-  // 狀態輪詢
   const [state, setState] = useState<StateResp | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
-  // 日誌
   const [logs, setLogs] = useState<LogItem[]>([]);
   const logRef = useRef<HTMLDivElement>(null);
   const log = useCallback((msg: string, kind: LogItem["kind"] = "info") => {
     setLogs((lst) => [...lst, { ts: new Date().toLocaleTimeString(), msg, kind }].slice(-200));
   }, []);
-  useEffect(() => { logRef.current?.scrollTo({ top: 999999, behavior: "smooth" }); }, [logs]);
+  useEffect(() => { logRef.current?.scrollTo({ top: 1e6, behavior: "smooth" }); }, [logs]);
 
-  // 在網址上同步 room/bet/reveal（方便重整仍保留設定）
+  // 將 room/bet/reveal 同步到 URL（放在 effect，避免 render 期更動）
   useEffect(() => {
     const sp = new URLSearchParams(search?.toString() || "");
     sp.set("room", room);
     sp.set("bet", String(bettingSeconds));
     sp.set("reveal", String(revealSeconds));
     router.replace(`/admin/baccarat?${sp.toString()}`);
-  }, [room, bettingSeconds, revealSeconds]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room, bettingSeconds, revealSeconds]);
 
-  /* 取得狀態 */
   const fetchState = useCallback(async () => {
     try {
       const res = await fetch(`/api/casino/baccarat/state?room=${room}`, { cache: "no-store", credentials: "include" });
@@ -81,19 +87,13 @@ export default function BaccaratAdminPage() {
     }
   }, [room, log]);
 
-  // 輪詢狀態
   useEffect(() => {
     let alive = true;
-    (async () => {
-      const first = await fetchState();
-      if (!alive) return;
-      if (!first) return;
-    })();
+    (async () => { await fetchState(); })();
     const t = setInterval(fetchState, 1000);
     return () => { alive = false; clearInterval(t); };
   }, [fetchState]);
 
-  /* 控制 API 包裝 */
   async function post(url: string, label: string) {
     try {
       setLoading(true);
@@ -111,14 +111,12 @@ export default function BaccaratAdminPage() {
     }
   }
 
-  /* ========== 單局控制 ========== */
   const startRound = useCallback(async () => {
     await post(`/api/casino/baccarat/admin/start?room=${room}&seconds=${bettingSeconds}`, "開始下注");
   }, [room, bettingSeconds]);
 
   const revealNow = useCallback(async () => {
-    // 如果你暫時沒有 /reveal API，可先不使用這顆鈕
-    await post(`/api/casino/baccarat/admin/reveal?room=${room}`, "強制進入揭示");
+    await post(`/api/casino/baccarat/admin/reveal?room=${room}`, "強制開牌");
   }, [room]);
 
   const settleNow = useCallback(async () => {
@@ -129,7 +127,6 @@ export default function BaccaratAdminPage() {
     await post(`/api/casino/baccarat/admin/reset?room=${room}`, "重置本局（退款）");
   }, [room]);
 
-  /* ========== 自動輪播 ========== */
   const autoRef = useRef({ stop: true });
   const tickerRef = useRef<NodeJS.Timeout | null>(null);
   const revealTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -140,46 +137,29 @@ export default function BaccaratAdminPage() {
     setAutoOn(true);
     log(`🔁 已啟用【自動輪播】（房間：${room}，${bettingSeconds}s，揭示 ${revealSeconds}s）`, "ok");
 
-    // 主 loop：每秒檢查狀態並採取行動
     const loop = async () => {
       if (autoRef.current.stop) return;
-
       const s = state || (await fetchState());
       const phase: Phase = (s?.phase ?? "SETTLED");
 
-      // 下注期：確保有開局；若時間快到，準備排程進入揭示
       if (phase === "BETTING") {
-        // 安排揭示定時器（如果還沒安排）
         if (!revealTimerRef.current) {
           const ms = Math.max(0, (s?.secLeft ?? 0) * 1000);
           revealTimerRef.current = setTimeout(async () => {
             revealTimerRef.current = null;
-            // 嘗試 reveal -> 等待 revealSeconds -> settle
-            try {
-              await post(`/api/casino/baccarat/admin/reveal?room=${room}`, "自動：進入揭示");
-            } catch {/* 忽略失敗，loop 會再處理 */}
-            // 等揭示秒數
-            if (revealSeconds > 0) {
-              await new Promise((r) => setTimeout(r, revealSeconds * 1000));
-            }
-            try {
-              await post(`/api/casino/baccarat/admin/settle?room=${room}`, "自動：結算");
-            } catch {/* 忽略，loop 繼續 */}
+            try { await post(`/api/casino/baccarat/admin/reveal?room=${room}`, "自動：進入揭示"); } catch {}
+            if (revealSeconds > 0) await new Promise((r) => setTimeout(r, revealSeconds * 1000));
+            try { await post(`/api/casino/baccarat/admin/settle?room=${room}`, "自動：結算"); } catch {}
           }, ms);
         }
       }
 
-      // 已結算：立即開下一局（防止卡住）
       if (phase === "SETTLED") {
-        // 清除任何揭示計時器
         if (revealTimerRef.current) { clearTimeout(revealTimerRef.current); revealTimerRef.current = null; }
-        try {
-          await post(`/api/casino/baccarat/admin/start?room=${room}&seconds=${bettingSeconds}`, "自動：開新局");
-        } catch {/* 忽略 */}
+        try { await post(`/api/casino/baccarat/admin/start?room=${room}&seconds=${bettingSeconds}`, "自動：開新局"); } catch {}
       }
     };
 
-    // 立即跑一次，之後每 1s 跑一次
     await loop();
     tickerRef.current = setInterval(() => { loop(); }, 1000);
   }, [autoOn, room, bettingSeconds, revealSeconds, state, fetchState, post, log]);
@@ -192,12 +172,8 @@ export default function BaccaratAdminPage() {
     log("⏹️ 已停止【自動輪播】", "info");
   }, [log]);
 
-  // 切房時把自動關掉（避免跨房衝突）
-  useEffect(() => {
-    if (autoOn) stopAuto();
-  }, [room]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (autoOn) stopAuto(); }, [room]); // 切房自動關閉
 
-  /* ========== 顯示用 ========== */
   const phaseLabel = useMemo(() => {
     switch (state?.phase) {
       case "BETTING": return "下注中";
@@ -207,11 +183,11 @@ export default function BaccaratAdminPage() {
     }
   }, [state?.phase]);
 
-  /* ================= Render ================= */
   return (
     <main className="bk-admin-wrap">
       <header className="bk-admin-header">
         <h1>百家樂｜管理面板</h1>
+
         <div className="row">
           <div className="field">
             <label>房間</label>
@@ -267,9 +243,7 @@ export default function BaccaratAdminPage() {
           <div className="table-wrap">
             <table>
               <thead>
-                <tr>
-                  <th>局序</th><th>結果</th><th>閒</th><th>莊</th>
-                </tr>
+                <tr><th>局序</th><th>結果</th><th>閒</th><th>莊</th></tr>
               </thead>
               <tbody>
                 {(state?.recent || []).map((r, i) => (
@@ -301,7 +275,6 @@ export default function BaccaratAdminPage() {
         </div>
       </section>
 
-      {/* 掛管理面板樣式（你可以換成自己的檔名） */}
       <link rel="stylesheet" href="/styles/admin/baccarat-admin.css" />
     </main>
   );
