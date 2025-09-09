@@ -183,7 +183,7 @@ async function autoForRoom(room: RoomCode) {
           if (inc > 0) {
             await tx.user.update({ where: { id: uid }, data: { balance: { increment: inc } } });
             await tx.ledger.create({
-              data: { userId: uid, type: "REFUND", target: "WALLET", amount: inc },
+             data: { userId: uid, type: "PAYOUT", target: "WALLET", amount: inc },
             });
           }
         }
