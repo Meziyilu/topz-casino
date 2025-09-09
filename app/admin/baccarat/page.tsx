@@ -302,7 +302,7 @@ export default function BaccaratAdminPage() {
       </section>
 
       {/* 掛管理面板樣式（你可以換成自己的檔名） */}
-      <link rel="stylesheet" href="/style/admin/baccarat-admin.css" />
+      <link rel="stylesheet" href="/styles/admin/baccarat-admin.css" />
     </main>
   );
 }
