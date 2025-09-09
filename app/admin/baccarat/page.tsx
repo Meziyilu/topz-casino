@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import "@/../public/styles/admin/baccarat-admin.css";
 
 type Room = "R30" | "R60" | "R90";
 
