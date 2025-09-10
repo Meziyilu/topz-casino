@@ -1,28 +1,104 @@
 // app/api/casino/baccarat/leaderboard/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { GameCode, RoomCode, StatPeriod } from "@prisma/client";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-import { NextResponse } from "next/server";
-import prisma, { Prisma } from "@/lib/prisma";
+function toPeriod(p?: string): StatPeriod {
+  const s = (p || "WEEKLY").toUpperCase();
+  if (s === "DAILY") return "DAILY";
+  if (s === "ALL_TIME") return "ALL_TIME";
+  return "WEEKLY";
+}
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const room = (searchParams.get("room") ?? "R60") as string;
-  const day = searchParams.get("day") ?? new Date().toISOString().slice(0, 10);
+function toRoomCode(r?: string): RoomCode | undefined {
+  if (!r) return undefined;
+  const u = r.toUpperCase();
+  return (["R30", "R60", "R90"] as RoomCode[]).includes(u as RoomCode)
+    ? (u as RoomCode)
+    : undefined;
+}
 
-  // 方式 A：參數 cast 成 enum
-  const roomEnum = Prisma.sql`${room}::"RoomCode"`;
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const period = toPeriod(searchParams.get("period") || undefined);
+    const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "10", 10), 1), 50);
+    const room = toRoomCode(searchParams.get("room") || undefined);
 
-  const rows = await prisma.$queryRaw(Prisma.sql`
-    SELECT "userId", SUM("amount") AS net
-    FROM "Ledger"
-    WHERE "day" = ${day}
-      AND "room" = ${roomEnum}
-      AND "type" IN ('BET_PLACED','PAYOUT')   -- 依你實際條件調整
-    GROUP BY "userId"
-    ORDER BY net DESC
-    LIMIT 50
-  `);
+    // 先找對應期間、遊戲、（可選）房間的最新快照窗口
+    const latest = await prisma.userStatSnapshot.findFirst({
+      where: {
+        period,
+        gameCode: "BACCARAT",
+        ...(room ? { room } : {}),
+      },
+      orderBy: [{ windowEnd: "desc" }, { updatedAt: "desc" }],
+      select: { windowStart: true, windowEnd: true },
+    });
 
-  return NextResponse.json({ items: rows });
+    const where = latest
+      ? {
+          period,
+          gameCode: "BACCARAT" as GameCode,
+          windowStart: latest.windowStart,
+          windowEnd: latest.windowEnd,
+          ...(room ? { room } : {}),
+        }
+      : {
+          period,
+          gameCode: "BACCARAT" as GameCode,
+          ...(room ? { room } : {}),
+        };
+
+    // 取排行榜
+    const rows = await prisma.userStatSnapshot.findMany({
+      where,
+      orderBy: [{ netProfit: "desc" }],
+      take: limit,
+      select: {
+        userId: true,
+        netProfit: true,
+        winsCount: true,
+        lossesCount: true,
+        betsCount: true,
+        user: {
+          select: {
+            displayName: true,
+            avatarUrl: true,
+            vipTier: true,
+            headframe: true,
+            panelTint: true,
+          },
+        },
+      },
+    });
+
+    const items = rows.map((r, idx) => ({
+      rank: idx + 1,
+      userId: r.userId,
+      netProfit: Number(r.netProfit ?? 0), // BigInt -> number
+      wins: r.winsCount,
+      losses: r.lossesCount,
+      bets: r.betsCount,
+      displayName: r.user?.displayName || "玩家",
+      avatarUrl: r.user?.avatarUrl || null,
+      vipTier: r.user?.vipTier || 0,
+      headframe: r.user?.headframe || null,
+      panelTint: r.user?.panelTint || null,
+    }));
+
+    return NextResponse.json({
+      ok: true,
+      period,
+      room: room ?? null,
+      window: latest ? { start: latest.windowStart, end: latest.windowEnd } : null,
+      items,
+    });
+  } catch (e) {
+    console.error("[baccarat/leaderboard] GET error:", e);
+    return NextResponse.json({ ok: false, error: "INTERNAL" }, { status: 500 });
+  }
 }
