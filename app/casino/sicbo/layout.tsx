@@ -1,4 +1,4 @@
-// 閳跨媴绗?闁瑦妲?Server Component閿涘牓鐖懛顓ㄧ礆閿涘苯鐨ラ梺鈧徊锕傤€忕€佃埖顔岄拃鍊熺礆閸忋儴鍤滃杈╂畱閸忋劌鐓欏Ο锝呯础
+// 闁宠法濯寸粭?闂侇偅鐟﹀Σ?Server Component闁挎稑鐗撻悥顖滄嚊椤撱劎绀嗛柨娑樿嫰閻ㄣ儵姊洪埀顒傚緤閿曞偆鈧繒鈧絻鍩栭宀勬媰閸婄喓绀嗛柛蹇嬪劥閸ゆ粌顔忔潏鈺傜暠闁稿繈鍔岄悡娆徫熼敐鍛
 
 export default function SicboSectionLayout({
   children,
