@@ -1,188 +1,160 @@
-/* ===== Baccarat Room — dark glass look ===== */
-
-:root{
-  --glass-bg: rgba(255,255,255,.06);
-  --glass-stroke: rgba(255,255,255,.10);
-  --glass-hover: rgba(255,255,255,.14);
-  --gold: #ffd700;
-  --cyan: #67e8f9;
-  --rose: #fda4af;
-  --amber: #fde68a;
-  --violet: #c4b5fd;
-  --emerald: #6ee7b7;
+/* ===== 基礎佈局 ===== */
+.bk-room-wrap {
+  min-height: 100vh;
+  background: radial-gradient(1000px 700px at 50% 0%, rgba(96,165,250,.12), transparent 60%),
+              radial-gradient(900px 700px at 100% 30%, rgba(167,139,250,.12), transparent 60%),
+              #0b0f18;
 }
 
-/* wrapper */
-.bk-room-wrap{
-  min-height:100vh;
-  background:
-    radial-gradient(1000px 700px at 110% 10%, rgba(167,139,250,.12), transparent 60%),
-    radial-gradient(1200px 600px at 10% -10%, rgba(96,165,250,.12), transparent 60%),
-    radial-gradient(800px 700px at 50% 110%, rgba(253,164,175,.10), transparent 60%),
-    #0b0f18;
-  color:#fff;
-}
-
-/* header */
 .bk-header{
   display:flex; align-items:center; justify-content:space-between;
-  gap:16px; padding:18px 24px; margin:0 auto; max-width:1120px;
-  border-bottom:1px solid var(--glass-stroke);
-  background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,0));
-  position: sticky; top:0; z-index:20; backdrop-filter:saturate(140%) blur(6px);
+  max-width:1200px; margin:0 auto; padding:16px;
+  color:#fff;
 }
-.bk-header .left, .bk-header .right{ display:flex; align-items:center; gap:12px; }
-.bk-header .center{ font-weight:700; opacity:.9; }
-.bk-room-name{ font-weight:700; padding-left:6px; }
+.bk-header .left{ display:flex; align-items:center; gap:10px; }
+.bk-header .center{ opacity:.9; font-weight:700; }
+.bk-header .right{ display:flex; gap:14px; opacity:.9; }
 
 .bk-btn{
-  padding:8px 12px; border-radius:10px;
-  background:var(--glass-bg); border:1px solid var(--glass-stroke);
-  color:#fff; transition:all .2s ease;
+  border:1px solid rgba(255,255,255,.2);
+  background:linear-gradient(135deg, rgba(255,255,255,.08), rgba(255,255,255,.02));
+  color:#fff; border-radius:10px; padding:8px 12px;
 }
-.bk-btn:hover{ border-color: var(--glass-hover); transform: translateY(-1px); }
+.bk-room-name{ font-weight:800; }
+.bk-room-seq{ opacity:.8; margin-left:8px; }
 
-/* layout grid */
 .bk-content{
-  max-width:1120px; margin:24px auto 64px; padding:0 16px;
-  display:grid; grid-template-columns: 1.8fr 1fr; gap:20px;
-}
-@media (max-width: 1024px){
-  .bk-content{ grid-template-columns: 1fr; }
+  max-width:1200px; margin:0 auto; padding:16px;
+  display:grid; grid-template-columns: 1.5fr 1fr; gap:16px;
 }
 
-.bk-left, .bk-right{ display:flex; flex-direction:column; gap:20px; }
-
-/* panel */
 .bk-panel{
-  border:1px solid var(--glass-stroke);
-  background:linear-gradient(135deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
-  border-radius:16px; padding:16px; position:relative;
-  box-shadow: 0 8px 32px rgba(0,0,0,.37);
+  background:linear-gradient(135deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:16px; padding:16px; color:#fff;
+  box-shadow: 0 10px 35px rgba(0,0,0,.35);
 }
 
-/* reveal */
-.bk-reveal .bk-reveal-head{
-  display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;
-}
-.bk-reveal .title{ font-weight:700; }
-.bk-reveal .sub{ font-size:14px; opacity:.8; }
-
-.bk-reveal-grid{
-  display:grid; grid-template-columns: 1fr 1fr; gap:16px;
-}
-@media (max-width:640px){ .bk-reveal-grid{ grid-template-columns: 1fr; } }
+/* ===== 開牌動畫區 ===== */
+.bk-reveal-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.bk-reveal-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
 
 .side{
-  position:relative; border:1px solid var(--glass-stroke); border-radius:14px; padding:12px;
-  background: linear-gradient(135deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
-  transition:border-color .2s ease, box-shadow .2s ease;
+  position:relative;
+  border:1px solid rgba(255,255,255,.12); border-radius:14px; padding:12px;
+  background:linear-gradient(135deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
 }
-.side-player{ background:linear-gradient(135deg, rgba(103,232,249,.10), rgba(255,255,255,.04)); }
-.side-banker{ background:linear-gradient(135deg, rgba(253,164,175,.10), rgba(255,255,255,.04)); }
-.side.win{ border-color: rgba(255,215,0,.7); box-shadow:0 0 24px rgba(255,215,0,.35); }
-
+.side.win{
+  border-color:rgba(255,215,0,.75);
+  box-shadow:0 0 24px rgba(255,215,0,.35), inset 0 0 18px rgba(255,215,0,.18);
+}
 .side-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
-.side-head .name{ font-weight:700; }
-.side-head .pts{ font-size:13px; opacity:.8; }
+.cards{ display:flex; gap:10px; min-height:92px; align-items:center; justify-content:center; }
 
-.cards{ display:flex; gap:12px; justify-content:center; align-items:center; min-height:96px; }
-
-.badges{ position:absolute; left:12px; bottom:10px; display:flex; gap:8px; }
-
-/* reveal result */
 .bk-reveal-result{ margin-top:10px; font-size:18px; }
 
-/* bet panel */
-.bk-bet-panel .panel-head{
-  display:flex; align-items:center; justify-content:space-between; gap:12px; margin:10px 0 14px;
+/* ===== 卡片翻牌 ===== */
+.bk-card{
+  width:58px; height:82px; border-radius:12px; position:relative;
+  transform-style:preserve-3d; transition: opacity .3s ease, transform .5s ease;
+  opacity:0; transform: rotateY(-90deg);
+  border:1px solid rgba(255,255,255,.2);
 }
-.bk-bet-panel .title{ font-weight:700; }
-.bk-bet-panel .amount{ font-size:14px; opacity:.9; }
-.bk-bet-panel .amount input{
-  width:110px; margin:0 8px; padding:6px 8px; color:#fff;
-  background:transparent; border:1px solid var(--glass-stroke); border-radius:8px;
-  outline:none;
-}
-.bk-bet-panel .amount input:focus{ border-color:var(--glass-hover); }
+.bk-card.show{ opacity:1; transform: rotateY(0deg); }
+.bk-card.flip{ transform: rotateY(180deg); }
 
-.chips{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
-.chips button{
-  padding:6px 10px; border-radius:999px; background:transparent; color:#fff;
-  border:1px solid var(--glass-stroke); transition: all .18s ease;
+.bk-card-back, .bk-card-front{
+  position:absolute; inset:0; border-radius:12px; backface-visibility:hidden;
 }
-.chips button:hover{ border-color:var(--glass-hover); }
-.chips button:disabled{ opacity:.5; cursor:not-allowed; }
+.bk-card-back{
+  background:linear-gradient(135deg, rgba(255,255,255,.16), rgba(255,255,255,.05));
+  border:1px solid rgba(255,255,255,.22);
+}
+.bk-card-front{
+  background:#fff; color:#111; transform:rotateY(180deg);
+  display:grid; place-items:center; border:1px solid rgba(0,0,0,.1);
+}
+.bk-card-text{ font-weight:800; }
+
+/* ===== 下注面板 ===== */
+.bk-bet-panel .panel-head{ display:flex; align-items:center; justify-content:space-between; margin:12px 0; }
+.bk-bet-panel .amount input{
+  width:100px; background:transparent; color:#fff; border:1px solid rgba(255,255,255,.24);
+  border-radius:8px; padding:4px 6px; margin:0 6px;
+}
+
+.chips{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+.chips button{
+  border:1px solid rgba(255,255,255,.2);
+  background:linear-gradient(135deg, rgba(255,255,255,.08), rgba(255,255,255,.02));
+  color:#fff; border-radius:20px; padding:6px 10px;
+}
 .chips button.active{ border-color:#fff; background:rgba(255,255,255,.12); }
 
-/* info cards grid */
 .mybets.grid{
-  display:grid;
+  display:grid; gap:10px;
   grid-template-columns: repeat(4, minmax(0,1fr));
-  gap:12px; margin-bottom:14px;
+  margin-bottom:14px;
 }
-@media (max-width: 920px){ .mybets.grid{ grid-template-columns: repeat(2, minmax(0,1fr)); } }
+.info-card{ border:1px solid rgba(255,255,255,.2); border-radius:10px; padding:8px; }
+.info-card .k{ font-size:12px; opacity:.8; }
+.info-card .v{ font-size:16px; font-weight:800; margin-top:4px; }
+.info-card.wide{ grid-column: span 2 / span 2; }
+.info-card.ac-cyan{ border-color: rgba(103,232,249,.45); }
+.info-card.ac-amber{ border-color: rgba(253,230,138,.45); }
+.info-card.ac-rose{ border-color: rgba(253,164,175,.45); }
+.info-card.ac-emerald{ border-color: rgba(110,231,183,.45); }
+.info-card.ac-violet{ border-color: rgba(196,181,253,.45); }
 
-/* bet grid */
-.bet-grid{
-  display:grid;
-  grid-template-columns: repeat(4, minmax(0,1fr));
-  gap:12px;
+.bet-grid{ display:grid; gap:12px; grid-template-columns: repeat(4, minmax(0,1fr)); }
+.bet-btn{
+  position:relative; overflow:hidden; border-radius:14px; padding:14px; color:#fff;
+  border:1px solid rgba(255,255,255,.22);
+  background:linear-gradient(135deg, rgba(255,255,255,.08), rgba(255,255,255,.02));
 }
-@media (max-width: 920px){ .bet-grid{ grid-template-columns: repeat(2, minmax(0,1fr)); } }
+.bet-btn[data-theme="cyan"]{ border-color: rgba(103,232,249,.5); }
+.bet-btn[data-theme="amber"]{ border-color: rgba(253,230,138,.5); }
+.bet-btn[data-theme="rose"]{ border-color: rgba(253,164,175,.5); }
+.bet-btn[data-theme="emerald"]{ border-color: rgba(110,231,183,.5); }
+.bet-btn[data-theme="violet"]{ border-color: rgba(196,181,253,.5); }
+.bet-btn:disabled{ opacity:.6; cursor:not-allowed; }
+.bet-label{ font-size:18px; font-weight:800; }
+.bet-rate{ opacity:.85; font-size:12px; margin-top:4px; }
+.bet-note{ opacity:.85; font-size:12px; margin-top:6px; }
 
-.err{ color:#fca5a5; font-size:13px; margin-top:8px; }
-
-/* streaks */
-.streak-grid{
-  display:grid; grid-template-columns: repeat(10, minmax(0,1fr)); gap:6px;
+/* 贏家按鈕「金框閃三下」 */
+@keyframes goldPulse3 {
+  0%, 100% { box-shadow: none; }
+  10%, 20% { box-shadow: 0 0 22px rgba(255,215,0,.6), inset 0 0 18px rgba(255,215,0,.35); }
+  30%, 40% { box-shadow: none; }
+  50%, 60% { box-shadow: 0 0 22px rgba(255,215,0,.6), inset 0 0 18px rgba(255,215,0,.35); }
+  70%, 80% { box-shadow: none; }
+  90% { box-shadow: 0 0 22px rgba(255,215,0,.6), inset 0 0 18px rgba(255,215,0,.35); }
 }
+.gold-pulse-3{
+  animation: goldPulse3 1.6s ease-out 1 both;
+  border-color: rgba(255,215,0,.9) !important;
+}
+
+/* ===== 右側：路子 ===== */
+.streak-grid{ display:grid; grid-template-columns: repeat(10, 1fr); gap:6px; }
 .streak{
   height:24px; border-radius:6px; display:flex; align-items:center; justify-content:center;
-  font-size:10px; opacity:.95; border:1px solid transparent;
+  font-size:11px; border:1px solid rgba(255,255,255,.3);
 }
-.streak.p{ background: rgba(103,232,249,.25); border-color: rgba(103,232,249,.6); }
-.streak.b{ background: rgba(253,164,175,.25); border-color: rgba(253,164,175,.6); }
-.streak.t{ background: rgba(253,230,138,.25); border-color: rgba(253,230,138,.6); }
+.streak.p{ background:rgba(103,232,249,.25); border-color:rgba(103,232,249,.6); }
+.streak.b{ background:rgba(253,164,175,.25); border-color:rgba(253,164,175,.6); }
+.streak.t{ background:rgba(253,230,138,.25); border-color:rgba(253,230,138,.6); }
+.muted{ opacity:.65; font-size:12px; padding:6px 0; }
 
-.table-wrap{ margin-top:12px; max-height:260px; overflow:auto; font-size:14px; opacity:.95; }
-.table-wrap table{ width:100%; border-collapse:collapse; }
+.table-wrap{ margin-top:10px; max-height:260px; overflow:auto; }
+.table-wrap table{ width:100%; color:#fff; opacity:.9; }
 .table-wrap thead{ opacity:.7; }
-.table-wrap tbody tr{ border-top:1px solid var(--glass-stroke); }
-.table-wrap th, .table-wrap td{ padding:6px 8px; text-align:left; }
-.muted{ opacity:.6; }
+.table-wrap td, .table-wrap th{ padding:6px 8px; border-top:1px solid rgba(255,255,255,.12); }
 
-/* gold sweep / soft glow */
-@keyframes goldSweep{
-  0%{ transform: translateX(-120%); opacity:0; }
-  40%{ opacity:.9; }
-  100%{ transform: translateX(120%); opacity:0; }
-}
-@keyframes softGlow{
-  0%{ opacity:0; }
-  40%{ opacity:1; }
-  100%{ opacity:0; }
-}
-
-.gold-sweep{
-  animation: goldSweep 1.2s ease-in-out;
-  background: linear-gradient(
-    120deg,
-    transparent 0%,
-    rgba(255,255,255,.22) 20%,
-    rgba(255,215,0,.35) 40%,
-    rgba(255,255,255,.18) 60%,
-    transparent 80%
-  );
-  -webkit-mask-image: linear-gradient(90deg, transparent 0%, black 25%, black 75%, transparent 100%);
-  mask-image: linear-gradient(90deg, transparent 0%, black 25%, black 75%, transparent 100%);
-}
-
-.soft-glow{
-  animation: softGlow 1.2s ease-in-out;
-  background: radial-gradient(ellipse at center,
-              rgba(255,215,0,.16) 0%,
-              rgba(255,215,0,.10) 30%,
-              rgba(255,215,0,.05) 55%,
-              transparent 70%);
+/* ===== RWD ===== */
+@media (max-width: 980px){
+  .bk-content{ grid-template-columns: 1fr; }
+  .mybets.grid{ grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .bet-grid{ grid-template-columns: repeat(2, minmax(0,1fr)); }
 }
