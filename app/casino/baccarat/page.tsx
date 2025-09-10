@@ -81,6 +81,7 @@ export default function BaccaratLobbyPage() {
           <div className="opacity-80">暫無房間資料</div>
         )}
       </div>
+      <link rel="stylesheet" href="/styles/baccarat.css" />
     </main>
   );
 }

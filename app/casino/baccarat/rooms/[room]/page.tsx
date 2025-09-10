@@ -1,13 +1,12 @@
-// app/casino/baccarat/rooms/[room]/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
-import Leaderboard from "@/components/Leaderboard";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+/** =========================
+ * Types — 對齊 v1.1.2 後端概念（可依你實際 API 調整）
+ * ========================= */
+type RoundPhase = "BETTING" | "REVEALING" | "SETTLED";
 type Outcome = "PLAYER" | "BANKER" | "TIE" | null;
-type Phase = "BETTING" | "REVEALING" | "SETTLED";
-type RoomCode = "R30" | "R60" | "R90";
 type BetSide =
   | "PLAYER"
   | "BANKER"
@@ -18,485 +17,602 @@ type BetSide =
   | "PERFECT_PAIR"
   | "BANKER_SUPER_SIX";
 
-type Card = { rank: number; suit: number };
-
 type StateResp = {
-  ok: boolean;
-  room: { code: RoomCode; name: string; durationSeconds: number };
-  day: string;
-  roundId: string | null;
-  roundSeq: number;
-  phase: Phase;
-  secLeft: number;
-  result: null | { outcome: Exclude<Outcome, null>; p: number; b: number };
-  cards?: { player: Card[]; banker: Card[] };
-  myBets: Partial<Record<BetSide, number>>;
-  balance: number | null;
-  recent: { roundSeq: number; outcome: Exclude<Outcome, null>; p: number; b: number }[];
+  serverTime: string; // ISO
+  current: {
+    room: "R30" | "R60" | "R90" | string;
+    roundSeq: number;
+    phase: RoundPhase;
+    // 倒數結束時間（BETTING: 收注時間；REVEALING: 揭示完成時間）
+    endsAt: string; // ISO
+    // 牌面（已決定），但翻牌順序走前端動畫
+    playerCards: string[]; // e.g., ["A♠","9♥","5♦"] or ["K♣","8♠"]
+    bankerCards: string[];
+    outcome: Outcome; // SETTLED 才會有，其他為 null
+  };
+  my: {
+    // 可用於房內「我的下注合計」
+    totals: Partial<Record<BetSide, number>>;
+  };
+  config: {
+    bettingSeconds: number;
+    revealFlipIntervalMs: number; // 單張翻牌間隔
+  };
+  history?: {
+    lastOutcomes: Outcome[]; // 路子用（簡化）
+  };
 };
 
-type MyBetsResp = { items: { side: BetSide; amount: number }[] };
+type PlaceBetReq = { side: BetSide; amount: number; room: string };
+type PlaceBetResp = { ok: boolean; err?: string };
 
-const zhPhase: Record<Phase, string> = { BETTING: "下注中", REVEALING: "開牌中", SETTLED: "已結算" };
-const zhOutcome: Record<Exclude<Outcome, null>, string> = { PLAYER: "閒", BANKER: "莊", TIE: "和" };
-const PAYOUT_HINT: Record<BetSide, string> = {
-  PLAYER: "1 : 1",
-  BANKER: "1 : 1（6點半賠）",
-  TIE: "1 : 8",
-  PLAYER_PAIR: "1 : 11",
-  BANKER_PAIR: "1 : 11",
-  ANY_PAIR: "1 : 5",
-  PERFECT_PAIR: "1 : 25",
-  BANKER_SUPER_SIX: "1 : 12",
-};
+/** =========================
+ * 小工具
+ * ========================= */
+const fmt = (n: number | undefined | null) =>
+  (n ?? 0).toLocaleString("zh-TW");
 
-const pad4 = (n: number) => n.toString().padStart(4, "0");
-const formatTime = (d = new Date()) =>
-  `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(
-    d.getSeconds()
-  ).padStart(2, "0")}`;
-
-const suitIcon = (s: number) => ["♠", "♥", "♦", "♣"][s] || "■";
-const rankIcon = (r: number) => (r === 1 ? "A" : r === 11 ? "J" : r === 12 ? "Q" : r === 13 ? "K" : String(r));
-const cardToLabel = (c: Card) => `${rankIcon(c.rank)}${suitIcon(c.suit)}`;
-
-function deriveFlags(cards?: { player: Card[]; banker: Card[] }, result?: StateResp["result"] | null) {
-  const pc = cards?.player ?? [];
-  const bc = cards?.banker ?? [];
-  const sameRank = (a?: Card, b?: Card) => !!(a && b && a.rank === b.rank);
-  const sameSuit = (a?: Card, b?: Card) => !!(a && b && a.suit === b.suit);
-  const playerPair = sameRank(pc[0], pc[1]);
-  const bankerPair = sameRank(bc[0], bc[1]);
-  const perfectPair = (playerPair && sameSuit(pc[0], pc[1])) || (bankerPair && sameSuit(bc[0], bc[1]));
-  const anyPair = playerPair || bankerPair;
-  const super6 = result?.outcome === "BANKER" && result?.b === 6;
-  return { playerPair, bankerPair, anyPair, perfectPair, super6 };
+function cx(...xs: (string | false | null | undefined)[]) {
+  return xs.filter(Boolean).join(" ");
 }
 
-/* ===== 翻牌動畫 ===== */
-function PlayingCard({ label, show, flip, delayMs = 0 }: { label: string; show: boolean; flip: boolean; delayMs?: number }) {
+// 把 "A♠" 解析為 { rank: "A", suit: "♠" }
+function parseCard(code: string): { rank: string; suit: string } {
+  // 允許 "A♠" 或 "A-S" 或 "AS" 之類；此處做最常見格式
+  const m = code.match(/^([2-9]|10|J|Q|K|A)\s*([♠♣♥♦SCDH])$/i);
+  if (m) {
+    const rank = m[1];
+    const s = m[2].toUpperCase();
+    const suitMap: Record<string, string> = {
+      S: "♠",
+      C: "♣",
+      H: "♥",
+      D: "♦",
+      "♠": "♠",
+      "♣": "♣",
+      "♥": "♥",
+      "♦": "♦",
+    };
+    return { rank, suit: suitMap[s] || "♠" };
+  }
+  // 退而求其次：取最後一個字元當花色
+  const suit = code.slice(-1);
+  const rank = code.slice(0, -1);
+  return { rank: rank || "?", suit: suit || "♠" };
+}
+
+/** =========================
+ * 牌與動畫組件
+ * ========================= */
+
+// 單張撲克牌（含翻轉）
+function Card({
+  code,
+  faceUp,
+  delayMs = 0,
+}: {
+  code: string;
+  faceUp: boolean;
+  delayMs?: number;
+}) {
+  const { rank, suit } = useMemo(() => parseCard(code), [code]);
+  const isRed = suit === "♥" || suit === "♦";
+
   return (
     <div
-      className={`bk-card ${show ? "show" : ""} ${flip ? "flip" : ""}`}
-      style={{ transitionDelay: `${delayMs}ms` }}
-      title={label}
+      className="card-3d w-16 h-24 md:w-20 md:h-28"
+      style={{
+        animationDelay: `${Math.max(0, delayMs)}ms`,
+      }}
+      data-faceup={faceUp ? "1" : "0"}
     >
-      <div className="bk-card-back" />
-      <div className="bk-card-front">
-        <span className="bk-card-text">{label}</span>
+      {/* 正面 */}
+      <div className={cx("card-face card-front", isRed && "text-red-500")}>
+        <div className="flex flex-col w-full h-full justify-between p-2">
+          <div className="text-xs md:text-sm font-semibold">{rank}</div>
+          <div className="text-center text-lg md:text-2xl">{suit}</div>
+          <div className="text-right text-xs md:text-sm font-semibold rotate-180">
+            {rank}
+          </div>
+        </div>
+      </div>
+      {/* 背面 */}
+      <div className="card-face card-back">
+        <div className="w-full h-full grid place-items-center">
+          <div className="w-12 h-12 rounded-md opacity-90 backdrop-blur-sm glass-tile" />
+        </div>
       </div>
     </div>
   );
 }
 
-type CardLabel = string;
-function useBaccaratReveal(params: {
-  phase: Phase;
-  playerLabels: CardLabel[];
-  bankerLabels: CardLabel[];
-  outcome: Exclude<Outcome, null> | null;
+// 一手牌（玩家或莊家）+ 贏家金框閃三下
+function HandView({
+  title,
+  cards,
+  faceUps, // 每張是否翻開
+  winner, // 此手是否獲勝（TIE 則兩邊都閃）
+  baseDelay = 0,
+}: {
+  title: string;
+  cards: string[];
+  faceUps: boolean[];
+  winner: boolean;
+  baseDelay?: number;
 }) {
-  const { phase, playerLabels, bankerLabels, outcome } = params;
-  const [showP, setShowP] = useState([false, false, false]);
-  const [flipP, setFlipP] = useState([false, false, false]);
-  const [showB, setShowB] = useState([false, false, false]);
-  const [flipB, setFlipB] = useState([false, false, false]);
-  const [winnerGlow, setWinnerGlow] = useState<"PLAYER" | "BANKER" | "TIE" | null>(null);
-
-  const p3 = playerLabels[2] != null;
-  const b3 = bankerLabels[2] != null;
-
-  const script = useMemo(() => {
-    const steps: { at: number; act: () => void }[] = [];
-    let t = 0;
-    const stepGap = 240;
-    const flipGap = 180;
-
-    steps.push({ at: (t += stepGap), act: () => setShowP((s) => [true, s[1], s[2]]) });
-    steps.push({ at: (t += flipGap), act: () => setFlipP((s) => [true, s[1], s[2]]) });
-    steps.push({ at: (t += stepGap), act: () => setShowB((s) => [true, s[1], s[2]]) });
-    steps.push({ at: (t += flipGap), act: () => setFlipB((s) => [true, s[1], s[2]]) });
-    steps.push({ at: (t += stepGap), act: () => setShowP((s) => [s[0], true, s[2]]) });
-    steps.push({ at: (t += flipGap), act: () => setFlipP((s) => [s[0], true, s[2]]) });
-    steps.push({ at: (t += stepGap), act: () => setShowB((s) => [s[0], true, s[2]]) });
-    steps.push({ at: (t += flipGap), act: () => setFlipB((s) => [s[0], true, s[2]]) });
-
-    if (p3) {
-      steps.push({ at: (t += stepGap + 260), act: () => setShowP((s) => [s[0], s[1], true]) });
-      steps.push({ at: (t += flipGap), act: () => setFlipP((s) => [s[0], s[1], true]) });
-    }
-    if (b3) {
-      steps.push({ at: (t += stepGap + (p3 ? 200 : 260)), act: () => setShowB((s) => [s[0], s[1], true]) });
-      steps.push({ at: (t += flipGap), act: () => setFlipB((s) => [s[0], s[1], true]) });
-    }
-
-    steps.push({ at: (t += 420), act: () => setWinnerGlow(outcome) });
-    return steps;
-  }, [p3, b3, outcome]);
-
-  useEffect(() => {
-    setShowP([false, false, false]);
-    setFlipP([false, false, false]);
-    setShowB([false, false, false]);
-    setFlipB([false, false, false]);
-    setWinnerGlow(null);
-
-    if (phase !== "SETTLED" || playerLabels.length === 0 || bankerLabels.length === 0) return;
-    const timers: any[] = [];
-    for (const s of script) timers.push(setTimeout(() => s.act(), s.at));
-    return () => timers.forEach(clearTimeout);
-  }, [phase, playerLabels, bankerLabels, script]);
-
-  return {
-    animatedCards: {
-      player: playerLabels.map((lbl, i) => ({ label: lbl, show: showP[i], flip: flipP[i] })),
-      banker: bankerLabels.map((lbl, i) => ({ label: lbl, show: showB[i], flip: flipB[i] })),
-    },
-    winnerGlow,
-  };
+  return (
+    <div
+      className={cx(
+        "rounded-xl p-3 md:p-4 glass-panel border transition-shadow",
+        winner ? "winner-flash border-amber-400" : "border-white/10"
+      )}
+    >
+      <div className="mb-2 flex items-center justify-between">
+        <div className="text-xs uppercase tracking-wide opacity-80">{title}</div>
+        {winner && (
+          <div className="text-xs font-semibold text-amber-300">WINNER</div>
+        )}
+      </div>
+      <div className="flex gap-2 md:gap-3">
+        {cards.map((c, i) => (
+          <Card
+            key={`${title}-${i}-${c}`}
+            code={c}
+            faceUp={!!faceUps[i]}
+            delayMs={baseDelay + i * 600}
+          />
+        ))}
+      </div>
+    </div>
+  );
 }
 
-export default function RoomPage() {
-  const { room } = useParams<{ room: RoomCode }>();
-  const router = useRouter();
-  const roomCodeUpper = (String(room || "").toUpperCase() as RoomCode) || "R60";
-  const fixedRoom = (["R30", "R60", "R90"] as RoomCode[]).includes(roomCodeUpper) ? roomCodeUpper : undefined;
+/** =========================
+ * 主頁面
+ * ========================= */
+export default function BaccaratRoomPage({
+  params,
+}: {
+  params: { room: string };
+}) {
+  const room = decodeURIComponent(params.room);
 
-  const [data, setData] = useState<StateResp | null>(null);
-  const [err, setErr] = useState("");
+  // 狀態
+  const [S, setS] = useState<StateResp | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setErr] = useState<string | null>(null);
 
-  const [nowStr, setNowStr] = useState(formatTime());
+  // 下注
+  const [amount, setAmount] = useState<number>(0);
+  const [placing, setPlacing] = useState(false);
+  const [toast, setToast] = useState<{ type: "ok" | "warn" | "err"; text: string } | null>(null);
+
+  // 翻牌控制：在 REVEALING 時，按順序依序翻面
+  const [pFace, setPFace] = useState<boolean[]>([false, false, false]);
+  const [bFace, setBFace] = useState<boolean[]>([false, false, false]);
+
+  const prevPhase = useRef<RoundPhase | null>(null);
+  const revealTimer = useRef<number | null>(null);
+
+  // 倒數
+  const now = useRef<number>(Date.now());
+  const [, forceTick] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => setNowStr(formatTime()), 1000);
+    const t = window.setInterval(() => {
+      now.current = Date.now();
+      forceTick((x) => x + 1);
+    }, 1000);
     return () => clearInterval(t);
   }, []);
 
-  const [amount, setAmount] = useState<number>(100);
-  const isAmountValid = Number.isFinite(amount) && amount > 0;
-  const emptyAgg: Record<BetSide, number> = {
-    PLAYER: 0,
-    BANKER: 0,
-    TIE: 0,
-    PLAYER_PAIR: 0,
-    BANKER_PAIR: 0,
-    ANY_PAIR: 0,
-    PERFECT_PAIR: 0,
-    BANKER_SUPER_SIX: 0,
-  };
-  const [myBets, setMyBets] = useState<Record<BetSide, number>>(emptyAgg);
-  const [placing, setPlacing] = useState<BetSide | null>(null);
+  const countdownLabel = useMemo(() => {
+    if (!S) return "--";
+    const ends = new Date(S.current.endsAt).getTime();
+    const sec = Math.max(0, Math.ceil((ends - now.current) / 1000));
+    return `${sec}s`;
+  }, [S, now.current]);
 
+  /** 輪詢目前狀態 */
   const fetchState = useCallback(async () => {
     try {
-      const res = await fetch(`/api/casino/baccarat/state?room=${roomCodeUpper}`, { cache: "no-store", credentials: "include" });
-      const json: StateResp = await res.json();
-      if (!res.ok || !json?.ok) throw new Error((json as any)?.error || "載入失敗");
-      setData(json);
-      setErr("");
+      const res = await fetch(
+        `/api/casino/baccarat/state?room=${encodeURIComponent(room)}`,
+        { credentials: "include", cache: "no-store" }
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = (await res.json()) as StateResp;
 
-      // 如果剛結算完 → 重置下注面板顯示
-      if (json.phase === "SETTLED") {
-        setMyBets({ ...emptyAgg });
-      }
+      // 保底 config 值
+      data.config = {
+        bettingSeconds: data.config?.bettingSeconds ?? 20,
+        revealFlipIntervalMs: data.config?.revealFlipIntervalMs ?? 600,
+      };
+
+      setS(data);
+      setErr(null);
     } catch (e: any) {
-      setErr(e?.message || "連線失敗");
+      setErr(e?.message || "載入失敗");
     }
-  }, [roomCodeUpper]);
+  }, [room]);
 
-  const fetchMyBets = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/casino/baccarat/my-bets?room=${roomCodeUpper}`, { cache: "no-store", credentials: "include" });
-      if (!res.ok) return;
-      const json: MyBetsResp = await res.json();
-      const agg = { ...emptyAgg };
-      for (const it of json.items) agg[it.side] += it.amount;
-      setMyBets(agg);
-    } catch {}
-  }, [roomCodeUpper]);
-
+  // 首次/每秒輪詢
   useEffect(() => {
-    const load = async () => {
-      await fetchState();
-      await fetchMyBets();
-    };
-    load();
-    const timer = setInterval(load, 1000);
-    return () => clearInterval(timer);
-  }, [fetchState, fetchMyBets]);
-
-  // 本地倒數（同步畫面）
-  const [localSec, setLocalSec] = useState(0);
-  useEffect(() => { if (data) setLocalSec(data.secLeft ?? 0); }, [data?.secLeft]);
-  useEffect(() => {
-    if (localSec <= 0) return;
-    const t = setInterval(() => setLocalSec((s) => Math.max(0, s - 1)), 1000);
+    setLoading(true);
+    fetchState().finally(() => setLoading(false));
+    const t = window.setInterval(fetchState, 1000);
     return () => clearInterval(t);
-  }, [localSec]);
+  }, [fetchState]);
 
-  // 下單
-  async function place(side: BetSide) {
-    if (!data) return;
-    if (data.phase !== "BETTING") return setErr("目前非下注時間");
-    if (!isAmountValid) return setErr("請輸入正確的下注金額");
-    if (!data.roundId) return setErr("本局未建立，稍候再試");
+  // 監聽 phase 變化 → 控制翻牌動畫
+  useEffect(() => {
+    const phase = S?.current.phase ?? null;
+    const curP = S?.current.playerCards ?? [];
+    const curB = S?.current.bankerCards ?? [];
 
-    setPlacing(side);
-    try {
-      const res = await fetch("/api/casino/baccarat/bet", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          room: roomCodeUpper,
-          roundId: data.roundId,
-          bets: [{ side, amount }],
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || "下注失敗");
-
-      setErr("");
-      await fetchMyBets();
-      await fetchState();
-    } catch (e: any) {
-      setErr(e?.message || "下注失敗");
-    } finally {
-      setPlacing(null);
+    // BETTING → 清空翻面
+    if (phase === "BETTING") {
+      setPFace([false, false, false]);
+      setBFace([false, false, false]);
     }
-  }
 
-  const outcomeMark: Outcome = data?.result ? data.result.outcome : null;
-  const flags = useMemo(
-    () => deriveFlags(data?.cards, data?.result),
-    [data?.cards, data?.result]
+    // 進入 REVEALING → 按序翻牌
+    if (phase === "REVEALING" && prevPhase.current !== "REVEALING") {
+      const interval = S?.config.revealFlipIntervalMs ?? 600;
+      // 翻順序：P1, B1, P2, B2, (視情況)P3, (視情況)B3
+      const steps: Array<() => void> = [];
+      if (curP[0]) steps.push(() => setPFace((s) => [true, s[1], s[2]]));
+      if (curB[0]) steps.push(() => setBFace((s) => [true, s[1], s[2]]));
+      if (curP[1]) steps.push(() => setPFace((s) => [s[0], true, s[2]]));
+      if (curB[1]) steps.push(() => setBFace((s) => [s[0], true, s[2]]));
+      if (curP[2]) steps.push(() => setPFace((s) => [s[0], s[1], true]));
+      if (curB[2]) steps.push(() => setBFace((s) => [s[0], s[1], true]));
+
+      // 執行序列
+      let i = 0;
+      const run = () => {
+        steps[i]?.();
+        i++;
+        if (i < steps.length) {
+          revealTimer.current = window.setTimeout(run, interval);
+        }
+      };
+      // 啟動
+      revealTimer.current = window.setTimeout(run, 200);
+    }
+
+    prevPhase.current = phase;
+    return () => {
+      if (revealTimer.current) {
+        clearTimeout(revealTimer.current);
+        revealTimer.current = null;
+      }
+    };
+  }, [S?.current.phase, S?.current.playerCards, S?.current.bankerCards, S?.config.revealFlipIntervalMs]);
+
+  /** 下單 */
+  const placeBet = useCallback(
+    async (side: BetSide) => {
+      if (!amount || amount <= 0) {
+        setToast({ type: "warn", text: "請輸入下注金額" });
+        return;
+      }
+      if (S?.current.phase !== "BETTING") {
+        setToast({ type: "warn", text: "本局已停止下注" });
+        return;
+      }
+      setPlacing(true);
+      try {
+        const body: PlaceBetReq = { side, amount, room };
+        const res = await fetch(`/api/casino/baccarat/bet`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = (await res.json()) as PlaceBetResp;
+        if (!res.ok || !data.ok) {
+          throw new Error(data?.err || `下單失敗 (${res.status})`);
+        }
+        setToast({ type: "ok", text: "下注成功" });
+        fetchState();
+      } catch (e: any) {
+        setToast({ type: "err", text: e?.message || "下注失敗" });
+      } finally {
+        setPlacing(false);
+      }
+    },
+    [amount, room, S?.current.phase, fetchState]
   );
-  const myTotal = (Object.keys(myBets) as BetSide[]).reduce((s, k) => s + (myBets[k] || 0), 0);
 
-  // **** 贏家金框閃三下（下注面板的該按鈕） ****
-  const goldPulseSide: BetSide | null = useMemo(() => {
-    if (!data || data.phase !== "SETTLED" || !outcomeMark) return null;
-    if (outcomeMark === "PLAYER" && myBets.PLAYER > 0) return "PLAYER";
-    if (outcomeMark === "BANKER" && myBets.BANKER > 0) return "BANKER";
-    if (outcomeMark === "TIE" && myBets.TIE > 0) return "TIE";
-    if (flags.playerPair && myBets.PLAYER_PAIR > 0) return "PLAYER_PAIR";
-    if (flags.bankerPair && myBets.BANKER_PAIR > 0) return "BANKER_PAIR";
-    if (flags.anyPair && myBets.ANY_PAIR > 0) return "ANY_PAIR";
-    if (flags.perfectPair && myBets.PERFECT_PAIR > 0) return "PERFECT_PAIR";
-    if (flags.super6 && myBets.BANKER_SUPER_SIX > 0) return "BANKER_SUPER_SIX";
-    return null;
-  }, [data?.phase, outcomeMark, flags, myBets]);
-
-  const playerLabels = (data?.cards?.player ?? []).map(cardToLabel);
-  const bankerLabels = (data?.cards?.banker ?? []).map(cardToLabel);
-  const { animatedCards, winnerGlow } = useBaccaratReveal({
-    phase: data?.phase ?? "BETTING",
-    playerLabels,
-    bankerLabels,
-    outcome: data?.result?.outcome ?? null,
-  });
-
-  if (!data) {
-    return (
-      <main className="bk-room-wrap">
-        <div className="text-white p-10">載入中… {err && <span className="ml-2 text-rose-300">{err}</span>}</div>
-        <link rel="stylesheet" href="/style/baccarat/baccarat-room.css" />
-      </main>
-    );
-  }
+  // UI helpers
+  const myTotals = S?.my?.totals || {};
+  const outcome = S?.current.outcome ?? null;
+  const playerWin = outcome === "PLAYER" || outcome === "TIE";
+  const bankerWin = outcome === "BANKER" || outcome === "TIE";
 
   return (
-    <main className="bk-room-wrap text-white">
-      {/* Header */}
-      <header className="bk-header">
-        <div className="left">
-          <button className="bk-btn" onClick={() => router.push("/casino/baccarat")} title="回百家樂大廳">
-            ← 回百家樂大廳
-          </button>
-          <span className="bk-room-name">{data.room.name}</span>
-          <span className="bk-room-seq"># {pad4(data.roundSeq)}</span>
-        </div>
-        <div className="center">{zhPhase[data.phase]}</div>
-        <div className="right">
-          <span>倒數：{typeof localSec === "number" ? `${localSec}s` : "--"}</span>
-          <span className="mx-3">時間：{nowStr}</span>
-          <span>餘額：{data.balance ?? "—"}</span>
-        </div>
-      </header>
+    <div className="px-4 md:px-6 py-6 space-y-6">
+      {/* 樣式（翻牌 + 金框閃爍 + 玻璃） */}
+      <style jsx global>{`
+        .glass-panel {
+          background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+          box-shadow: 0 6px 24px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.06);
+        }
+        .glass-tile {
+          background: radial-gradient(ellipse at center, rgba(255,255,255,0.35), rgba(255,255,255,0.05));
+          border: 1px dashed rgba(255,255,255,0.18);
+        }
+        .card-3d {
+          position: relative;
+          perspective: 800px;
+          transform-style: preserve-3d;
+          transition: transform 0.6s ease;
+        }
+        .card-3d .card-face {
+          position: absolute;
+          inset: 0;
+          backface-visibility: hidden;
+          border-radius: 0.6rem;
+          border: 1px solid rgba(255,255,255,0.12);
+          background: rgba(20,20,30,0.75);
+        }
+        .card-3d .card-front {
+          background: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.03));
+          color: #e5e7eb;
+        }
+        .card-3d .card-back {
+          transform: rotateY(180deg);
+          background: linear-gradient(180deg, rgba(49,46,129,0.35), rgba(17,24,39,0.6));
+        }
+        .card-3d[data-faceup="1"] {
+          transform: rotateY(0deg);
+        }
+        .card-3d[data-faceup="0"] {
+          transform: rotateY(180deg);
+        }
 
-      {/* Content */}
-      <section className="bk-content">
-        {/* 左：動畫 + 下注 */}
-        <div className="bk-left">
-          <div className="bk-panel">
-            {/* 開牌動畫 */}
-            <div className="bk-reveal">
-              <div className="bk-reveal-head">
-                <span className="title">開牌動畫</span>
-                <span className="sub">
-                  {data.phase === "BETTING" ? "等待下注結束…" : data.phase === "REVEALING" ? "開牌中…" : "本局結果"}
-                </span>
-              </div>
+        @keyframes winnerBlink {
+          0% { box-shadow: 0 0 0 rgba(251,191,36,0), 0 0 0 rgba(251,191,36,0); }
+          20% { box-shadow: 0 0 20px rgba(251,191,36,0.8), 0 0 40px rgba(251,191,36,0.35); }
+          40% { box-shadow: 0 0 10px rgba(251,191,36,0.5), 0 0 20px rgba(251,191,36,0.2); }
+          100% { box-shadow: 0 0 0 rgba(251,191,36,0), 0 0 0 rgba(251,191,36,0); }
+        }
+        .winner-flash {
+          border-width: 2px !important;
+          animation: winnerBlink 0.6s ease-in-out 0s 3;
+        }
+      `}</style>
 
-              <div className="bk-reveal-grid">
-                {/* 閒 */}
-                <div className={`side side-player ${data && (data.result?.outcome === "PLAYER" || winnerGlow === "PLAYER") ? "win" : ""}`}>
-                  <div className="side-head">
-                    <span className="name">閒方{data?.result?.outcome === "PLAYER" || winnerGlow === "PLAYER" ? " ★勝" : ""}</span>
-                    <span className="pts">合計 {data?.result?.p ?? 0} 點</span>
-                  </div>
-                  <div className="cards">
-                    {animatedCards.player.length > 0
-                      ? animatedCards.player.map((c, i) => (
-                          <PlayingCard key={`p-${i}`} label={c.label} show={c.show} flip={c.flip} />
-                        ))
-                      : [0, 1, 2].map((i) => <PlayingCard key={`p-skel-${i}`} label="?" show={false} flip={false} />)}
-                  </div>
-                </div>
+      {/* 房間資訊列 */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <Info tile title="房間" value={S?.current.room || room} />
+        <Info tile title="局序" value={S ? `#${S.current.roundSeq}` : "--"} />
+        <Info
+          tile
+          title="階段"
+          value={
+            S?.current.phase === "BETTING"
+              ? "下注中"
+              : S?.current.phase === "REVEALING"
+              ? "開牌中"
+              : S?.current.phase === "SETTLED"
+              ? "已結算"
+              : "--"
+          }
+        />
+        <Info tile title="倒數" value={S ? countdownLabel : "--"} />
+        <Info tile title="目前時間" value={new Date().toLocaleTimeString()} />
+      </div>
 
-                {/* 莊 */}
-                <div className={`side side-banker ${data && (data.result?.outcome === "BANKER" || winnerGlow === "BANKER") ? "win" : ""}`}>
-                  <div className="side-head">
-                    <span className="name">莊方{data?.result?.outcome === "BANKER" || winnerGlow === "BANKER" ? " ★勝" : ""}</span>
-                    <span className="pts">合計 {data?.result?.b ?? 0} 點</span>
-                  </div>
-                  <div className="cards">
-                    {animatedCards.banker.length > 0
-                      ? animatedCards.banker.map((c, i) => (
-                          <PlayingCard key={`b-${i}`} label={c.label} show={c.show} flip={c.flip} />
-                        ))
-                      : [0, 1, 2].map((i) => <PlayingCard key={`b-skel-${i}`} label="?" show={false} flip={false} />)}
-                  </div>
-                </div>
-              </div>
+      {/* 翻牌區（玩家 / 莊家） */}
+      <div className="grid md:grid-cols-2 gap-4">
+        <HandView
+          title="PLAYER"
+          cards={S?.current.playerCards || []}
+          faceUps={pFace}
+          winner={!!S && playerWin && S.current.phase === "SETTLED"}
+          baseDelay={0}
+        />
+        <HandView
+          title="BANKER"
+          cards={S?.current.bankerCards || []}
+          faceUps={bFace}
+          winner={!!S && bankerWin && S.current.phase === "SETTLED"}
+          baseDelay={150}
+        />
+      </div>
 
-              <div className="bk-reveal-result">
-                結果：<b>{data.result ? zhOutcome[data.result.outcome] : "—"}</b>
-              </div>
-            </div>
+      {/* 注單資訊列（示範：你的 API 可直接帶 totals） */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <Info title="我壓閒" value={`${fmt(myTotals.PLAYER)} 元`} color="cyan" />
+        <Info title="我壓和" value={`${fmt(myTotals.TIE)} 元`} color="amber" />
+        <Info title="我壓莊" value={`${fmt(myTotals.BANKER)} 元`} color="rose" />
+        <Info title="我壓對子" value={`${fmt((myTotals.PLAYER_PAIR ?? 0) + (myTotals.BANKER_PAIR ?? 0))} 元`} />
+        <Info title="本局合計" value={`${fmt(
+          Object.values(myTotals).reduce((a, b) => a + (b ?? 0), 0)
+        )} 元`} wide />
+      </div>
 
-            {/* 下注面板 */}
-            <div className="bk-bet-panel">
-              <div className="panel-head">
-                <div className="title">下注面板</div>
-                <div className="amount">
-                  單注金額：
-                  <input
-                    type="number"
-                    min={1}
-                    value={amount}
-                    onChange={(e) => setAmount(Math.max(0, Number(e.target.value || 0)))}
-                  />
-                  <span>元</span>
-                </div>
-              </div>
-
-              <div className="chips">
-                {[50, 100, 200, 500, 1000, 5000].map((c) => (
-                  <button key={c} onClick={() => setAmount(c)} disabled={data?.phase !== "BETTING"} className={amount === c ? "active" : ""}>
-                    {c}
-                  </button>
-                ))}
-                <button onClick={() => setAmount((a) => a + 50)} disabled={data?.phase !== "BETTING"}>+50</button>
-                <button onClick={() => setAmount((a) => a + 100)} disabled={data?.phase !== "BETTING"}>+100</button>
-                <button onClick={() => setAmount(0)} disabled={data?.phase !== "BETTING"}>清除</button>
-              </div>
-
-              {/* 我的下注彙總卡（結算後自動清空） */}
-              <div className="mybets grid">
-                <div className="info-card"><div className="k">目前選擇</div><div className="v">{amount} 元</div></div>
-                <div className="info-card ac-cyan"><div className="k">我壓閒</div><div className="v">{myBets.PLAYER} 元</div></div>
-                <div className="info-card ac-amber"><div className="k">我壓和</div><div className="v">{myBets.TIE} 元</div></div>
-                <div className="info-card ac-rose"><div className="k">我壓莊</div><div className="v">{myBets.BANKER} 元</div></div>
-                <div className="info-card ac-emerald"><div className="k">閒對</div><div className="v">{myBets.PLAYER_PAIR} 元</div></div>
-                <div className="info-card ac-emerald"><div className="k">莊對</div><div className="v">{myBets.BANKER_PAIR} 元</div></div>
-                <div className="info-card ac-violet"><div className="k">任一對</div><div className="v">{myBets.ANY_PAIR} 元</div></div>
-                <div className="info-card ac-violet"><div className="k">完美對</div><div className="v">{myBets.PERFECT_PAIR} 元</div></div>
-                <div className="info-card ac-rose"><div className="k">超級6</div><div className="v">{myBets.BANKER_SUPER_SIX} 元</div></div>
-                <div className="info-card wide"><div className="k">本局合計</div><div className="v">{myTotal} 元</div></div>
-              </div>
-
-              {/* 八種注型 */}
-              <div className="bet-grid">
-                {(
-                  [
-                    { side: "PLAYER", label: '壓「閒」', theme: "cyan" },
-                    { side: "TIE", label: '壓「和」', theme: "amber" },
-                    { side: "BANKER", label: '壓「莊」', theme: "rose" },
-                    { side: "PLAYER_PAIR", label: "閒對", theme: "emerald" },
-                    { side: "BANKER_PAIR", label: "莊對", theme: "emerald" },
-                    { side: "ANY_PAIR", label: "任一對", theme: "violet" },
-                    { side: "PERFECT_PAIR", label: "完美對", theme: "violet" },
-                    { side: "BANKER_SUPER_SIX", label: "超級6(莊6)", theme: "rose" },
-                  ] as const
-                ).map((b) => {
-                  const isWinnerBtn = goldPulseSide === (b.side as BetSide);
-                  return (
-                    <button
-                      key={b.side}
-                      data-theme={b.theme}
-                      className={`bet-btn ${isWinnerBtn ? "gold-pulse-3" : ""}`}
-                      disabled={placing === (b.side as BetSide) || data?.phase !== "BETTING" || !isAmountValid}
-                      title={PAYOUT_HINT[b.side as BetSide]}
-                      onClick={() => place(b.side as BetSide)}
-                    >
-                      <div className="bet-label">{b.label}</div>
-                      <div className="bet-rate">{PAYOUT_HINT[b.side as BetSide]}</div>
-                      {!!myBets[b.side as BetSide] && <div className="bet-note">我本局：{myBets[b.side as BetSide]}</div>}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {err && <div className="err">{err}</div>}
-            </div>
-          </div>
-        </div>
-
-        {/* 右：路子 + 排行榜 */}
-        <div className="bk-right">
-          <div className="bk-panel">
-            <div className="title">路子（近 20 局）</div>
-
-            <div className="streak-grid">
-              {(data?.recent || []).map((r, i) => (
-                <div
-                  key={i}
-                  className={`streak ${r.outcome === "PLAYER" ? "p" : r.outcome === "BANKER" ? "b" : "t"}`}
-                  title={`#${pad4(r.roundSeq)}：${zhOutcome[r.outcome]}  閒${r.p} / 莊${r.b}`}
+      {/* 下注面板 */}
+      <div className="glass-panel rounded-xl p-4 border border-white/10">
+        <div className="flex flex-col md:flex-row md:items-end gap-3">
+          <div className="grow">
+            <label className="text-sm opacity-80">下注金額</label>
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(Math.max(0, Number(e.target.value || 0)))}
+              className="mt-1 w-full rounded-lg px-3 py-2 bg-black/30 border border-white/10 outline-none focus:ring-2"
+              placeholder="輸入金額"
+            />
+            <div className="flex flex-wrap gap-2 mt-2">
+              {[100, 200, 500, 1000, 2000, 5000].map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setAmount(v)}
+                  className="px-3 py-1.5 rounded-lg border border-white/10 hover:border-white/30 transition"
                 >
-                  {zhOutcome[r.outcome]}
-                </div>
+                  {v.toLocaleString()}$
+                </button>
               ))}
-              {(!data || (data && data.recent.length === 0)) && <div className="muted">暫無資料</div>}
-            </div>
-
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr><th>局序</th><th>結果</th><th>閒點</th><th>莊點</th></tr>
-                </thead>
-                <tbody>
-                  {(data?.recent || []).map((r) => (
-                    <tr key={`t-${r.roundSeq}`}>
-                      <td>{pad4(r.roundSeq)}</td>
-                      <td>{zhOutcome[r.outcome]}</td>
-                      <td>{r.p}</td>
-                      <td>{r.b}</td>
-                    </tr>
-                  ))}
-                  {(!data || (data && data.recent.length === 0)) && (
-                    <tr><td colSpan={4} className="muted">暫無資料</td></tr>
-                  )}
-                </tbody>
-              </table>
+              <button
+                onClick={() => setAmount(0)}
+                className="px-3 py-1.5 rounded-lg border border-white/10 hover:border-white/30 transition"
+              >
+                清除
+              </button>
+              <button
+                onClick={() => setAmount((a) => a * 2)}
+                className="px-3 py-1.5 rounded-lg border border-white/10 hover:border-white/30 transition"
+              >
+                加倍
+              </button>
             </div>
           </div>
 
-          {fixedRoom && <Leaderboard fixedRoom={fixedRoom} showRoomSelector={false} />}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 grow">
+            <BetBtn text="閒 (PLAYER)" hue="cyan" onClick={() => placeBet("PLAYER")} disabled={placing} />
+            <BetBtn text="莊 (BANKER)" hue="rose" onClick={() => placeBet("BANKER")} disabled={placing} />
+            <BetBtn text="和 (TIE)" hue="amber" onClick={() => placeBet("TIE")} disabled={placing} />
+            <BetBtn text="超級6" hue="pink" onClick={() => placeBet("BANKER_SUPER_SIX")} disabled={placing} />
+            <BetBtn text="閒對 (P.Pair)" hue="sky" onClick={() => placeBet("PLAYER_PAIR")} disabled={placing} />
+            <BetBtn text="莊對 (B.Pair)" hue="violet" onClick={() => placeBet("BANKER_PAIR")} disabled={placing} />
+            <BetBtn text="任一對 (Any)" hue="fuchsia" onClick={() => placeBet("ANY_PAIR")} disabled={placing} />
+            <BetBtn text="完美對 (Perf.)" hue="emerald" onClick={() => placeBet("PERFECT_PAIR")} disabled={placing} />
+          </div>
         </div>
-      </section>
 
-      <link rel="stylesheet" href="/style/baccarat/baccarat-room.css" />
-    </main>
+        {S?.current.phase !== "BETTING" && (
+          <div className="mt-3 text-xs opacity-80">
+            現在非下注階段（{S?.current.phase === "REVEALING" ? "開牌中" : "已結算"}）
+          </div>
+        )}
+      </div>
+
+      {/* 路子（簡化展示，可替換成你的 RoadmapPanel） */}
+      <div className="glass-panel rounded-xl p-4 border border-white/10">
+        <div className="text-sm opacity-80 mb-2">近期結果</div>
+        <div className="flex flex-wrap gap-1">
+          {(S?.history?.lastOutcomes ?? []).map((o, idx) => (
+            <span
+              key={idx}
+              className={cx(
+                "px-2 py-0.5 rounded-md text-xs border",
+                o === "PLAYER" && "bg-cyan-500/20 border-cyan-500/30",
+                o === "BANKER" && "bg-rose-500/20 border-rose-500/30",
+                o === "TIE" && "bg-amber-500/20 border-amber-500/30"
+              )}
+            >
+              {o ?? "-"}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Toast */}
+      {toast && (
+        <div
+          className={cx(
+            "fixed left-1/2 -translate-x-1/2 bottom-6 px-4 py-2 rounded-lg border shadow-lg glass-panel z-50",
+            toast.type === "ok" && "border-emerald-400/40",
+            toast.type === "warn" && "border-amber-400/40",
+            toast.type === "err" && "border-rose-400/40"
+          )}
+          onAnimationEnd={() => setToast(null)}
+        >
+          {toast.text}
+        </div>
+      )}
+
+      {/* 載入/錯誤 */}
+      {loading && <div className="text-sm opacity-70">載入中…</div>}
+      {error && <div className="text-sm text-rose-300">錯誤：{error}</div>}
+    </div>
+  );
+}
+
+/** =========================
+ * 小型 UI 元件
+ * ========================= */
+
+function Info({
+  title,
+  value,
+  tile = false,
+  wide = false,
+  color,
+}: {
+  title: string;
+  value: string;
+  tile?: boolean;
+  wide?: boolean;
+  color?: "cyan" | "rose" | "amber";
+}) {
+  return (
+    <div
+      className={cx(
+        "rounded-xl border border-white/10",
+        tile ? "glass-panel p-3" : "p-2",
+        wide && "col-span-2"
+      )}
+    >
+      <div className="text-xs opacity-70">{title}</div>
+      <div
+        className={cx(
+          "mt-0.5 text-sm md:text-base font-semibold",
+          color === "cyan" && "text-cyan-300",
+          color === "rose" && "text-rose-300",
+          color === "amber" && "text-amber-300"
+        )}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function BetBtn({
+  text,
+  onClick,
+  disabled,
+  hue,
+}: {
+  text: string;
+  onClick: () => void;
+  disabled?: boolean;
+  hue:
+    | "cyan"
+    | "rose"
+    | "amber"
+    | "pink"
+    | "sky"
+    | "violet"
+    | "fuchsia"
+    | "emerald";
+}) {
+  const colorMap: Record<string, string> = {
+    cyan: "from-cyan-500/20 to-cyan-400/10 border-cyan-400/30 hover:border-cyan-300/50",
+    rose: "from-rose-500/20 to-rose-400/10 border-rose-400/30 hover:border-rose-300/50",
+    amber: "from-amber-500/20 to-amber-400/10 border-amber-400/30 hover:border-amber-300/50",
+    pink: "from-pink-500/20 to-pink-400/10 border-pink-400/30 hover:border-pink-300/50",
+    sky: "from-sky-500/20 to-sky-400/10 border-sky-400/30 hover:border-sky-300/50",
+    violet: "from-violet-500/20 to-violet-400/10 border-violet-400/30 hover:border-violet-300/50",
+    fuchsia: "from-fuchsia-500/20 to-fuchsia-400/10 border-fuchsia-400/30 hover:border-fuchsia-300/50",
+    emerald: "from-emerald-500/20 to-emerald-400/10 border-emerald-400/30 hover:border-emerald-300/50",
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={cx(
+        "rounded-lg px-3 py-2 border transition glass-panel",
+        "bg-gradient-to-br",
+        colorMap[hue],
+        disabled && "opacity-50 cursor-not-allowed"
+      )}
+    >
+      <div className="text-sm font-semibold">{text}</div>
+    </button>
   );
 }
