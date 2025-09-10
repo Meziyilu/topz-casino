@@ -49,25 +49,25 @@ function RoomCard({ room }: { room: RoomKey }) {
           onClick={() => router.push(`/casino/sicbo/${room.toLowerCase()}`)}
           className="px-3 py-1 rounded bg-white/20 hover:bg-white/30"
         >
-          闂侇偅褰冮崣鍡涘箣閸ф鐏?
+          闂備緡鍋呰ぐ鍐矗閸℃稑绠ｉ柛褎顨嗛悘?
         </button>
       </div>
       {data ? (
         <>
           <div className="text-sm opacity-80">
-            閻忕偐鍋撻柧?<b>{data.current.daySeq}</b>闁挎繃绮庢刊顓㈠箞?<b>{data.current.phase}</b>闁挎繃绮岄埀顒佸笚閺?<b>{countdown}s</b>
+            闁诲繒鍋愰崑鎾绘煣?<b>{data.current.daySeq}</b>闂佹寧绻冪划搴㈠垔椤撱垹绠?<b>{data.current.phase}</b>闂佹寧绻冪划宀勫焵椤掍礁绗氶柡?<b>{countdown}s</b>
           </div>
           <div className="text-sm opacity-80">
-            濞戞挸锕ら惇顒勬晬?
+            婵炴垶鎸搁敃銈夋儑椤掑嫭鏅?
             {last ? (
               <span>
-                濡ょ姳鍗冲?<b>{last.die1}-{last.die2}-{last.die3}</b>闁挎稑鐗忛梽鍕渶?<b>{last.sum}</b>
-                {last.isTriple ? "闁挎稑鑻﹢鍥殽? : ""}闁?
+                婵°倗濮抽崡鍐差焽?<b>{last.die1}-{last.die2}-{last.die3}</b>闂佹寧绋戦悧蹇涙⒔閸曨剦娓?<b>{last.sum}</b>
+                {last.isTriple ? "闂佹寧绋戦懟顖氾耿閸ヮ煈娈? : ""}闂?
               </span>
-            ) : "閻忓繑姘ㄩ崝?}
+            ) : "闁诲繐绻戝銊╁礉?}
           </div>
         </>
-      ) : <div className="text-sm opacity-60">閺夋挸顦崣鍡樼▔椤撴稈鍋?/div>}
+      ) : <div className="text-sm opacity-60">闁哄鎸搁ˇ顖炲矗閸℃鈻旀い鎾寸▓閸?/div>}
     </div>
   );
 }
@@ -75,7 +75,7 @@ function RoomCard({ room }: { room: RoomKey }) {
 export default function SicboLobby() {
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-bold">Sic Bo 濡ょ姵婢橀顐ｅ緞瑜嶉幀鈧?/h1>
+      <h1 className="text-2xl font-bold">Sic Bo 婵°倗濮靛姗€顢氶锝呯窞鐟滃秹骞€閳?/h1>
       <div className="grid md:grid-cols-3 gap-4">
         <RoomCard room="R30" />
         <RoomCard room="R60" />
