@@ -1,7 +1,7 @@
 // app/api/casino/baccarat/leaderboard/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { GameCode, RoomCode, StatPeriod } from "@prisma/client";
+import type { RoomCode, StatPeriod } from "@prisma/client";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,34 +28,35 @@ export async function GET(req: NextRequest) {
     const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "10", 10), 1), 50);
     const room = toRoomCode(searchParams.get("room") || undefined);
 
-    // 先找對應期間、遊戲、（可選）房間的最新快照窗口
+    // 1) 找到這個期間 +（可選）房間 的最新快照視窗
     const latest = await prisma.userStatSnapshot.findFirst({
       where: {
         period,
-        gameCode: "BACCARAT",
         ...(room ? { room } : {}),
       },
       orderBy: [{ windowEnd: "desc" }, { updatedAt: "desc" }],
       select: { windowStart: true, windowEnd: true },
     });
 
-    const where = latest
-      ? {
-          period,
-          gameCode: "BACCARAT" as GameCode,
-          windowStart: latest.windowStart,
-          windowEnd: latest.windowEnd,
-          ...(room ? { room } : {}),
-        }
-      : {
-          period,
-          gameCode: "BACCARAT" as GameCode,
-          ...(room ? { room } : {}),
-        };
+    // 2) 沒有快照就回空榜
+    if (!latest) {
+      return NextResponse.json({
+        ok: true,
+        period,
+        room: room ?? null,
+        window: null,
+        items: [],
+      });
+    }
 
-    // 取排行榜
+    // 3) 在該快照視窗內取排行榜
     const rows = await prisma.userStatSnapshot.findMany({
-      where,
+      where: {
+        period,
+        windowStart: latest.windowStart,
+        windowEnd: latest.windowEnd,
+        ...(room ? { room } : {}),
+      },
       orderBy: [{ netProfit: "desc" }],
       take: limit,
       select: {
@@ -85,16 +86,16 @@ export async function GET(req: NextRequest) {
       bets: r.betsCount,
       displayName: r.user?.displayName || "玩家",
       avatarUrl: r.user?.avatarUrl || null,
-      vipTier: r.user?.vipTier || 0,
-      headframe: r.user?.headframe || null,
-      panelTint: r.user?.panelTint || null,
+      vipTier: r.user?.vipTier ?? 0,
+      headframe: r.user?.headframe ?? null,
+      panelTint: r.user?.panelTint ?? null,
     }));
 
     return NextResponse.json({
       ok: true,
       period,
       room: room ?? null,
-      window: latest ? { start: latest.windowStart, end: latest.windowEnd } : null,
+      window: { start: latest.windowStart, end: latest.windowEnd },
       items,
     });
   } catch (e) {
