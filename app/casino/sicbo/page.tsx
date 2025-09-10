@@ -49,25 +49,25 @@ function RoomCard({ room }: { room: RoomKey }) {
           onClick={() => router.push(`/casino/sicbo/${room.toLowerCase()}`)}
           className="px-3 py-1 rounded bg-white/20 hover:bg-white/30"
         >
-          進入房間
+          闁彃鍙嗛幋鍧楁灁
         </button>
       </div>
       {data ? (
         <>
           <div className="text-sm opacity-80">
-            局�?<b>{data.current.daySeq}</b>｜狀�?<b>{data.current.phase}</b>｜倒數 <b>{countdown}s</b>
+            鐏炩偓閾?<b>{data.current.daySeq}</b>閿濇粎濯幈?<b>{data.current.phase}</b>閿濇粌鈧帗鏆?<b>{countdown}s</b>
           </div>
           <div className="text-sm opacity-80">
-            上局�?
+            娑撳﹤鐪敍?
             {last ? (
               <span>
-                骰面 <b>{last.die1}-{last.die2}-{last.die3}</b>（總�?<b>{last.sum}</b>
-                {last.isTriple ? "，圍�? : ""}�?
+                妤犱即娼?<b>{last.die1}-{last.die2}-{last.die3}</b>閿涘牏闄勬?<b>{last.sum}</b>
+                {last.isTriple ? "閿涘苯婀囨? : ""}閿?
               </span>
-            ) : "尚無"}
+            ) : "鐏忔氨鍔?}
           </div>
         </>
-      ) : <div className="text-sm opacity-60">載入中�?/div>}
+      ) : <div className="text-sm opacity-60">鏉撳鍙嗘稉顓涒偓?/div>}
     </div>
   );
 }
@@ -75,7 +75,7 @@ function RoomCard({ room }: { room: RoomKey }) {
 export default function SicboLobby() {
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-bold">Sic Bo 骰寶大廳</h1>
+      <h1 className="text-2xl font-bold">Sic Bo 妤犳澘顕径褍鎬€</h1>
       <div className="grid md:grid-cols-3 gap-4">
         <RoomCard room="R30" />
         <RoomCard room="R60" />

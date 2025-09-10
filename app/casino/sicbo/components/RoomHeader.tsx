@@ -36,9 +36,9 @@ export default function RoomHeader({
         <Tab code="R90" />
       </div>
       <div className="text-sm opacity-90">
-        局�?<b>{daySeq}</b>｜狀�?<b>{phase}</b>｜倒數 <b>{countdown}s</b>
+        鐏炩偓閾?<b>{daySeq}</b>閿濇粎濯幈?<b>{phase}</b>閿濇粌鈧帗鏆?<b>{countdown}s</b>
       </div>
-      <div className="text-sm">餘額 <b>{balance.toLocaleString()}</b></div>
+      <div className="text-sm">妞佹﹢顢?<b>{balance.toLocaleString()}</b></div>
     </div>
   );
 }

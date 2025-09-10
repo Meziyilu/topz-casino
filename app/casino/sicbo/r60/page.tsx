@@ -70,7 +70,7 @@ export default function Page() {
     await load();
   };
 
-  if (!s) return <div className="p-6">載入中�?/div>;
+  if (!s) return <div className="p-6">鏉撳鍙嗘稉顓涒偓?/div>;
 
   return (
     <div className="p-4 space-y-4">
