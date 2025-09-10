@@ -1,12 +1,12 @@
 import { NextRequest } from "next/server";
 import { ensureRooms, subscribeRoom } from "@/lib/sicbo/room";
-import type { RoomCode } from "@prisma/client";
+import type { RoomKey } from "@/lib/sicbo/types";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   await ensureRooms();
-  const room = (req.nextUrl.searchParams.get("room") || "R60") as RoomCode;
+  const room = (req.nextUrl.searchParams.get("room") || "R60") as RoomKey;
 
   const stream = new ReadableStream({
     start(controller) {
@@ -14,21 +14,14 @@ export async function GET(req: NextRequest) {
         controller.enqueue(new TextEncoder().encode(`event: ${t}\n`));
         controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(d)}\n\n`));
       };
-      const off1 = subscribeRoom(room as any, "tick", (d) => send("tick", d));
-      const off2 = subscribeRoom(room as any, "state", (d) => send("state", d));
-      const off3 = subscribeRoom(room as any, "result", (d) => send("result", d));
+      const off1 = subscribeRoom(room, "tick",   (d) => send("tick", d));
+      const off2 = subscribeRoom(room, "state",  (d) => send("state", d));
+      const off3 = subscribeRoom(room, "result", (d) => send("result", d));
       const hb = setInterval(() => send("ping", { t: Date.now() }), 15000);
 
-      (controller as any)._cleanup = () => {
-        off1();
-        off2();
-        off3();
-        clearInterval(hb);
-      };
+      (controller as any)._cleanup = () => { off1(); off2(); off3(); clearInterval(hb); };
     },
-    cancel() {
-      (this as any)._cleanup?.();
-    },
+    cancel() { (this as any)._cleanup?.(); },
   });
 
   return new Response(stream, {

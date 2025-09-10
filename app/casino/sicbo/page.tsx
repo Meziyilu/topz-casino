@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import "@/styles/sicbo.css";
+import "../../../styles/sicbo.css";
 
 type RoomKey = "R30" | "R60" | "R90";
 type StateResp = {
@@ -25,10 +25,7 @@ function useRoomState(room: RoomKey) {
     }
   }
 
-  useEffect(() => {
-    load();
-  }, []);
-
+  useEffect(() => { load(); }, []);
   useEffect(() => {
     const t = setInterval(() => {
       if (!data) return;
@@ -68,14 +65,10 @@ function RoomCard({ room }: { room: RoomKey }) {
                 骰面 <b>{last.die1}-{last.die2}-{last.die3}</b>（總點 <b>{last.sum}</b>
                 {last.isTriple ? "，圍骰" : ""}）
               </span>
-            ) : (
-              "尚無"
-            )}
+            ) : "尚無"}
           </div>
         </>
-      ) : (
-        <div className="text-sm opacity-60">載入中…</div>
-      )}
+      ) : <div className="text-sm opacity-60">載入中…</div>}
     </div>
   );
 }

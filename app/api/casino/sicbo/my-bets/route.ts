@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   const items = await prisma.sicboBet.findMany({
     where: { userId },
     orderBy: { placedAt: "desc" },
-    take: 50,
+    take: 50
   });
   return NextResponse.json({ items });
 }

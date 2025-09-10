@@ -1,6 +1,7 @@
+// 若 DB 無值時作為 fallback（實務以 prisma.sicboConfig.payoutTable 為主）
 export const defaultPayoutTable = {
   bigSmall: { BIG: 1, SMALL: 1, tripleKills: true },
-  singleFace: { one: 1, two: 2, three: 3 },
+  singleFace: { one: 1, two: 2, three: 3 }, // 單點 1~3 倍（依出現顆數）
   doubleFace: 8,
   anyTriple: 24,
   specificTriple: 150,

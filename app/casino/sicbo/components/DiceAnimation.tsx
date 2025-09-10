@@ -1,12 +1,6 @@
 "use client";
 
-export default function DiceAnimation({
-  dice,
-  size = 48,
-}: {
-  dice: [number, number, number] | null;
-  size?: number;
-}) {
+export default function DiceAnimation({ dice }: { dice: [number, number, number] | null }) {
   return (
     <div className="glass p-3 rounded-lg flex items-center justify-center gap-3">
       {[0, 1, 2].map((i) => {
@@ -14,16 +8,8 @@ export default function DiceAnimation({
         return (
           <div
             key={i}
-            className={`flex items-center justify-center font-bold glass ${
-              dice ? "" : "dice-shake"
-            }`}
-            style={{
-              width: size,
-              height: size,
-              borderRadius: 12,
-              fontSize: Math.round(size * 0.5),
-            }}
-            title={dice ? `骰子${i + 1}: ${v}` : "搖骰中…"}
+            className={`flex items-center justify-center font-bold glass ${dice ? "" : "dice-shake"}`}
+            style={{ width: 48, height: 48, borderRadius: 12, fontSize: 24 }}
           >
             {v}
           </div>

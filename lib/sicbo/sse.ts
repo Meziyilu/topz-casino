@@ -9,9 +9,11 @@ export class SSEHub {
 
   subscribe(topic: string, h: Handler) {
     if (!this.subs.has(topic)) this.subs.set(topic, new Set());
-    this.subs.get(topic)!.add(h);
-    return () => this.subs.get(topic)!.delete(h);
+    const set = this.subs.get(topic)!;
+    set.add(h);
+    return () => set.delete(h);
   }
 }
 
+// 單例（跨 hot-reload）
 export const sicboHub: SSEHub = (globalThis as any).__sicboHub ??= new SSEHub();

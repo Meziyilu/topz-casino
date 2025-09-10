@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSSE } from "@/lib/useSSE";
+import { useSSE } from "../../../../lib/useSSE";
 import RoomHeader from "../components/RoomHeader";
 import DiceAnimation from "../components/DiceAnimation";
 import SicboBoard from "../components/SicboBoard";
 import RoadmapPanel from "../components/RoadmapPanel";
-import "@/styles/sicbo.css";
+import "../../../../styles/sicbo.css";
 
 type StateResp = {
   room: "R60";
@@ -29,9 +29,7 @@ export default function Page() {
     setS(j);
   }
 
-  useEffect(() => {
-    load();
-  }, []);
+  useEffect(() => { load(); }, []);
 
   useSSE(`/api/casino/sicbo/stream?room=${room}`, (ev: any) => {
     if (ev.type === "state") {
