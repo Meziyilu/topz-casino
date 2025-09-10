@@ -2,117 +2,85 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 
-type RoomCode = "R30" | "R60" | "R90";
-type Phase = "BETTING" | "REVEALING" | "SETTLED";
-
-type RoomBrief = {
-  code: RoomCode;
-  phase: Phase;
-  roundId: string | null;
-  countdown: number; // 伺服器回傳剩餘秒數
-  online: number;
+type LobbyRoom = {
+  code: "R30" | "R60" | "R90";
+  name: string;
+  description: string;
+  secondsPerRound: number;
+  phase: "BETTING" | "REVEALING" | "SETTLED";
+  secLeft: number;
+  playerCount: number;
 };
 
-export default function BaccaratRoomsPage() {
-  const [rooms, setRooms] = useState<RoomBrief[]>([]);
+export default function BaccaratLobbyPage() {
+  const router = useRouter();
+  const [rooms, setRooms] = useState<LobbyRoom[]>([]);
+  const [err, setErr] = useState("");
 
-  // 每秒輪詢房間列表，並用本地倒數做平滑
+  async function load() {
+    try {
+      const res = await fetch("/api/casino/baccarat/rooms", { cache: "no-store" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "載入失敗");
+      setRooms(json.rooms || []);
+      setErr("");
+    } catch (e: any) {
+      setErr(e?.message || "連線失敗");
+    }
+  }
+
   useEffect(() => {
-    let timer: any;
-    let tick: any;
-
-    const fetchRooms = async () => {
-      try {
-        const r = await fetch("/api/casino/baccarat/rooms", { cache: "no-store" });
-        if (!r.ok) throw new Error();
-        const d = await r.json();
-        const list: RoomBrief[] = d.rooms ?? [];
-        setRooms(list);
-      } catch {
-        // 失敗時不改動，等下次輪詢
-      }
-    };
-
-    // 每秒取一次
-    const startPolling = () => {
-      fetchRooms();
-      timer = setInterval(fetchRooms, 1000);
-      // 本地倒數：每 1s 全體 -1（不小於 0），讓畫面更順
-      tick = setInterval(() => {
-        setRooms((prev) =>
-          prev.map((r) => ({
-            ...r,
-            countdown: Math.max(0, (r.countdown ?? 0) - 1),
-          }))
-        );
-      }, 1000);
-    };
-
-    startPolling();
-    return () => {
-      clearInterval(timer);
-      clearInterval(tick);
-    };
+    load();
+    const t = setInterval(load, 2000);
+    return () => clearInterval(t);
   }, []);
 
-  const phaseClass = (p: Phase) =>
-    p === "BETTING" ? "betting" : p === "REVEALING" ? "revealing" : "settled";
-
-  const phaseZh: Record<Phase, string> = {
-    BETTING: "下注中",
-    REVEALING: "開牌中",
-    SETTLED: "已結算",
-  };
-
   return (
-    <main className="bk-wrap">
-      <header className="bk-header">
-        <div className="left">
-          <Link href="/" className="bk-logo">TOPZCASINO</Link>
-          <span className="bk-room">Baccarat</span>
-        </div>
-        <div className="center">
-          <div className="bk-phase betting">百家樂大廳</div>
-        </div>
-        <div className="right">
-          <Link href="/" className="bk-btn ghost">返回大廳</Link>
-        </div>
-      </header>
+    <main className="min-h-screen px-4 py-8 text-white bg-[radial-gradient(1200px_600px_at_10%_-10%,rgba(96,165,250,.12),transparent_60%),radial-gradient(1000px_800px_at_110%_10%,rgba(167,139,250,.12),transparent_60%),radial-gradient(800px_700px_at_50%_110%,rgba(253,164,175,.10),transparent_60%)]">
+      <h1 className="text-2xl font-bold mb-6">百家樂大廳</h1>
 
-      <section className="rooms-grid">
+      {err && <div className="mb-4 text-sm text-rose-300">⚠️ {err}</div>}
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {rooms.map((r) => (
-          <Link
+          <button
             key={r.code}
-            href={`/casino/baccarat/rooms/${r.code}`}
-            className="room-card glass tilt"
+            onClick={() => router.push(`/casino/baccarat/rooms/${r.code}`)}
+            className="text-left rounded-2xl border border-white/15 hover:border-white/30 transition p-5 bg-white/5 backdrop-blur-md shadow-[0_8px_32px_rgba(0,0,0,.35)]"
+            title={`進入 ${r.name}`}
           >
-            <div className="room-code">{r.code}</div>
-
-            <div className={`room-phase ${phaseClass(r.phase)}`}>
-              {phaseZh[r.phase]}
+            <div className="flex items-center justify-between">
+              <div className="text-xl font-extrabold">{r.name}</div>
+              <div className="text-xs opacity-80">{r.secondsPerRound}s/局</div>
             </div>
 
-            <div className="room-meta">
-              <span className="room-countdown" title="本局倒數">{r.countdown}s</span>
-              <span className="room-online" title="在線人數">👥 {r.online}</span>
-            </div>
+            <p className="mt-2 text-sm opacity-90 line-clamp-2">{r.description || "—"}</p>
 
-            <div className="room-enter">進入房間 →</div>
-            <div className="sheen" />
-          </Link>
+            <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
+              <div className="rounded-lg border border-white/10 px-3 py-2 bg-white/5">
+                <div className="opacity-70 text-xs">狀態</div>
+                <div className="font-semibold">
+                  {r.phase === "BETTING" ? "下注中" : r.phase === "REVEALING" ? "開牌中" : "已結算"}
+                </div>
+              </div>
+              <div className="rounded-lg border border-white/10 px-3 py-2 bg-white/5">
+                <div className="opacity-70 text-xs">倒數</div>
+                <div className="font-semibold">{r.phase === "BETTING" ? `${r.secLeft}s` : "—"}</div>
+              </div>
+              <div className="rounded-lg border border-white/10 px-3 py-2 bg-white/5">
+                <div className="opacity-70 text-xs">目前玩家</div>
+                <div className="font-semibold">{r.playerCount}</div>
+              </div>
+            </div>
+          </button>
         ))}
 
-        {/* 沒資料時的占位 */}
         {rooms.length === 0 && (
-          <div className="room-empty glass">
-            讀取中或暫無房間…
-          </div>
+          <div className="opacity-80">暫無房間資料</div>
         )}
-      </section>
-
-      <link rel="stylesheet" href="/styles/baccarat.css" />
+      </div>
     </main>
   );
 }
