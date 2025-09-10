@@ -6,7 +6,6 @@ import RoomHeader from "../components/RoomHeader";
 import DiceAnimation from "../components/DiceAnimation";
 import SicboBoard from "../components/SicboBoard";
 import RoadmapPanel from "../components/RoadmapPanel";
-import "../../../../styles/sicbo.css";
 
 export default function Page() {
   const room = "R30";
@@ -53,7 +52,7 @@ export default function Page() {
     await load();
   };
 
-  if (!s) return <div className="p-6">載入中…</div>;
+  if (!s) return <div className="p-6">載入中�?/div>;
 
   return (
     <div className="p-4 space-y-4">

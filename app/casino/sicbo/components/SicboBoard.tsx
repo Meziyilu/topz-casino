@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import "../../../../styles/sicbo.css";
 
 type BetPayload = any;
 
@@ -20,8 +19,8 @@ export default function SicboBoard({
   const odds = payoutTable;
 
   const bigSmall = [
-    { key: "BIG", title: "å¤§", odds: odds.bigSmall.BIG, payload: { kind: "BIG_SMALL", bigSmall: "BIG" } },
-    { key: "SMALL", title: "å°", odds: odds.bigSmall.SMALL, payload: { kind: "BIG_SMALL", bigSmall: "SMALL" } },
+    { key: "BIG", title: "å¤?, odds: odds.bigSmall.BIG, payload: { kind: "BIG_SMALL", bigSmall: "BIG" } },
+    { key: "SMALL", title: "å°?, odds: odds.bigSmall.SMALL, payload: { kind: "BIG_SMALL", bigSmall: "SMALL" } },
   ];
 
   const totals = useMemo(() => {

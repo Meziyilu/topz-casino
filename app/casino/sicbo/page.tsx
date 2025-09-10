@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import "../../../styles/sicbo.css";
 
 type RoomKey = "R30" | "R60" | "R90";
 type StateResp = {
@@ -56,19 +55,19 @@ function RoomCard({ room }: { room: RoomKey }) {
       {data ? (
         <>
           <div className="text-sm opacity-80">
-            局號 <b>{data.current.daySeq}</b>｜狀態 <b>{data.current.phase}</b>｜倒數 <b>{countdown}s</b>
+            局�?<b>{data.current.daySeq}</b>｜狀�?<b>{data.current.phase}</b>｜倒數 <b>{countdown}s</b>
           </div>
           <div className="text-sm opacity-80">
-            上局：
+            上局�?
             {last ? (
               <span>
-                骰面 <b>{last.die1}-{last.die2}-{last.die3}</b>（總點 <b>{last.sum}</b>
-                {last.isTriple ? "，圍骰" : ""}）
+                骰面 <b>{last.die1}-{last.die2}-{last.die3}</b>（總�?<b>{last.sum}</b>
+                {last.isTriple ? "，圍�? : ""}�?
               </span>
             ) : "尚無"}
           </div>
         </>
-      ) : <div className="text-sm opacity-60">載入中…</div>}
+      ) : <div className="text-sm opacity-60">載入中�?/div>}
     </div>
   );
 }
