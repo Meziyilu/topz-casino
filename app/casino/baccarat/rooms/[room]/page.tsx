@@ -52,9 +52,7 @@ const PAYOUT_HINT: Record<BetSide, string> = {
 
 const pad4 = (n: number) => n.toString().padStart(4, "0");
 const formatTime = (d = new Date()) =>
-  `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(
-    d.getSeconds()
-  ).padStart(2, "0")}`;
+  `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
 
 const suitIcon = (s: number) => ["♠", "♥", "♦", "♣"][s] || "■";
 const rankIcon = (r: number) => (r === 1 ? "A" : r === 11 ? "J" : r === 12 ? "Q" : r === 13 ? "K" : String(r));
@@ -73,14 +71,20 @@ function deriveFlags(cards?: { player: Card[]; banker: Card[] }, result?: StateR
   return { playerPair, bankerPair, anyPair, perfectPair, super6 };
 }
 
-/* ===== 翻牌動畫 ===== */
-function PlayingCard({ label, show, flip, delayMs = 0 }: { label: string; show: boolean; flip: boolean; delayMs?: number }) {
+/* ===== 翻牌動畫卡片 ===== */
+function PlayingCard({
+  label,
+  show,
+  flip,
+  delayMs = 0,
+}: {
+  label: string;
+  show: boolean;
+  flip: boolean;
+  delayMs?: number;
+}) {
   return (
-    <div
-      className={`bk-card ${show ? "show" : ""} ${flip ? "flip" : ""}`}
-      style={{ transitionDelay: `${delayMs}ms` }}
-      title={label}
-    >
+    <div className={`bk-card ${show ? "show" : ""} ${flip ? "flip" : ""}`} style={{ transitionDelay: `${delayMs}ms` }} title={label}>
       <div className="bk-card-back" />
       <div className="bk-card-front">
         <span className="bk-card-text">{label}</span>
@@ -89,6 +93,7 @@ function PlayingCard({ label, show, flip, delayMs = 0 }: { label: string; show: 
   );
 }
 
+/* ===== 翻牌腳本（沿用你的時序，收斂為 REVEALING/SETTLED 時觸發） ===== */
 type CardLabel = string;
 function useBaccaratReveal(params: {
   phase: Phase;
@@ -112,36 +117,44 @@ function useBaccaratReveal(params: {
     const stepGap = 240;
     const flipGap = 180;
 
+    // P1
     steps.push({ at: (t += stepGap), act: () => setShowP((s) => [true, s[1], s[2]]) });
     steps.push({ at: (t += flipGap), act: () => setFlipP((s) => [true, s[1], s[2]]) });
+    // B1
     steps.push({ at: (t += stepGap), act: () => setShowB((s) => [true, s[1], s[2]]) });
     steps.push({ at: (t += flipGap), act: () => setFlipB((s) => [true, s[1], s[2]]) });
+    // P2
     steps.push({ at: (t += stepGap), act: () => setShowP((s) => [s[0], true, s[2]]) });
     steps.push({ at: (t += flipGap), act: () => setFlipP((s) => [s[0], true, s[2]]) });
+    // B2
     steps.push({ at: (t += stepGap), act: () => setShowB((s) => [s[0], true, s[2]]) });
     steps.push({ at: (t += flipGap), act: () => setFlipB((s) => [s[0], true, s[2]]) });
-
+    // P3?
     if (p3) {
       steps.push({ at: (t += stepGap + 260), act: () => setShowP((s) => [s[0], s[1], true]) });
       steps.push({ at: (t += flipGap), act: () => setFlipP((s) => [s[0], s[1], true]) });
     }
+    // B3?
     if (b3) {
       steps.push({ at: (t += stepGap + (p3 ? 200 : 260)), act: () => setShowB((s) => [s[0], s[1], true]) });
       steps.push({ at: (t += flipGap), act: () => setFlipB((s) => [s[0], s[1], true]) });
     }
 
+    // 勝方金框閃
     steps.push({ at: (t += 420), act: () => setWinnerGlow(outcome) });
     return steps;
   }, [p3, b3, outcome]);
 
   useEffect(() => {
+    // 每局重置
     setShowP([false, false, false]);
     setFlipP([false, false, false]);
     setShowB([false, false, false]);
     setFlipB([false, false, false]);
     setWinnerGlow(null);
 
-    if (phase !== "SETTLED" || playerLabels.length === 0 || bankerLabels.length === 0) return;
+    // 只有在 REVEALING / SETTLED 時才播放腳本（避免下注中跳動畫）
+    if ((phase !== "REVEALING" && phase !== "SETTLED") || playerLabels.length === 0 || bankerLabels.length === 0) return;
     const timers: any[] = [];
     for (const s of script) timers.push(setTimeout(() => s.act(), s.at));
     return () => timers.forEach(clearTimeout);
@@ -165,14 +178,18 @@ export default function RoomPage() {
   const [data, setData] = useState<StateResp | null>(null);
   const [err, setErr] = useState("");
 
+  // 時鐘
   const [nowStr, setNowStr] = useState(formatTime());
   useEffect(() => {
     const t = setInterval(() => setNowStr(formatTime()), 1000);
     return () => clearInterval(t);
   }, []);
 
+  // 本地下注額
   const [amount, setAmount] = useState<number>(100);
   const isAmountValid = Number.isFinite(amount) && amount > 0;
+
+  // 我的本局下注彙總（面板顯示用）
   const emptyAgg: Record<BetSide, number> = {
     PLAYER: 0,
     BANKER: 0,
@@ -188,13 +205,16 @@ export default function RoomPage() {
 
   const fetchState = useCallback(async () => {
     try {
-      const res = await fetch(`/api/casino/baccarat/state?room=${roomCodeUpper}`, { cache: "no-store", credentials: "include" });
+      const res = await fetch(`/api/casino/baccarat/state?room=${roomCodeUpper}`, {
+        cache: "no-store",
+        credentials: "include",
+      });
       const json: StateResp = await res.json();
       if (!res.ok || !json?.ok) throw new Error((json as any)?.error || "載入失敗");
       setData(json);
       setErr("");
 
-      // 如果剛結算完 → 重置下注面板顯示
+      // 已結算 → 清空本地下注合計（視覺）
       if (json.phase === "SETTLED") {
         setMyBets({ ...emptyAgg });
       }
@@ -205,7 +225,10 @@ export default function RoomPage() {
 
   const fetchMyBets = useCallback(async () => {
     try {
-      const res = await fetch(`/api/casino/baccarat/my-bets?room=${roomCodeUpper}`, { cache: "no-store", credentials: "include" });
+      const res = await fetch(`/api/casino/baccarat/my-bets?room=${roomCodeUpper}`, {
+        cache: "no-store",
+        credentials: "include",
+      });
       if (!res.ok) return;
       const json: MyBetsResp = await res.json();
       const agg = { ...emptyAgg };
@@ -224,9 +247,11 @@ export default function RoomPage() {
     return () => clearInterval(timer);
   }, [fetchState, fetchMyBets]);
 
-  // 本地倒數（同步畫面）
+  // 本地倒數（畫面同步）
   const [localSec, setLocalSec] = useState(0);
-  useEffect(() => { if (data) setLocalSec(data.secLeft ?? 0); }, [data?.secLeft]);
+  useEffect(() => {
+    if (data) setLocalSec(data.secLeft ?? 0);
+  }, [data?.secLeft]);
   useEffect(() => {
     if (localSec <= 0) return;
     const t = setInterval(() => setLocalSec((s) => Math.max(0, s - 1)), 1000);
@@ -265,14 +290,20 @@ export default function RoomPage() {
     }
   }
 
+  // 旗標與動畫
+  const flags = useMemo(() => deriveFlags(data?.cards, data?.result), [data?.cards, data?.result]);
   const outcomeMark: Outcome = data?.result ? data.result.outcome : null;
-  const flags = useMemo(
-    () => deriveFlags(data?.cards, data?.result),
-    [data?.cards, data?.result]
-  );
+  const playerLabels = (data?.cards?.player ?? []).map(cardToLabel);
+  const bankerLabels = (data?.cards?.banker ?? []).map(cardToLabel);
+  const { animatedCards, winnerGlow } = useBaccaratReveal({
+    phase: data?.phase ?? "BETTING",
+    playerLabels,
+    bankerLabels,
+    outcome: data?.result?.outcome ?? null,
+  });
   const myTotal = (Object.keys(myBets) as BetSide[]).reduce((s, k) => s + (myBets[k] || 0), 0);
 
-  // **** 贏家金框閃三下（下注面板的該按鈕） ****
+  // 贏家金框閃三下（下注面板的該按鈕）
   const goldPulseSide: BetSide | null = useMemo(() => {
     if (!data || data.phase !== "SETTLED" || !outcomeMark) return null;
     if (outcomeMark === "PLAYER" && myBets.PLAYER > 0) return "PLAYER";
@@ -286,20 +317,13 @@ export default function RoomPage() {
     return null;
   }, [data?.phase, outcomeMark, flags, myBets]);
 
-  const playerLabels = (data?.cards?.player ?? []).map(cardToLabel);
-  const bankerLabels = (data?.cards?.banker ?? []).map(cardToLabel);
-  const { animatedCards, winnerGlow } = useBaccaratReveal({
-    phase: data?.phase ?? "BETTING",
-    playerLabels,
-    bankerLabels,
-    outcome: data?.result?.outcome ?? null,
-  });
-
   if (!data) {
     return (
       <main className="bk-room-wrap">
-        <div className="text-white p-10">載入中… {err && <span className="ml-2 text-rose-300">{err}</span>}</div>
-        <link rel="stylesheet" href="/style/baccarat/baccarat-room.css" />
+        <div className="text-white p-10">
+          載入中… {err && <span className="ml-2 text-rose-300">{err}</span>}
+        </div>
+        <link rel="stylesheet" href="/styles/baccarat/baccarat-room.css" />
       </main>
     );
   }
@@ -346,9 +370,7 @@ export default function RoomPage() {
                   </div>
                   <div className="cards">
                     {animatedCards.player.length > 0
-                      ? animatedCards.player.map((c, i) => (
-                          <PlayingCard key={`p-${i}`} label={c.label} show={c.show} flip={c.flip} />
-                        ))
+                      ? animatedCards.player.map((c, i) => <PlayingCard key={`p-${i}`} label={c.label} show={c.show} flip={c.flip} />)
                       : [0, 1, 2].map((i) => <PlayingCard key={`p-skel-${i}`} label="?" show={false} flip={false} />)}
                   </div>
                 </div>
@@ -361,9 +383,7 @@ export default function RoomPage() {
                   </div>
                   <div className="cards">
                     {animatedCards.banker.length > 0
-                      ? animatedCards.banker.map((c, i) => (
-                          <PlayingCard key={`b-${i}`} label={c.label} show={c.show} flip={c.flip} />
-                        ))
+                      ? animatedCards.banker.map((c, i) => <PlayingCard key={`b-${i}`} label={c.label} show={c.show} flip={c.flip} />)
                       : [0, 1, 2].map((i) => <PlayingCard key={`b-skel-${i}`} label="?" show={false} flip={false} />)}
                   </div>
                 </div>
@@ -380,12 +400,7 @@ export default function RoomPage() {
                 <div className="title">下注面板</div>
                 <div className="amount">
                   單注金額：
-                  <input
-                    type="number"
-                    min={1}
-                    value={amount}
-                    onChange={(e) => setAmount(Math.max(0, Number(e.target.value || 0)))}
-                  />
+                  <input type="number" min={1} value={amount} onChange={(e) => setAmount(Math.max(0, Number(e.target.value || 0)))} />
                   <span>元</span>
                 </div>
               </div>
@@ -396,23 +411,59 @@ export default function RoomPage() {
                     {c}
                   </button>
                 ))}
-                <button onClick={() => setAmount((a) => a + 50)} disabled={data?.phase !== "BETTING"}>+50</button>
-                <button onClick={() => setAmount((a) => a + 100)} disabled={data?.phase !== "BETTING"}>+100</button>
-                <button onClick={() => setAmount(0)} disabled={data?.phase !== "BETTING"}>清除</button>
+                <button onClick={() => setAmount((a) => a + 50)} disabled={data?.phase !== "BETTING"}>
+                  +50
+                </button>
+                <button onClick={() => setAmount((a) => a + 100)} disabled={data?.phase !== "BETTING"}>
+                  +100
+                </button>
+                <button onClick={() => setAmount(0)} disabled={data?.phase !== "BETTING"}>
+                  清除
+                </button>
               </div>
 
               {/* 我的下注彙總卡（結算後自動清空） */}
               <div className="mybets grid">
-                <div className="info-card"><div className="k">目前選擇</div><div className="v">{amount} 元</div></div>
-                <div className="info-card ac-cyan"><div className="k">我壓閒</div><div className="v">{myBets.PLAYER} 元</div></div>
-                <div className="info-card ac-amber"><div className="k">我壓和</div><div className="v">{myBets.TIE} 元</div></div>
-                <div className="info-card ac-rose"><div className="k">我壓莊</div><div className="v">{myBets.BANKER} 元</div></div>
-                <div className="info-card ac-emerald"><div className="k">閒對</div><div className="v">{myBets.PLAYER_PAIR} 元</div></div>
-                <div className="info-card ac-emerald"><div className="k">莊對</div><div className="v">{myBets.BANKER_PAIR} 元</div></div>
-                <div className="info-card ac-violet"><div className="k">任一對</div><div className="v">{myBets.ANY_PAIR} 元</div></div>
-                <div className="info-card ac-violet"><div className="k">完美對</div><div className="v">{myBets.PERFECT_PAIR} 元</div></div>
-                <div className="info-card ac-rose"><div className="k">超級6</div><div className="v">{myBets.BANKER_SUPER_SIX} 元</div></div>
-                <div className="info-card wide"><div className="k">本局合計</div><div className="v">{myTotal} 元</div></div>
+                <div className="info-card">
+                  <div className="k">目前選擇</div>
+                  <div className="v">{amount} 元</div>
+                </div>
+                <div className="info-card ac-cyan">
+                  <div className="k">我壓閒</div>
+                  <div className="v">{myBets.PLAYER} 元</div>
+                </div>
+                <div className="info-card ac-amber">
+                  <div className="k">我壓和</div>
+                  <div className="v">{myBets.TIE} 元</div>
+                </div>
+                <div className="info-card ac-rose">
+                  <div className="k">我壓莊</div>
+                  <div className="v">{myBets.BANKER} 元</div>
+                </div>
+                <div className="info-card ac-emerald">
+                  <div className="k">閒對</div>
+                  <div className="v">{myBets.PLAYER_PAIR} 元</div>
+                </div>
+                <div className="info-card ac-emerald">
+                  <div className="k">莊對</div>
+                  <div className="v">{myBets.BANKER_PAIR} 元</div>
+                </div>
+                <div className="info-card ac-violet">
+                  <div className="k">任一對</div>
+                  <div className="v">{myBets.ANY_PAIR} 元</div>
+                </div>
+                <div className="info-card ac-violet">
+                  <div className="k">完美對</div>
+                  <div className="v">{myBets.PERFECT_PAIR} 元</div>
+                </div>
+                <div className="info-card ac-rose">
+                  <div className="k">超級6</div>
+                  <div className="v">{myBets.BANKER_SUPER_SIX} 元</div>
+                </div>
+                <div className="info-card wide">
+                  <div className="k">本局合計</div>
+                  <div className="v">{myTotal} 元</div>
+                </div>
               </div>
 
               {/* 八種注型 */}
@@ -473,7 +524,12 @@ export default function RoomPage() {
             <div className="table-wrap">
               <table>
                 <thead>
-                  <tr><th>局序</th><th>結果</th><th>閒點</th><th>莊點</th></tr>
+                  <tr>
+                    <th>局序</th>
+                    <th>結果</th>
+                    <th>閒點</th>
+                    <th>莊點</th>
+                  </tr>
                 </thead>
                 <tbody>
                   {(data?.recent || []).map((r) => (
@@ -485,7 +541,11 @@ export default function RoomPage() {
                     </tr>
                   ))}
                   {(!data || (data && data.recent.length === 0)) && (
-                    <tr><td colSpan={4} className="muted">暫無資料</td></tr>
+                    <tr>
+                      <td colSpan={4} className="muted">
+                        暫無資料
+                      </td>
+                    </tr>
                   )}
                 </tbody>
               </table>
