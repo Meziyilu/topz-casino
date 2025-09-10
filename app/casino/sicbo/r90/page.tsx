@@ -7,16 +7,25 @@ import DiceAnimation from "../components/DiceAnimation";
 import SicboBoard from "../components/SicboBoard";
 import RoadmapPanel from "../components/RoadmapPanel";
 
+type StateResp = {
+  room: "R90";
+  current: { daySeq: number; phase: string; locksAt: string };
+  config: { payoutTable: any };
+  history: { daySeq: number; die1: number; die2: number; die3: number; sum: number; isTriple: boolean }[];
+  my?: { balance: number };
+};
+
 export default function Page() {
-  const room = "R30";
-  const [s, setS] = useState<any>(null);
+  const room = "R90";
+  const [s, setS] = useState<StateResp | null>(null);
   const [winKeys, setWinKeys] = useState<Set<string>>(new Set());
   const [dice, setDice] = useState<[number, number, number] | null>(null);
   const [countdown, setCountdown] = useState(0);
 
   async function load() {
     const r = await fetch(`/api/casino/sicbo/state?room=${room}`, { cache: "no-store" });
-    setS(await r.json());
+    const j = await r.json();
+    setS(j);
   }
 
   useEffect(() => { load(); }, []);
@@ -36,6 +45,15 @@ export default function Page() {
         if (sum <= 10) wins.add("SMALL");
       }
       wins.add(`TOTAL_${sum}`);
+      [1, 2, 3, 4, 5, 6].forEach((f) => {
+        const c = dice.filter((x: number) => x === f).length;
+        if (c > 0) wins.add(`FACE_${f}`);
+        if (c >= 2) wins.add(`DBL_${f}`);
+      });
+      if (isTriple) {
+        wins.add("TRIPLE_ANY");
+        wins.add(`TRIPLE_${dice[0]}${dice[0]}${dice[0]}`);
+      }
       setWinKeys(wins);
       setTimeout(() => setWinKeys(new Set()), 2500);
       load();
@@ -52,11 +70,11 @@ export default function Page() {
     await load();
   };
 
-  if (!s) return <div className="p-6">鏉撳鍙嗘稉顓涒偓?/div>;
+  if (!s) return <div className="p-6">載入中…</div>;
 
   return (
     <div className="p-4 space-y-4">
-      <RoomHeader room="R30" daySeq={s.current.daySeq} phase={s.current.phase} countdown={countdown} balance={s.my?.balance ?? 0} />
+      <RoomHeader room="R90" daySeq={s.current.daySeq} phase={s.current.phase} countdown={countdown} balance={s.my?.balance ?? 0} />
       <DiceAnimation dice={dice} />
       <SicboBoard payoutTable={s.config.payoutTable} disabled={s.current.phase !== "BETTING"} onBet={onBet} winKeys={winKeys} />
       <RoadmapPanel history={s.history} />
