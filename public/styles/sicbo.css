@@ -213,3 +213,33 @@
 
 /* 底部工具條提示 */
 .locked-hint { color: #ffd7d7 !important; font-weight: 700; }
+
+/* =========================
+   中獎格閃光動畫
+   ========================= */
+
+@keyframes winner-flash {
+  0%, 100% { box-shadow: 0 0 0 rgba(255, 215, 0, 0); }
+  50% { 
+    box-shadow: 0 0 18px 8px rgba(255, 215, 0, .95), 0 0 25px rgba(255, 245, 157, .8);
+    border-color: rgba(255, 215, 0, .9);
+  }
+}
+
+.tile.winner,
+.sicbo-cell.winner {
+  animation: winner-flash 0.5s ease-in-out 4; /* 閃 4 下，可調整 3~5 */
+  position: relative;
+  z-index: 2;
+}
+
+.tile.winner::after,
+.sicbo-cell.winner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle, rgba(255,255,200,.35) 0%, transparent 70%);
+  opacity: 0.7;
+  pointer-events: none;
+}

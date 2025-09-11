@@ -1,0 +1,33 @@
+.roadmap {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 8px;
+  margin-top: 20px;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(255,255,255,.06);
+}
+
+.roadmap-cell {
+  background: rgba(0,0,0,.3);
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 8px;
+  padding: 6px;
+  text-align: center;
+  font-size: 12px;
+}
+
+.dice-mini {
+  display: flex;
+  justify-content: center;
+  gap: 2px;
+  margin-bottom: 4px;
+}
+.dice-mini .pip {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: white;
+}
+.meta .sum { font-weight: 700; margin-right: 4px; }
+.meta .tag { opacity: .85; }

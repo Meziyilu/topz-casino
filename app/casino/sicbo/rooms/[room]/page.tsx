@@ -1,321 +1,221 @@
 "use client";
 
-import Head from "next/head";
-import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { useParams } from "next/navigation";
+import Roadmap from "@/components/sicbo/Roadmap";
 
 type Phase = "BETTING" | "REVEALING" | "SETTLED";
-type Room = "SB_R30" | "SB_R60" | "SB_R90";
-type Kind =
-  | "BIG" | "SMALL" | "ODD" | "EVEN"
-  | "ANY_TRIPLE" | "SPECIFIC_TRIPLE" | "SPECIFIC_DOUBLE"
-  | "TOTAL" | "COMBINATION" | "SINGLE_DIE";
+type SicboRoomCode = "SB_R30" | "SB_R60" | "SB_R90";
 
-type StateResp = {
-  room: Room;
-  round: { id: string; phase: Phase; startedAt: string; endedAt?: string; dice: number[] };
+type StateApi = {
+  room: SicboRoomCode;
+  round: { id: string; phase: Phase; dice: number[] };
   timers: { lockInSec: number; endInSec: number };
   locked: boolean;
 };
 
-const TOTAL_PAYOUT: Record<number, number> = {
-  4: 50, 17: 50,
-  5: 18, 16: 18,
-  6: 14, 15: 14,
-  7: 12, 14: 12,
-  8: 8,  13: 8,
-  9: 6,  12: 6,
-  10: 6, 11: 6,
+type HistoryApi = {
+  room: SicboRoomCode;
+  items: { id: string; dice: number[]; endedAt: string }[];
 };
 
-const CHIP_PRESETS = [10, 100, 1000, 5000] as const;
+type MeApi = {
+  ok: boolean;
+  user?: { id: string; balance: number };
+};
 
-function cx(...xs: (string | false | null | undefined)[]) { return xs.filter(Boolean).join(" "); }
-function fmt(sec?: number) {
-  const s = Math.max(0, Math.floor(sec ?? 0)); const m = Math.floor(s / 60); const r = s % 60;
-  return `${m}:${r.toString().padStart(2, "0")}`;
+function sum(d: number[]) {
+  return (d[0] || 0) + (d[1] || 0) + (d[2] || 0);
+}
+function isTriple(d: number[]) {
+  return d[0] === d[1] && d[1] === d[2];
 }
 
 export default function SicboRoomPage() {
-  const params = useParams<{ room: Room }>();
-  const router = useRouter();
-
-  const [room, setRoom] = useState<Room>("SB_R30");
-  const [state, setState] = useState<StateResp | null>(null);
-  const [userId, setUserId] = useState("demo-user");       // 無驗證：輸入誰就扣誰
+  const { room } = useParams<{ room: string }>();
+  const [state, setState] = useState<StateApi | null>(null);
+  const [history, setHistory] = useState<HistoryApi["items"]>([]);
+  const [winners, setWinners] = useState<string[]>([]);
   const [balance, setBalance] = useState(0);
-  const [chip, setChip] = useState<number>(100);
-  const [amount, setAmount] = useState<number>(100);
+  const [betAmount, setBetAmount] = useState(100);
   const [placing, setPlacing] = useState(false);
+  const tickRef = useRef<number | null>(null);
+
+  async function load() {
+    const rs = await fetch(`/api/casino/sicbo/state?room=${room}`, { cache: "no-store" });
+    const st: StateApi = await rs.json();
+
+    const rh = await fetch(`/api/casino/sicbo/history?room=${room}&limit=12`, { cache: "no-store" });
+    const hist: HistoryApi = await rh.json();
+
+    const meRes = await fetch(`/api/users/me`, { cache: "no-store" });
+    const me: MeApi = await meRes.json();
+
+    setState(st);
+    setHistory(hist.items);
+    if (me.ok && me.user) setBalance(me.user.balance);
+
+    if (st.round.phase === "SETTLED" && st.round.dice?.length === 3) {
+      const s = sum(st.round.dice);
+      const triple = isTriple(st.round.dice);
+      const winners: string[] = [];
+
+      if (s >= 11) winners.push("BIG");
+      else winners.push("SMALL");
+
+      if (s % 2 === 0) winners.push("EVEN");
+      else winners.push("ODD");
+
+      winners.push(`TOTAL-${s}`);
+      if (triple) winners.push("ANY_TRIPLE");
+
+      setWinners(winners);
+
+      setTimeout(() => setWinners([]), 3000);
+    }
+  }
 
   useEffect(() => {
-    const r = (params?.room?.toString()?.toUpperCase() as Room) || "SB_R30";
-    setRoom(["SB_R30","SB_R60","SB_R90"].includes(r) ? r : "SB_R30");
-  }, [params?.room]);
+    load();
+    const poll = setInterval(load, 4000);
+    return () => clearInterval(poll);
+  }, [room]);
 
-  async function fetchState() {
-    const res = await fetch(`/api/casino/sicbo/state?room=${room}`, { cache: "no-store" });
-    if (res.ok) setState(await res.json());
-  }
-  async function fetchBalance() {
-    if (!userId) return;
-    const res = await fetch(`/api/wallet/balance?userId=${encodeURIComponent(userId)}`, { cache: "no-store" });
-    if (res.ok) setBalance((await res.json()).balance ?? 0);
-  }
-  useEffect(() => { fetchState(); fetchBalance(); }, [room, userId]);
-  useEffect(() => {
-    const t1 = setInterval(fetchState, 3000);
-    const t2 = setInterval(fetchBalance, 5000);
-    return () => { clearInterval(t1); clearInterval(t2); };
-  }, [room, userId]);
-  useEffect(() => setAmount(chip), [chip]);
+  const rolling = state?.round?.phase === "REVEALING";
 
-  async function place(kind: Kind, payload?: any) {
-    if (!state || state.locked || placing || amount <= 0) return;
+  async function placeBet(kind: string, payload?: any) {
+    if (!state || placing) return;
     setPlacing(true);
     try {
       const res = await fetch(`/api/casino/sicbo/bet`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ userId, room, kind, amount, payload }),
+        body: JSON.stringify({
+          room,
+          kind,
+          amount: betAmount,
+          payload,
+        }),
       });
-      const js = await res.json();
-      if (!res.ok) throw new Error(js?.error || "下注失敗");
-      await fetchBalance();
-    } catch (e: any) {
-      alert(e?.message || String(e));
+      const j = await res.json();
+      if (j.ok) {
+        setBalance(j.wallet); // 後端返回新餘額
+      } else {
+        alert(j.error || "下注失敗");
+      }
+    } catch (e) {
+      alert("NETWORK_ERROR");
     } finally {
       setPlacing(false);
-      fetchState();
     }
   }
 
-  async function refundThisRound() {
-    if (!state?.round?.id) return;
-    if (state.locked) return alert("已封盤，無法返金本局投注");
-    const res = await fetch(`/api/wallet/refund-round`, {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ userId, roundId: state.round.id }),
-    });
-    const js = await res.json();
-    if (!res.ok) return alert(js?.error || "返金失敗");
-    alert(`已返金 ${js.refunded} 元`);
-    fetchBalance(); fetchState();
-  }
-
-  async function topup(v: number) {
-    const r = await fetch(`/api/wallet/topup`, {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ userId, amount: v }),
-    });
-    const j = await r.json();
-    if (!r.ok) return alert(j?.error || "topup 失敗");
-    setBalance(j.balance);
-  }
-
-  const lockLeft = state?.timers?.lockInSec ?? 0;
-  const endLeft  = state?.timers?.endInSec  ?? 0;
-
-  const pairs = useMemo<[number, number][]>(() => {
-    const o: [number, number][] = [];
-    for (let a = 1; a <= 6; a++) for (let b = a + 1; b <= 6; b++) o.push([a, b]);
-    return o;
-  }, []);
-
   return (
-    <>
-      <Head><link rel="stylesheet" href="/styles/sicbo.css" /></Head>
+    <div className="sicbo-wrapper">
+      {/* Topbar */}
+      <div className="topbar glass flex justify-between items-center mb-4 flex-wrap gap-2">
+        <div className="left">
+          <span className="room-pill">{room}</span>
+        </div>
+        <div className="right text-sm flex gap-4 flex-wrap">
+          <span>餘額: <b>{balance}</b></span>
+          <span>Round: {state?.round?.id?.slice(-6) || "-"}</span>
+          <span>Phase: {state?.round?.phase}</span>
+          <span>倒數: {state?.timers?.lockInSec}s</span>
+        </div>
+      </div>
 
-      <div className="sicbo-wrapper">
-        {/* 頂部工具列（玻璃） */}
-        <div className="topbar glass">
-          <div className="left">
-            <button className="btn btn--ghost" onClick={() => router.push("/casino/sicbo")}>← 返回</button>
-            <div className="room-pill">{room.replace("SB_", "")}</div>
+      {/* 骰子 */}
+      <div className="flex justify-center items-center gap-4 mb-6 flex-wrap">
+        {state?.round?.dice?.map((d, i) => (
+          <div key={i} className={`dice face-${d} ${rolling ? "rolling" : ""}`}>
+            <span className="pip p1" /><span className="pip p2" /><span className="pip p3" />
+            <span className="pip p4" /><span className="pip p5" /><span className="pip p6" />
+            <span className="pip p7" /><span className="pip p8" /><span className="pip p9" />
+          </div>
+        ))}
+      </div>
+
+      {/* 下注面板 */}
+      <div className="table-outer">
+        <div className="table-grid">
+          <div
+            onClick={() => placeBet("SMALL")}
+            className={`tile big-left cursor-pointer ${winners.includes("SMALL") ? "winner" : ""}`}
+          >
+            <div className="badge">SMALL</div>
+            <div className="cn">小</div>
           </div>
 
-          <div className="right">
-            <div className="wallet">
-              <span className="label">餘額</span>
-              <span className="val">${balance.toLocaleString()}</span>
-              <button className="btn btn--ghost" onClick={() => topup(10000)}>+1w</button>
-              <button className="btn btn--ghost" onClick={() => topup(100000)}>+10w</button>
-            </div>
-            <div className="amount">
-              <span className="label">下注金額</span>
-              <input type="number" min={1} value={amount} onChange={(e)=>setAmount(Math.max(1, Number(e.target.value||0)))} />
-            </div>
-            <input className="user-input" value={userId} onChange={(e)=>setUserId(e.target.value)} placeholder="userId" />
-            <button className="btn btn--amber" onClick={refundThisRound} disabled={state?.locked}>返金本局</button>
+          <div className="mid-14">
+            {Array.from({ length: 14 }, (_, i) => i + 4).map((n) => (
+              <div
+                key={n}
+                onClick={() => placeBet("TOTAL", { value: n })}
+                className={`sicbo-cell total cursor-pointer ${winners.includes(`TOTAL-${n}`) ? "winner" : ""}`}
+              >
+                <div className="total-num">{n}</div>
+                <div className="total-odd">{n % 2 === 0 ? "雙" : "單"}</div>
+              </div>
+            ))}
+          </div>
+
+          <div
+            onClick={() => placeBet("BIG")}
+            className={`tile big-right cursor-pointer ${winners.includes("BIG") ? "winner" : ""}`}
+          >
+            <div className="badge">BIG</div>
+            <div className="cn">大</div>
           </div>
         </div>
 
-        {/* 綠色賭桌（整塊容納下注區） */}
-        <div className="table-outer glass">
-          {/* 上方顯示列 */}
-          <div className="table-head">
-            <div className="head-item">
-              <div className="k">局號</div><div className="v">{state?.round?.id?.slice(-6) ?? "-"}</div>
-            </div>
-            <div className="head-item">
-              <div className="k">狀態</div><div className="v">{state?.round?.phase ?? "-"}</div>
-            </div>
-            <div className="head-item">
-              <div className="k">封盤</div><div className="v">{fmt(lockLeft)}</div>
-            </div>
-            <div className="head-item">
-              <div className="k">結束</div><div className="v">{fmt(endLeft)}</div>
-            </div>
-            <div className="head-dice">
-              <Dice n={state?.round?.dice?.[0]} rolling={state?.round?.phase==="REVEALING" && !state?.round?.dice?.[0]} size="lg" />
-              <Dice n={state?.round?.dice?.[1]} rolling={state?.round?.phase==="REVEALING" && !state?.round?.dice?.[1]} size="lg" />
-              <Dice n={state?.round?.dice?.[2]} rolling={state?.round?.phase==="REVEALING" && !state?.round?.dice?.[2]} size="lg" />
-            </div>
+        <div className="row-two">
+          <div
+            onClick={() => placeBet("ODD")}
+            className={`sicbo-cell cursor-pointer ${winners.includes("ODD") ? "winner" : ""}`}
+          >
+            <div className="h1">單</div>
           </div>
-
-          {/* 大型賭桌（左小/中總和/右大） */}
-          <div className="table-grid">
-            {/* SMALL 左柱 */}
-            <button
-              className={cx("tile big-left", (state?.locked || placing || amount<=0) && "disabled")}
-              disabled={!!state?.locked || placing || amount<=0}
-              onClick={()=>place("SMALL")}
-            >
-              <div className="badge">SMALL</div>
-              <div className="cn">小</div>
-              <div className="note">4–10｜1賠1<br/>三同視為輸</div>
-            </button>
-
-            {/* 中央 4..17 14 格 */}
-            <div className="mid-14">
-              {Array.from({ length: 14 }, (_, i) => i + 4).map(total => (
-                <button key={total}
-                  className={cx("sicbo-cell total", (state?.locked || placing || amount<=0) && "disabled")}
-                  disabled={!!state?.locked || placing || amount<=0}
-                  onClick={()=>place("TOTAL", { total })}
-                >
-                  <div className="total-num">{total}</div>
-                  <div className="total-odd">1賠{TOTAL_PAYOUT[total]}</div>
-                </button>
-              ))}
-            </div>
-
-            {/* BIG 右柱 */}
-            <button
-              className={cx("tile big-right", (state?.locked || placing || amount<=0) && "disabled")}
-              disabled={!!state?.locked || placing || amount<=0}
-              onClick={()=>place("BIG")}
-            >
-              <div className="badge">BIG</div>
-              <div className="cn">大</div>
-              <div className="note">11–17｜1賠1<br/>三同視為輸</div>
-            </button>
+          <div
+            onClick={() => placeBet("EVEN")}
+            className={`sicbo-cell cursor-pointer ${winners.includes("EVEN") ? "winner" : ""}`}
+          >
+            <div className="h1">雙</div>
           </div>
+        </div>
 
-          {/* 單／雙 列 */}
-          <div className="row-two">
-            <button
-              className={cx("sicbo-cell", (state?.locked || placing || amount<=0) && "disabled")}
-              disabled={!!state?.locked || placing || amount<=0}
-              onClick={()=>place("ODD")}
-            >
-              <div className="h1">單</div><div className="sub">1賠1（三同輸）</div>
-            </button>
-            <button
-              className={cx("sicbo-cell", (state?.locked || placing || amount<=0) && "disabled")}
-              disabled={!!state?.locked || placing || amount<=0}
-              onClick={()=>place("EVEN")}
-            >
-              <div className="h1">雙</div><div className="sub">1賠1（三同輸）</div>
-            </button>
-          </div>
-
-          {/* 指定雙 + 任意豹子 + 指定豹子 */}
-          <div className="row-multi">
-            <div className="doubles">
-              {Array.from({ length: 6 }, (_, i) => i + 1).map(n => (
-                <button key={`d${n}`}
-                        className={cx("sicbo-cell", (state?.locked || placing || amount<=0) && "disabled")}
-                        disabled={!!state?.locked || placing || amount<=0}
-                        onClick={()=>place("SPECIFIC_DOUBLE",{ eye:n })}>
-                  <div className="h2">雙 {n}{n}</div><div className="sub">1賠8</div>
-                </button>
-              ))}
-            </div>
-
-            <button
-              className={cx("sicbo-cell any-triple", (state?.locked || placing || amount<=0) && "disabled")}
-              disabled={!!state?.locked || placing || amount<=0}
-              onClick={()=>place("ANY_TRIPLE")}
-            >
-              <div className="h2">任意豹子</div><div className="sub">1賠30</div>
-            </button>
-
-            <div className="triples">
-              {Array.from({ length: 6 }, (_, i) => i + 1).map(n => (
-                <button key={`t${n}`}
-                        className={cx("sicbo-cell", (state?.locked || placing || amount<=0) && "disabled")}
-                        disabled={!!state?.locked || placing || amount<=0}
-                        onClick={()=>place("SPECIFIC_TRIPLE",{ eye:n })}>
-                  <div className="h2">豹子 {n}{n}{n}</div><div className="sub">1賠150</div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* 兩數組合 15 格 */}
-          <div className="combos">
-            {pairs.map(([a,b]) => (
-              <button key={`p${a}${b}`}
-                      className={cx("sicbo-cell", (state?.locked || placing || amount<=0) && "disabled")}
-                      disabled={!!state?.locked || placing || amount<=0}
-                      onClick={()=>place("COMBINATION",{ a,b })}>
-                <div className="h2">{a} + {b}</div><div className="sub">1賠5</div>
-              </button>
-            ))}
-          </div>
-
-          {/* 單骰 1..6 */}
-          <div className="singles">
-            {Array.from({ length: 6 }, (_, i) => i + 1).map(n => (
-              <button key={`s${n}`}
-                      className={cx("sicbo-cell", (state?.locked || placing || amount<=0) && "disabled")}
-                      disabled={!!state?.locked || placing || amount<=0}
-                      onClick={()=>place("SINGLE_DIE",{ eye:n })}>
-                <div className="h2">{n}</div><div className="sub">中1×2 / 2×3 / 3×4</div>
-              </button>
-            ))}
-          </div>
-
-          {/* 底部工具條（籌碼＋快捷） */}
-          <div className="toolbar">
-            <div className="chips">
-              <span className="chips-label">籌碼</span>
-              {CHIP_PRESETS.map(v => (
-                <button key={v}
-                        onClick={()=>{setChip(v); setAmount(v);}}
-                        className={cx("chip", `chip-${v}`, chip===v && "selected")}
-                        title={`${v}`}>{v}</button>
-              ))}
-              <button className="btn btn--ghost" onClick={()=>setAmount(chip)}>用此籌碼額</button>
-              <button className="btn btn--ghost" onClick={()=>setAmount(v=>Math.max(1, v*2))}>x2</button>
-              <button className="btn btn--ghost" onClick={()=>setAmount(v=>Math.max(1, Math.floor(v/2)))}>½</button>
-            </div>
-            {state?.locked && <div className="locked-hint">已封盤，請等待下一局</div>}
+        <div className="row-multi mt-4">
+          <div
+            onClick={() => placeBet("ANY_TRIPLE")}
+            className={`sicbo-cell any-triple cursor-pointer ${winners.includes("ANY_TRIPLE") ? "winner" : ""}`}
+          >
+            任意豹子
           </div>
         </div>
       </div>
-    </>
-  );
-}
 
-function Dice({ n, rolling, size = "md" }: { n?: number; rolling?: boolean; size?: "sm"|"md"|"lg" }) {
-  const faceCls = n ? `face-${n}` : ""; const sizeCls = size === "sm" ? "dice-sm" : size === "lg" ? "dice-lg" : "";
-  return (
-    <span className={cx("dice", faceCls, rolling ? "rolling" : "", sizeCls)}>
-      <span className="pip p1" /><span className="pip p2" /><span className="pip p3" />
-      <span className="pip p4" /><span className="pip p5" /><span className="pip p6" />
-      <span className="pip p7" /><span className="pip p8" /><span className="pip p9" />
-    </span>
+      {/* 底部工具條：下注金額選擇 */}
+      <div className="toolbar flex justify-between items-center">
+        <div className="amount">
+          <span className="label">下注金額</span>
+          <input
+            type="number"
+            value={betAmount}
+            onChange={(e) => setBetAmount(parseInt(e.target.value) || 0)}
+          />
+        </div>
+        <div className="chips">
+          <span className="chips-label">快速籌碼:</span>
+          {[10, 100, 1000, 5000].map((c) => (
+            <button key={c} className={`chip chip-${c}`} onClick={() => setBetAmount(c)}>
+              {c}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 路子圖 */}
+      <Roadmap history={history} />
+    </div>
   );
 }

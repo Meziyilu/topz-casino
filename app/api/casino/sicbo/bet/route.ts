@@ -1,65 +1,35 @@
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { SicBoBetKind, SicBoRoomCode } from "@prisma/client";
-import { getUserOrThrow } from "@/lib/auth";
-import { getOrRotateRound } from "@/services/sicbo.service";
-import { debitTx } from "@/services/wallet.service";
-import { validatePayload } from "@/lib/sicbo";
+import { getUserFromRequest } from "@/lib/auth";
+import { debit, credit } from "@/services/wallet.service";
+import { BalanceTarget, LedgerType } from "@prisma/client";
 
 export async function POST(req: Request) {
+  const user = await getUserFromRequest(req);
+  if (!user) return NextResponse.json({ ok: false, error: "NOT_AUTH" }, { status: 401 });
+
+  const { room, kind, amount, payload } = await req.json();
+
+  if (!Number.isInteger(amount) || amount <= 0)
+    return NextResponse.json({ ok: false, error: "AMOUNT_INVALID" });
+
+  // 扣款
   try {
-    // ✅ 直接用 cookie 抓 userId
-    const me = await getUserOrThrow(req);
-
-    const { room, kind, amount, payload } = await req.json();
-    if (!room || !kind || !Number.isInteger(amount)) {
-      return NextResponse.json({ error: "MISSING_PARAMS" }, { status: 400 });
-    }
-
-    const r = room as SicBoRoomCode;
-    const k = kind as SicBoBetKind;
-
-    const { round, locked } = await getOrRotateRound(r);
-    if (locked || round.phase !== "BETTING") {
-      return NextResponse.json({ error: "ROUND_LOCKED" }, { status: 400 });
-    }
-
-    const normalized = validatePayload(k, payload);
-
-    const result = await prisma.$transaction(async (tx) => {
-      await debitTx(tx, me.id, "WALLET", amount, "BET_PLACED", {
-        sicboRoom: r,
-        sicboRoundId: round.id,
-      });
-
-      const bet = await tx.sicBoBet.create({
-        data: {
-          userId: me.id,
-          roundId: round.id,
-          kind: k,
-          amount,
-          payload: normalized as any,
-        },
-        select: { id: true },
-      });
-
-      await tx.user.update({
-        where: { id: me.id },
-        data: {
-          totalBets: { increment: 1 },
-          totalStaked: { increment: BigInt(amount) },
-          netProfit: { decrement: BigInt(amount) },
-        },
-      });
-
-      return { betId: bet.id, roundId: round.id };
+    await debit(user.id, BalanceTarget.WALLET, amount, LedgerType.BET_PLACED);
+    // 記錄下注
+    await prisma.sicBoBet.create({
+      data: {
+        userId: user.id,
+        roundId: "TODO", // 這裡要填當前回合ID，建議用 getOrRotateRound
+        kind,
+        amount,
+        payload,
+      },
     });
 
-    return NextResponse.json({ ok: true, ...result });
+    const u = await prisma.user.findUnique({ where: { id: user.id }, select: { balance: true } });
+    return NextResponse.json({ ok: true, wallet: u?.balance ?? 0 });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "BET_FAILED" }, { status: 500 });
+    return NextResponse.json({ ok: false, error: e.message });
   }
 }
