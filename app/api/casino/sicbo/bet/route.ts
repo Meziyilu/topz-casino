@@ -27,29 +27,77 @@ export async function POST(req: NextRequest) {
 
   let total = 0;
   for (const b of bets) {
-    if (!b?.amount || b.amount < cfg.limits.minBet) return NextResponse.json({ error:"UNDER_MIN" }, { status: 400 });
-    if (b.amount > cfg.limits.maxBet) return NextResponse.json({ error:"OVER_MAX" }, { status: 400 });
+    if (!b?.amount || b.amount < cfg.limits.minBet)
+      return NextResponse.json({ error: "UNDER_MIN" }, { status: 400 });
+    if (b.amount > cfg.limits.maxBet)
+      return NextResponse.json({ error: "OVER_MAX" }, { status: 400 });
     total += b.amount;
   }
-  if (total > cfg.limits.perRoundMax) return NextResponse.json({ error:"OVER_ROUND_LIMIT" }, { status: 400 });
-  if (me.balance < total) return NextResponse.json({ error:"INSUFFICIENT_BALANCE" }, { status: 402 });
+  if (total > cfg.limits.perRoundMax)
+    return NextResponse.json({ error: "OVER_ROUND_LIMIT" }, { status: 400 });
+  if (me.balance < total)
+    return NextResponse.json({ error: "INSUFFICIENT_BALANCE" }, { status: 402 });
 
   const tx = await prisma.$transaction(async (tx) => {
+    // ✅ Ledger：移除 game，改用 room + roundId
     await tx.ledger.create({
-      data: { type: "BET_PLACED", game: "SICBO", gameRef: s.roundId!, userId, amount: -total }
+      data: {
+        type: "BET_PLACED",
+        amount: -total,
+        userId,
+        room,
+        roundId: s.roundId!,
+      },
     });
-    await tx.user.update({ where: { id: userId }, data: { balance: { decrement: total } } });
+
+    await tx.user.update({
+      where: { id: userId },
+      data: { balance: { decrement: total } },
+    });
 
     const p = cfg.payout;
     const mapped = bets.map((b: any) => {
       const base: any = { userId, roundId: s.roundId!, amount: b.amount, odds: 1 };
-      if (b.kind==="BIG_SMALL")        return { ...base, kind:"BIG_SMALL", bigSmall:b.bigSmall, odds: Number(p.bigSmall?.[b.bigSmall] ?? 1) };
-      if (b.kind==="TOTAL")            return { ...base, kind:"TOTAL", totalSum:b.totalSum, odds: Number(p.total?.[b.totalSum] ?? 0) };
-      if (b.kind==="SINGLE_FACE")      return { ...base, kind:"SINGLE_FACE", face:b.face, odds: 1 };
-      if (b.kind==="DOUBLE_FACE")      return { ...base, kind:"DOUBLE_FACE", face:b.face, odds: Number(p.doubleFace ?? 8) };
-      if (b.kind==="ANY_TRIPLE")       return { ...base, kind:"ANY_TRIPLE", odds: Number(p.anyTriple ?? 24) };
-      if (b.kind==="SPECIFIC_TRIPLE")  return { ...base, kind:"SPECIFIC_TRIPLE", face:b.face, odds: Number(p.specificTriple ?? 150) };
-      if (b.kind==="TWO_DICE_COMBO")   return { ...base, kind:"TWO_DICE_COMBO", faceA:Math.min(b.faceA,b.faceB), faceB:Math.max(b.faceA,b.faceB), odds:Number(p.twoDiceCombo ?? 5) };
+      if (b.kind === "BIG_SMALL")
+        return {
+          ...base,
+          kind: "BIG_SMALL",
+          bigSmall: b.bigSmall,
+          odds: Number(p.bigSmall?.[b.bigSmall] ?? 1),
+        };
+      if (b.kind === "TOTAL")
+        return {
+          ...base,
+          kind: "TOTAL",
+          totalSum: b.totalSum,
+          odds: Number(p.total?.[b.totalSum] ?? 0),
+        };
+      if (b.kind === "SINGLE_FACE")
+        return { ...base, kind: "SINGLE_FACE", face: b.face, odds: 1 };
+      if (b.kind === "DOUBLE_FACE")
+        return {
+          ...base,
+          kind: "DOUBLE_FACE",
+          face: b.face,
+          odds: Number(p.doubleFace ?? 8),
+        };
+      if (b.kind === "ANY_TRIPLE")
+        return { ...base, kind: "ANY_TRIPLE", odds: Number(p.anyTriple ?? 24) };
+      if (b.kind === "SPECIFIC_TRIPLE")
+        return {
+          ...base,
+          kind: "SPECIFIC_TRIPLE",
+          face: b.face,
+          odds: Number(p.specificTriple ?? 150),
+        };
+      if (b.kind === "TWO_DICE_COMBO")
+        return {
+          ...base,
+          kind: "TWO_DICE_COMBO",
+          faceA: Math.min(b.faceA, b.faceB),
+          faceB: Math.max(b.faceA, b.faceB),
+          odds: Number(p.twoDiceCombo ?? 5),
+        };
       return base;
     });
 
