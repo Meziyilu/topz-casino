@@ -1,4 +1,3 @@
-// services/sicbo.service.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -11,53 +10,71 @@ async function readInt(key: string, fallback: number) {
   const row = await prisma.gameConfig.findUnique({ where: { gameCode_key: { gameCode: "SICBO", key } } });
   return row?.valueInt ?? fallback;
 }
+async function readBool(key: string, fallback: boolean) {
+  const row = await prisma.gameConfig.findUnique({ where: { gameCode_key: { gameCode: "SICBO", key } } });
+  return (row?.valueBool ?? null) === null ? fallback : !!row?.valueBool;
+}
 
 export async function getRoomMeta(room: SicBoRoomCode) {
   const baseInterval = await readInt("drawIntervalSec", 30);
   const lock = await readInt("lockBeforeRollSec", 5);
   const roomKey = `room.${room}.drawIntervalSec`;
   const roomInterval = await readInt(roomKey, room === "SB_R60" ? 60 : room === "SB_R90" ? 90 : 30);
-  return { drawIntervalSec: roomInterval || baseInterval, lockBeforeRollSec: lock };
+  const autoRotate = await readBool("autoRotate", true);
+  return {
+    drawIntervalSec: roomInterval || baseInterval,
+    lockBeforeRollSec: lock,
+    autoRotate,
+  };
 }
 
 export async function getOrRotateRound(room: SicBoRoomCode) {
   const meta = await getRoomMeta(room);
   let round = await prisma.sicBoRound.findFirst({
-    where: { room, phase: { in: [SicBoPhase.BETTING, SicBoPhase.REVEALING] } },
+    where: { room, phase: { in: [SicBoPhase.BETTING, SicBoPhase.REVEALING, SicBoPhase.SETTLED] } },
     orderBy: { startedAt: "desc" },
   });
   const now = taipeiNow();
 
+  // 若沒有任何 round，直接開新局
   if (!round) {
-    round = await prisma.sicBoRound.create({ data: { room, phase: "BETTING", dice: [] } });
+    round = await prisma.sicBoRound.create({ data: { room, phase: SicBoPhase.BETTING, dice: [] } });
     return { round, meta, locked: false };
   }
 
   const elapsed = (now.getTime() - round.startedAt.getTime()) / 1000;
   const willLockAt = meta.drawIntervalSec - meta.lockBeforeRollSec;
 
-  if (round.phase === "BETTING" && elapsed >= willLockAt) {
-    round = await prisma.sicBoRound.update({ where: { id: round.id }, data: { phase: "REVEALING" } });
+  // BETTING → 到鎖盤點即進入 REVEALING（接著會結算）
+  if (round.phase === SicBoPhase.BETTING && elapsed >= willLockAt) {
+    round = await prisma.sicBoRound.update({ where: { id: round.id }, data: { phase: SicBoPhase.REVEALING } });
     round = await revealAndSettle(round.id);
-  }
-  if (round.phase === "REVEALING") {
-    round = await revealAndSettle(round.id);
-  }
-  if (round.phase === "SETTLED") {
-    const doneElapsed = (now.getTime() - (round.endedAt ?? now).getTime()) / 1000;
-    if (doneElapsed >= 0) {
-      round = await prisma.sicBoRound.create({ data: { room, phase: "BETTING", dice: [] } });
-    }
   }
 
-  const locked = round.phase !== "BETTING" || elapsed >= willLockAt;
+  // REVEALING → 執行結算
+  if (round.phase === SicBoPhase.REVEALING) {
+    round = await revealAndSettle(round.id);
+  }
+
+  // SETTLED → 僅在 autoRotate=true 才自動開新局
+  if (round.phase === SicBoPhase.SETTLED && meta.autoRotate) {
+    // 如果剛結束就立刻開下一局（不延遲）
+    round = await prisma.sicBoRound.create({ data: { room, phase: SicBoPhase.BETTING, dice: [] } });
+  }
+
+  const locked = (() => {
+    if (round.phase !== SicBoPhase.BETTING) return true;
+    const nowElapsed = (taipeiNow().getTime() - round.startedAt.getTime()) / 1000;
+    return nowElapsed >= willLockAt;
+  })();
+
   return { round, meta, locked };
 }
 
 export async function revealAndSettle(roundId: string) {
   const round = await prisma.sicBoRound.findUnique({ where: { id: roundId } });
   if (!round) throw new Error("ROUND_NOT_FOUND");
-  if (round.phase === "SETTLED" && round.dice.length === 3) return round;
+  if (round.phase === SicBoPhase.SETTLED && round.dice.length === 3) return round;
 
   const dice = round.dice.length === 3 ? (round.dice as any) : rollDice();
   const bets = await prisma.sicBoBet.findMany({ where: { roundId } });
@@ -89,7 +106,7 @@ export async function revealAndSettle(roundId: string) {
 
   return await prisma.sicBoRound.update({
     where: { id: roundId },
-    data: { phase: "SETTLED", dice: dice as any, endedAt: taipeiNow() },
+    data: { phase: SicBoPhase.SETTLED, dice: dice as any, endedAt: taipeiNow() },
   });
 }
 
@@ -109,7 +126,7 @@ export async function placeBet(params: {
   if (amount < min || amount > max) throw new Error("BET_OUT_OF_RANGE");
 
   const { round } = await getOrRotateRound(room);
-  if (round.phase !== "BETTING") throw new Error("ROUND_LOCKED");
+  if (round.phase !== SicBoPhase.BETTING) throw new Error("ROUND_LOCKED");
 
   const me = await prisma.user.findUnique({ where: { id: userId } });
   if (!me) throw new Error("USER_NOT_FOUND");
@@ -148,7 +165,7 @@ export async function placeBet(params: {
 
 export async function getHistory(room: SicBoRoomCode, limit = 30) {
   return await prisma.sicBoRound.findMany({
-    where: { room, phase: "SETTLED" },
+    where: { room, phase: SicBoPhase.SETTLED },
     orderBy: { endedAt: "desc" },
     take: limit,
   });

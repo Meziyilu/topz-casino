@@ -14,6 +14,13 @@ export default function AdminHome() {
           <div className="title">百家樂管理</div>
           <div className="desc">開始 / 結算 / 自動輪播</div>
         </a>
+
+        {/* 新增：骰寶管理 */}
+        <a className="tile glass" href="/admin/sicbo">
+          <div className="title">骰寶管理</div>
+          <div className="desc">房間設定 / 封盤秒數 / 手動開獎</div>
+        </a>
+
         {/* 之後新增其它遊戲管理 tile */}
       </section>
 

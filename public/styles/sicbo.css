@@ -1,43 +1,139 @@
-/* styles/sicbo.css */
-.glass {
-  backdrop-filter: blur(10px);
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.18);
-  box-shadow: 0 6px 20px rgba(0,0,0,0.25);
-  border-radius: 12px;
+/* ===== SicBo Board Base ===== */
+.sicbo-board {
+  background: radial-gradient(120% 120% at 50% 0%, #0b3b2f 0%, #042826 60%, #031e1b 100%);
+  border-radius: 1rem;
+  padding: 1rem;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  box-shadow: inset 0 0 16px rgba(0, 0, 0, 0.6), 0 8px 30px rgba(3, 20, 18, 0.5);
 }
 
-/* 贏家金框閃爍（預設 4 次，約 2.2~2.4 秒） */
-@keyframes goldFlash {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255,215,0,0); border-color: rgba(255,215,0,0.0); }
-  50% { box-shadow: 0 0 16px 4px rgba(255,215,0,0.9); border-color: rgba(255,215,0,0.9); }
+/* 單一投注格 */
+.sicbo-cell {
+  min-height: 64px;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.05);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: .5rem .75rem;
+  transition: transform .08s ease, border-color .12s ease, background-color .12s ease, opacity .2s ease;
+  user-select: none;
 }
-.win-flash {
-  border: 2px solid rgba(255,215,0,0.9);
-  animation: goldFlash 0.55s ease-in-out 4;
+.sicbo-cell:hover {
+  border-color: rgba(255,255,255,0.4);
+  background: rgba(255,255,255,0.1);
+}
+.sicbo-cell:active {
+  transform: translateY(1px) scale(0.99);
+}
+.sicbo-cell.disabled,
+.sicbo-cell:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+  filter: grayscale(.15);
+}
+
+/* 顏色區塊（小/大/任意豹子） */
+.sicbo-cell--accent {
+  background: linear-gradient(180deg, rgba(16,185,129,.18), rgba(16,185,129,.1));
+  border-color: rgba(16,185,129,.35);
+}
+.sicbo-cell--triple {
+  background: linear-gradient(180deg, rgba(245,158,11,.22), rgba(245,158,11,.12));
+  border-color: rgba(245,158,11,.35);
+}
+
+/* ===== Chips（圓形籌碼） ===== */
+.chips {
+  display: flex; gap: .5rem; align-items: center;
+}
+.chip {
+  width: 48px; height: 48px;
+  border-radius: 9999px;
+  border: 4px solid #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800;
+  background: #0ea5e9; /* fallback 藍 */
+  box-shadow: 0 6px 0 0 rgba(0,0,0,.25), inset 0 0 8px rgba(255,255,255,.35);
+  transition: transform .08s ease, box-shadow .12s ease, opacity .2s ease;
+  user-select: none;
+}
+.chip--red    { background: #ef4444; }
+.chip--blue   { background: #3b82f6; }
+.chip--purple { background: #8b5cf6; }
+.chip--black  { background: #111827; }
+.chip:hover   { transform: translateY(-1px); }
+.chip:active  { transform: translateY(1px); }
+.chip.selected {
+  outline: 3px solid rgba(255,255,255,.7);
+  box-shadow: 0 4px 0 0 rgba(0,0,0,.25), 0 0 0 6px rgba(255,255,255,.12);
+}
+
+/* ===== Dice（帶動畫） ===== */
+.dice {
+  --size: 36px;
+  width: var(--size); height: var(--size);
+  background: linear-gradient(160deg, #fafafa, #e5e7eb);
   border-radius: 10px;
+  box-shadow: 0 4px 0 rgba(0,0,0,.25), inset 0 0 12px rgba(0,0,0,.12);
+  position: relative;
+  display: inline-block;
+}
+.dice .pip {
+  --pip: 8px;
+  width: var(--pip); height: var(--pip);
+  background: #111827;
+  border-radius: 9999px;
+  position: absolute;
+  opacity: 0;
+  transition: opacity .15s ease;
 }
 
-/* 棋盤格（兩骰組合區） */
-.board-grid { display:grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 8px; }
-.cell-btn {
-  position: relative; border-radius: 10px; border: 1px solid rgba(255,255,255,0.16);
-  background: rgba(0,0,0,0.25); padding: 10px; cursor: pointer;
-  transition: transform .06s ease, box-shadow .2s ease;
-}
-.cell-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(0,0,0,.3); }
-.cell-title { font-weight:700; letter-spacing:.4px; }
-.cell-odds { font-size:12px; opacity:.8; }
+/* 9 個定位點（3x3），實際用到 7 個即可 */
+.dice .p1 { top: 6px; left: 6px; }
+.dice .p2 { top: 6px; left: calc(50% - 4px); }
+.dice .p3 { top: 6px; right: 6px; }
+.dice .p4 { top: calc(50% - 4px); left: 6px; }
+.dice .p5 { top: calc(50% - 4px); left: calc(50% - 4px); }
+.dice .p6 { top: calc(50% - 4px); right: 6px; }
+.dice .p7 { bottom: 6px; left: 6px; }
+.dice .p8 { bottom: 6px; left: calc(50% - 4px); }
+.dice .p9 { bottom: 6px; right: 6px; }
 
-/* 大/小 區塊顏色 */
-.bigZone { background: linear-gradient(180deg, rgba(76,175,80,.18), rgba(76,175,80,.06)); }
-.smallZone { background: linear-gradient(180deg, rgba(244,67,54,.18), rgba(244,67,54,.06)); }
+/* 顯示不同點數（face-1..6） */
+.dice.face-1 .p5 { opacity: 1; }
 
-/* 骰子搖動 */
-.dice-shake { animation: diceShake .8s ease-in-out; }
-@keyframes diceShake {
-  0%,100% { transform: translate(0,0) rotate(0deg); }
-  25% { transform: translate(-4px,-3px) rotate(-8deg); }
-  50% { transform: translate(3px,2px) rotate(6deg); }
-  75% { transform: translate(-2px,4px) rotate(-4deg); }
+.dice.face-2 .p1, .dice.face-2 .p9 { opacity: 1; }
+
+.dice.face-3 .p1, .dice.face-3 .p5, .dice.face-3 .p9 { opacity: 1; }
+
+.dice.face-4 .p1, .dice.face-4 .p3, .dice.face-4 .p7, .dice.face-4 .p9 { opacity: 1; }
+
+.dice.face-5 .p1, .dice.face-5 .p3, .dice.face-5 .p5, .dice.face-5 .p7, .dice.face-5 .p9 { opacity: 1; }
+
+.dice.face-6 .p1, .dice.face-6 .p3, .dice.face-6 .p4, .dice.face-6 .p6, .dice.face-6 .p7, .dice.face-6 .p9 { opacity: 1; }
+
+/* 滾動動畫 */
+@keyframes dice-roll {
+  0%   { transform: translateY(0) rotate(0deg); }
+  20%  { transform: translate(-2px, -4px) rotate(18deg); }
+  40%  { transform: translate(4px, -6px) rotate(42deg); }
+  60%  { transform: translate(-3px, -3px) rotate(66deg); }
+  80%  { transform: translate(3px, -2px) rotate(84deg); }
+  100% { transform: translateY(0) rotate(90deg); }
 }
+.dice.rolling {
+  animation: dice-roll .6s linear infinite;
+  box-shadow: 0 6px 0 rgba(0,0,0,.35), inset 0 0 14px rgba(0,0,0,.16);
+}
+
+/* 歷史卡片小骰尺寸 */
+.dice.dice-sm { --size: 28px; }
+.dice.dice-lg { --size: 44px; }
+
+/* ===== Utilities ===== */
+.text-right  { text-align: right; }
+.text-left   { text-align: left; }
+.whitespace-pre-line { white-space: pre-line; }

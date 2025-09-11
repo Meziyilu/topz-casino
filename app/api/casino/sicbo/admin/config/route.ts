@@ -14,6 +14,7 @@ const KEYS = [
   "bet.min",
   "bet.max",
   "bet.totalMaxPerRound",
+  "autoRotate",
 ];
 
 export async function GET() {
