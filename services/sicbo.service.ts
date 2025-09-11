@@ -281,5 +281,10 @@ export async function getHistory(room: SicBoRoomCode, limit = 30) {
     where: { room, phase: SicBoPhase.SETTLED },
     orderBy: { endedAt: "desc" },
     take: limit,
+     select: {
+      id: true,
+      dice: true,
+      endedAt: true,
+    },
   });
 }
