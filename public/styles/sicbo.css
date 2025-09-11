@@ -1,61 +1,120 @@
-/* ===== SicBo Board Base ===== */
-.sicbo-board {
-  background: radial-gradient(120% 120% at 50% 0%, #0b3b2f 0%, #042826 60%, #031e1b 100%);
-  border-radius: 1rem;
-  padding: 1rem;
-  border: 1px solid rgba(16, 185, 129, 0.25);
-  box-shadow: inset 0 0 16px rgba(0, 0, 0, 0.6), 0 8px 30px rgba(3, 20, 18, 0.5);
+/* ===== Page Wrapper ===== */
+.sicbo-wrapper {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 16px;
+  color: #fff;
 }
 
-/* 單一投注格 */
+/* ===== Glass ===== */
+.glass {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 16px;
+}
+
+/* ===== Topbar ===== */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 12px; margin-bottom: 12px;
+}
+.topbar .left { display: flex; align-items: center; gap: 8px; }
+.topbar .right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.room-pill {
+  padding: 4px 10px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.18);
+  background: rgba(16,185,129,.25);
+  font-weight: 800;
+}
+.wallet { display:flex; gap:6px; align-items:center; }
+.wallet .label { opacity:.8; font-size:12px; }
+.wallet .val { font-weight:800; }
+.amount { display:flex; gap:6px; align-items:center; }
+.amount .label { opacity:.8; font-size:12px; }
+.amount input {
+  width: 120px; background: rgba(0,0,0,.35); color: #fff;
+  border: 1px solid rgba(255,255,255,.2); border-radius: 10px; padding: 6px 8px;
+}
+.user-input {
+  width: 160px; background: rgba(0,0,0,.35); color: #fff;
+  border: 1px solid rgba(255,255,255,.2); border-radius: 10px; padding: 6px 8px;
+}
+
+/* ===== Buttons ===== */
+.btn {
+  padding: 8px 12px; border-radius: 10px; font-weight: 700;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.08);
+  color: #fff; cursor: pointer;
+  transition: transform .06s ease, background-color .12s ease, border-color .12s ease;
+}
+.btn:hover { background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.2); }
+.btn:active { transform: translateY(1px); }
+
+.btn--ghost { background: rgba(255,255,255,.06); }
+.btn--amber {
+  background: rgba(245,158,11,.25); border-color: rgba(245,158,11,.5);
+}
+.btn--amber:hover { background: rgba(245,158,11,.35); }
+
+/* ===== Board（整個綠色賭桌容器）===== */
+.sicbo-board {
+  background: radial-gradient(120% 120% at 50% 0%, #0b3b2f 0%, #042826 60%, #031e1b 100%);
+  border-radius: 18px;
+  padding: 14px;
+  border: 1px solid rgba(16,185,129,0.25);
+  box-shadow: inset 0 0 16px rgba(0,0,0,0.6), 0 8px 30px rgba(3, 20, 18, 0.5);
+}
+
+/* ===== Info row ===== */
+.info-grid {
+  display: grid; gap: 10px; margin-bottom: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+}
+.infocard {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.06);
+}
+.infocard .k { font-size: 12px; opacity: .8; }
+.infocard .v { font-size: 16px; font-weight: 800; }
+.dice-stack { display: flex; gap: 6px; align-items: center; }
+
+/* ===== Betting cells ===== */
 .sicbo-cell {
   min-height: 64px;
-  border-radius: 0.75rem;
-  border: 1px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.05);
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
   color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: flex; align-items: center; justify-content: center;
   padding: .5rem .75rem;
   transition: transform .08s ease, border-color .12s ease, background-color .12s ease, opacity .2s ease;
   user-select: none;
 }
-.sicbo-cell:hover {
-  border-color: rgba(255,255,255,0.4);
-  background: rgba(255,255,255,0.1);
-}
-.sicbo-cell:active {
-  transform: translateY(1px) scale(0.99);
-}
-.sicbo-cell.disabled,
-.sicbo-cell:disabled {
-  opacity: .6;
-  cursor: not-allowed;
-  filter: grayscale(.15);
-}
+.sicbo-cell:hover { border-color: rgba(255,255,255,0.35); background: rgba(255,255,255,0.12); }
+.sicbo-cell:active { transform: translateY(1px) scale(0.99); }
+.sicbo-cell.disabled, .sicbo-cell:disabled { opacity:.6; cursor:not-allowed; filter: grayscale(.15); }
 
-/* 顏色區塊（小/大/任意豹子） */
 .sicbo-cell--accent {
   background: linear-gradient(180deg, rgba(16,185,129,.18), rgba(16,185,129,.1));
   border-color: rgba(16,185,129,.35);
 }
 .sicbo-cell--triple {
   background: linear-gradient(180deg, rgba(245,158,11,.22), rgba(245,158,11,.12));
-  border-color: rgba(245,158,11,.35);
+  border-color: rgba(245,158,11,.4);
 }
 
-/* ===== Chips（圓形籌碼） ===== */
-.chips {
-  display: flex; gap: .5rem; align-items: center;
-}
+/* ===== Chips ===== */
+.chips { display:flex; gap: .5rem; align-items:center; flex-wrap: wrap; }
 .chip {
   width: 48px; height: 48px;
-  border-radius: 9999px;
-  border: 4px solid #fff;
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 800;
-  background: #0ea5e9; /* fallback 藍 */
+  border-radius: 9999px; border: 4px solid #fff;
+  display:flex; align-items:center; justify-content:center; font-weight: 800;
+  background: #0ea5e9;
   box-shadow: 0 6px 0 0 rgba(0,0,0,.25), inset 0 0 8px rgba(255,255,255,.35);
   transition: transform .08s ease, box-shadow .12s ease, opacity .2s ease;
   user-select: none;
@@ -66,74 +125,51 @@
 .chip--black  { background: #111827; }
 .chip:hover   { transform: translateY(-1px); }
 .chip:active  { transform: translateY(1px); }
-.chip.selected {
-  outline: 3px solid rgba(255,255,255,.7);
-  box-shadow: 0 4px 0 0 rgba(0,0,0,.25), 0 0 0 6px rgba(255,255,255,.12);
-}
+.chip.selected { outline: 3px solid rgba(255,255,255,.7); box-shadow: 0 4px 0 0 rgba(0,0,0,.25), 0 0 0 6px rgba(255,255,255,.12); }
 
-/* ===== Dice（帶動畫） ===== */
+/* ===== Toolbar ===== */
+.toolbar {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(255,255,255,.18);
+  display:flex; align-items:center; justify-content:space-between; gap: 10px; flex-wrap: wrap;
+}
+.locked-hint { color: #fecaca; font-size: 12px; }
+
+/* ===== Dice（沿用之前的樣式＋動畫） ===== */
 .dice {
   --size: 36px;
   width: var(--size); height: var(--size);
   background: linear-gradient(160deg, #fafafa, #e5e7eb);
   border-radius: 10px;
   box-shadow: 0 4px 0 rgba(0,0,0,.25), inset 0 0 12px rgba(0,0,0,.12);
-  position: relative;
-  display: inline-block;
+  position: relative; display: inline-block;
 }
 .dice .pip {
-  --pip: 8px;
-  width: var(--pip); height: var(--pip);
-  background: #111827;
-  border-radius: 9999px;
-  position: absolute;
-  opacity: 0;
-  transition: opacity .15s ease;
+  --pip: 8px; width: var(--pip); height: var(--pip);
+  background: #111827; border-radius: 9999px;
+  position: absolute; opacity: 0; transition: opacity .15s ease;
 }
+.dice .p1 { top: 6px; left: 6px; } .dice .p2 { top: 6px; left: calc(50% - 4px); } .dice .p3 { top: 6px; right: 6px; }
+.dice .p4 { top: calc(50% - 4px); left: 6px; } .dice .p5 { top: calc(50% - 4px); left: calc(50% - 4px); } .dice .p6 { top: calc(50% - 4px); right: 6px; }
+.dice .p7 { bottom: 6px; left: 6px; } .dice .p8 { bottom: 6px; left: calc(50% - 4px); } .dice .p9 { bottom: 6px; right: 6px; }
 
-/* 9 個定位點（3x3），實際用到 7 個即可 */
-.dice .p1 { top: 6px; left: 6px; }
-.dice .p2 { top: 6px; left: calc(50% - 4px); }
-.dice .p3 { top: 6px; right: 6px; }
-.dice .p4 { top: calc(50% - 4px); left: 6px; }
-.dice .p5 { top: calc(50% - 4px); left: calc(50% - 4px); }
-.dice .p6 { top: calc(50% - 4px); right: 6px; }
-.dice .p7 { bottom: 6px; left: 6px; }
-.dice .p8 { bottom: 6px; left: calc(50% - 4px); }
-.dice .p9 { bottom: 6px; right: 6px; }
-
-/* 顯示不同點數（face-1..6） */
 .dice.face-1 .p5 { opacity: 1; }
-
 .dice.face-2 .p1, .dice.face-2 .p9 { opacity: 1; }
-
 .dice.face-3 .p1, .dice.face-3 .p5, .dice.face-3 .p9 { opacity: 1; }
-
 .dice.face-4 .p1, .dice.face-4 .p3, .dice.face-4 .p7, .dice.face-4 .p9 { opacity: 1; }
-
 .dice.face-5 .p1, .dice.face-5 .p3, .dice.face-5 .p5, .dice.face-5 .p7, .dice.face-5 .p9 { opacity: 1; }
-
 .dice.face-6 .p1, .dice.face-6 .p3, .dice.face-6 .p4, .dice.face-6 .p6, .dice.face-6 .p7, .dice.face-6 .p9 { opacity: 1; }
 
-/* 滾動動畫 */
 @keyframes dice-roll {
-  0%   { transform: translateY(0) rotate(0deg); }
-  20%  { transform: translate(-2px, -4px) rotate(18deg); }
-  40%  { transform: translate(4px, -6px) rotate(42deg); }
-  60%  { transform: translate(-3px, -3px) rotate(66deg); }
-  80%  { transform: translate(3px, -2px) rotate(84deg); }
+  0% { transform: translateY(0) rotate(0deg); }
+  20% { transform: translate(-2px, -4px) rotate(18deg); }
+  40% { transform: translate(4px, -6px) rotate(42deg); }
+  60% { transform: translate(-3px, -3px) rotate(66deg); }
+  80% { transform: translate(3px, -2px) rotate(84deg); }
   100% { transform: translateY(0) rotate(90deg); }
 }
-.dice.rolling {
-  animation: dice-roll .6s linear infinite;
-  box-shadow: 0 6px 0 rgba(0,0,0,.35), inset 0 0 14px rgba(0,0,0,.16);
-}
+.dice.rolling { animation: dice-roll .6s linear infinite; box-shadow: 0 6px 0 rgba(0,0,0,.35), inset 0 0 14px rgba(0,0,0,.16); }
 
-/* 歷史卡片小骰尺寸 */
 .dice.dice-sm { --size: 28px; }
 .dice.dice-lg { --size: 44px; }
-
-/* ===== Utilities ===== */
-.text-right  { text-align: right; }
-.text-left   { text-align: left; }
-.whitespace-pre-line { white-space: pre-line; }
