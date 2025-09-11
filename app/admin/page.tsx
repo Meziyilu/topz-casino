@@ -1,4 +1,3 @@
-// app/admin/page.tsx
 "use client";
 
 export default function AdminHome() {
@@ -15,16 +14,13 @@ export default function AdminHome() {
           <div className="desc">開始 / 結算 / 自動輪播</div>
         </a>
 
-        {/* 新增：骰寶管理 */}
-        <a className="tile glass" href="/admin/sicbo">
-          <div className="title">骰寶管理</div>
-          <div className="desc">房間設定 / 封盤秒數 / 手動開獎</div>
+        <a className="tile glass" href="/admin/coins">
+          <div className="title">金幣管理</div>
+          <div className="desc">搜尋玩家、加/扣金幣（錢包/銀行）</div>
         </a>
-
-        {/* 之後新增其它遊戲管理 tile */}
       </section>
 
-      <link rel="stylesheet" href="/style/admin/admin-home.css" />
+      <link rel="stylesheet" href="/styles/admin/admin-home.css" />
     </main>
   );
 }

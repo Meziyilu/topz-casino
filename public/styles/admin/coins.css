@@ -1,0 +1,50 @@
+.coins-admin { padding: 16px; color: #e9f3ff; }
+.glass {
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 16px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.coins-head { padding: 16px; margin-bottom: 14px; }
+.coins-head h1 { margin: 0 0 10px; }
+
+.coins-head .filters { display:flex; gap:8px; align-items:center; margin-bottom: 10px; }
+.coins-head .filters input {
+  flex: 1; min-width: 240px;
+  background: rgba(0,0,0,.35); color:#fff; border:1px solid rgba(255,255,255,.25); border-radius:10px; padding:8px 10px;
+}
+
+.controls { display:flex; flex-direction: column; gap:10px; }
+.controls .row { display:flex; gap:8px; align-items:center; flex-wrap: wrap; }
+.controls label { opacity:.85; font-size:13px; }
+.controls input[type="number"], .controls select, .controls .note {
+  background: rgba(0,0,0,.35); color:#fff; border:1px solid rgba(255,255,255,.25); border-radius:10px;
+  padding:8px 10px;
+}
+.controls .note { min-width: 260px; }
+
+.btn {
+  padding: 8px 12px; border-radius: 10px; font-weight: 700; cursor: pointer;
+  background: rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.25); color:#fff;
+}
+.btn.ghost { background: rgba(255,255,255,.08); }
+.btn.add { background: rgba(34,197,94,.22); border-color: rgba(34,197,94,.45); }
+.btn.sub { background: rgba(239,68,68,.22); border-color: rgba(239,68,68,.45); }
+
+.coins-table { padding: 8px; }
+.coins-table .thead,
+.coins-table .row {
+  display: grid;
+  grid-template-columns: 1.3fr 0.6fr 0.6fr 0.8fr;
+  column-gap: 8px;
+  align-items: center;
+}
+.coins-table .thead { font-weight: 800; padding: 8px 10px; opacity: .9; }
+.coins-table .row { padding: 8px 10px; border-top: 1px dashed rgba(255,255,255,.15); }
+.coins-table .user .name { font-weight: 700; }
+.coins-table .user .sub { font-size: 12px; opacity: .85; }
+.coins-table .bal { font-weight: 800; }
+.coins-table .ops { display:flex; gap:8px; }
+.loading, .empty { padding: 20px; opacity: .85; }
