@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  const userId = getOptionalUserId(req);
+  const userId = await getOptionalUserId(req); // ✅ await
   if (!userId) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
 
   const items = await prisma.sicboBet.findMany({

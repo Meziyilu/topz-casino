@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
   const room = (req.nextUrl.searchParams.get("room") || "R60") as RoomKey;
-  const userId = getOptionalUserId(req);
+  const userId = await getOptionalUserId(req); // ✅ await
   try {
     const dto = await SicboService.getState(room, userId ?? undefined);
     return NextResponse.json(dto);

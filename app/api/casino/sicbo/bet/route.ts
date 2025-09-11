@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null) as any;
   const room = (body?.room || "R60") as RoomKey;
   const bets = Array.isArray(body?.bets) ? body.bets : [];
-  const userId = getOptionalUserId(req);
+  const userId = await getOptionalUserId(req); // ✅ await
 
   if (!userId) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   if (!bets.length) return NextResponse.json({ error: "NO_BETS" }, { status: 400 });
