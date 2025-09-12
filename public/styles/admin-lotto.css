@@ -1,0 +1,37 @@
+/* public/styles/admin-lotto.css */
+:root { --g: rgba(255,255,255,0.08); --gb: rgba(255,255,255,0.16); --r: 14px; --blur: 12px; }
+.admin-wrap { max-width: 1200px; margin: 24px auto; color:#e8eefc; }
+.panel { background: linear-gradient(180deg, var(--g), rgba(255,255,255,0.04));
+  border:1px solid var(--gb); border-radius: var(--r); padding:16px; backdrop-filter: blur(var(--blur));
+}
+.grid { display:grid; gap:16px; }
+.grid.cols-2 { grid-template-columns: 1fr 1fr; }
+.grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+.h { margin:0 0 8px; font-size:18px; }
+.sub { color:#a9b3c9; }
+
+.btn { padding:10px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.2); background:#84cc16; color:#0d1222; font-weight:800; }
+.btn.ghost { background:transparent; color:#e8eefc; }
+.btn.warn { background:#f59e0b; color:#101; }
+.btn.danger { background:#ef4444; color:#fff; }
+
+.kv { display:grid; grid-template-columns: 160px 1fr; gap:10px; align-items:center; margin-bottom:10px; }
+.input, .select, .textarea {
+  width:100%; padding:10px 12px; border-radius:12px; border:1px solid rgba(255,255,255,0.15);
+  background: rgba(0,0,0,0.25); color:#e8eefc;
+}
+
+.table { width:100%; border-collapse: collapse; }
+.table th, .table td { padding:8px 10px; border-bottom:1px solid rgba(255,255,255,0.12); text-align:left; }
+.badge { display:inline-block; padding:4px 8px; border-radius:999px; border:1px solid rgba(255,255,255,0.2); margin-right:6px; }
+.badge.green { background:#84cc16; color:#102; border-color:#a3e635; }
+.badge.gray { background:rgba(255,255,255,0.1); }
+.badge.yellow { background:#facc15; color:#222; }
+.badge.red { background:#ef4444; }
+
+.flex { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.muted { color:#a9b3c9; }
+.sep { height:1px; background:rgba(255,255,255,0.12); margin:12px 0; }
+
+.card { padding:12px; border:1px solid rgba(255,255,255,0.12); border-radius:12px; background: rgba(0,0,0,0.25); }
+.num { font-weight:800; }

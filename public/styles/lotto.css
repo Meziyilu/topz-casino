@@ -1,0 +1,90 @@
+/* public/styles/lotto.css */
+
+/* 基礎 */
+:root { --glass: rgba(255,255,255,0.08); --glass-b: rgba(255,255,255,0.15); --blur: 12px; --radius: 16px; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+
+.glass {
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  background: linear-gradient(180deg, var(--glass), rgba(255,255,255,0.04));
+  border: 1px solid var(--glass-b);
+  border-radius: var(--radius);
+  color: #e8eefc;
+  padding: 16px;
+}
+
+/* 大廳 */
+.lotto-lobby { max-width: 1080px; margin: 24px auto; }
+.lotto-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
+.lotto-head h1 { margin: 0; font-size: 28px; }
+.lotto-head .sub { color:#a9b3c9; }
+
+.lotto-panels { display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+.panel { padding:16px; border-radius: var(--radius); background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.1); }
+.panel h3 { margin: 0 0 8px; }
+.countdown { font-size: 40px; font-weight: 700; margin: 6px 0; }
+.status { color:#a9b3c9; margin-bottom: 6px; }
+.pools { display:flex; gap:16px; margin-bottom: 8px; }
+.muted { color:#8aa; }
+
+.btn-primary, .btn-ghost {
+  display:inline-block; padding:10px 16px; border-radius:12px; border:1px solid rgba(255,255,255,0.2);
+  text-decoration:none; color:#0d1222; background:#84cc16; font-weight:700;
+}
+.btn-ghost { background:transparent; color:#e8eefc; }
+
+/* 球球 */
+.balls, .roller-track { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.ball {
+  width: 36px; height: 36px; border-radius: 50%;
+  display:flex; align-items:center; justify-content:center;
+  background: radial-gradient(circle at 30% 30%, #fff, #ddd 40%, #bbb 60%, #999 80%, #888 100%);
+  color:#111; font-weight:800; border: 1px solid rgba(0,0,0,0.15);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.2), 0 4px 18px rgba(0,0,0,0.3);
+}
+.ball.special {
+  background: radial-gradient(circle at 30% 30%, #fff, #ffd966 40%, #ffc107 70%, #e0a800 100%);
+}
+
+/* 滾珠動畫展示槽 */
+.balls-roller {
+  position: relative; overflow: hidden; height: 56px; padding: 8px; border-radius: 14px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+  border: 1px solid rgba(255,255,255,0.12);
+  margin: 10px 0 14px;
+}
+.roller-track { position:absolute; left:0; top:8px; animation: slide 6s linear infinite; }
+.ball.rolling { transform: translateY(0); animation: bob 1.4s ease-in-out infinite; }
+@keyframes slide { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+@keyframes bob   { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+
+/* 投注頁 */
+.lotto-play { max-width: 1080px; margin: 24px auto; }
+.form-row { display:flex; align-items:center; gap:10px; margin-bottom: 10px; }
+.form-row label { width: 80px; color:#a9b3c9; }
+.form-row input { flex:1; padding:10px 12px; border-radius:12px; border:1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.25); color:#e8eefc; }
+
+.chips { display:flex; gap:8px; flex-wrap:wrap; }
+.chip { padding:8px 12px; border-radius:12px; background: rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.18); color:#e8eefc; }
+.chip:hover { background: rgba(255,255,255,0.16); }
+
+.pick-grid {
+  display:grid; grid-template-columns: repeat(10, 1fr); gap:6px; margin: 12px 0;
+}
+.num {
+  padding:10px 0; text-align:center; border-radius:10px; border:1px solid rgba(255,255,255,0.15);
+  background: rgba(0,0,0,0.25); color:#e8eefc; font-weight:700;
+}
+.num.picked { background:#84cc16; color:#102; border-color:#a3e635; }
+
+.picked-bar { padding:8px 10px; background: rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); border-radius: 10px; color:#cfe; }
+
+.actions { display:flex; gap:10px; margin-top: 12px; }
+.toast { margin-top:10px; color:#f8d7da; background:#84202933; border:1px solid #84202966; padding:8px 12px; border-radius:10px; }
+
+@media (max-width: 900px) {
+  .lotto-panels { grid-template-columns: 1fr; }
+  .pick-grid { grid-template-columns: repeat(7, 1fr); }
+}
