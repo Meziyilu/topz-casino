@@ -1,0 +1,138 @@
+/* ================================
+   Sic Bo Lobby — 專用樣式
+   依賴：/styles/sicbo.css（共用骰子/玻璃/深色主題）
+================================ */
+
+/* 外框 */
+.lobby-wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 16px;
+  color: #fff;
+}
+
+.lobby-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.lobby-head .title {
+  font-size: 24px;
+  font-weight: 800;
+}
+.lobby-head .sub {
+  opacity: .8;
+}
+
+/* 卡片格 */
+.lobby-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+/* 房卡片 */
+.room-card {
+  border-radius: 16px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 10px 26px rgba(0,0,0,.28);
+}
+
+/* 卡片頂部列 */
+.room-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.room-head .name {
+  font-size: 18px;
+  font-weight: 800;
+}
+.room-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.room-actions .btn {
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.10);
+  color: #fff;
+  font-weight: 700;
+}
+.room-actions .btn:hover {
+  background: rgba(255,255,255,.16);
+}
+.room-actions .btn-primary {
+  background: rgba(59,130,246,.25);
+  border-color: rgba(59,130,246,.45);
+}
+.room-actions .btn-primary:hover {
+  background: rgba(59,130,246,.35);
+}
+
+/* 當前狀態列 */
+.room-stats {
+  font-size: 13px;
+  opacity: .9;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.room-stats b { font-weight: 800 }
+
+/* 最後一局 */
+.room-last {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  opacity: .95;
+}
+.room-last .label { opacity: .8; }
+.dice-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;     /* 修正你說的「骰子擠」 */
+  margin-left: 4px;
+}
+
+/* 小骰子尺寸調整（比房內略小） */
+.dice.dice-sm { --size: 24px; }
+
+/* REVEALING 提示 */
+.room-hint {
+  font-size: 12px;
+  color: #fbbf24;
+}
+
+/* 分隔路子與卡片或其他模組 */
+.lobby-section-gap {
+  height: 10px;
+}
+
+/* 路子圖（大廳若要顯示共用 road） */
+.lobby-road {
+  margin-bottom: 12px;
+}
+
+/* 手機/小寬度不做響應式（照你的需求），這裡保留最小保護避免擠爆 */
+@media (max-width: 980px) {
+  .lobby-grid {
+    grid-template-columns: 1fr 1fr 1fr; /* 仍維持三欄 */
+  }
+}
+
+/* 平滑倒數的文字樣式（看起來更穩定） */
+.countdown {
+  font-variant-numeric: tabular-nums;
+}
