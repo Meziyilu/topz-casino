@@ -140,7 +140,7 @@ export default function AdminCoinsPage() {
         )}
       </section>
 
-      <link rel="stylesheet" href="/style/admin/coins.css" />
+      <link rel="stylesheet" href="/styles/admin/coins.css" />
     </main>
   );
 }
