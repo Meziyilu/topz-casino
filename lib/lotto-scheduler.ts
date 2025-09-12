@@ -4,7 +4,7 @@ export const runtime = "nodejs";
 import { readConfig, ensureOpenDraw, lockIfNeeded, drawIfDue, settleIfDrawn } from "@/services/lotto.service";
 
 type SchedulerState = {
-  timer?: NodeJS.Timer;
+  timer?: ReturnType<typeof setInterval>;
   running: boolean;
 };
 
@@ -31,7 +31,10 @@ export function startLottoScheduler() {
 }
 
 export function stopLottoScheduler() {
-  if (state.timer) clearInterval(state.timer);
+  if (state.timer) {
+    // 在不同 TS lib 設定（DOM vs Node）都可通過型別檢查
+    clearInterval(state.timer);
+  }
   state.timer = undefined;
   state.running = false;
 }
