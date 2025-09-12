@@ -1,7 +1,7 @@
 "use client";
 
 import Head from "next/head";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 type Phase = "BETTING" | "REVEALING" | "SETTLED";
@@ -46,11 +46,19 @@ export default function SicboRoomPage() {
   const [room, setRoom] = useState<Room>("SB_R30");
   const [state, setState] = useState<StateResp | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [userId, setUserId] = useState("demo-user");       // 無驗證：輸入誰就扣誰
+  const [userId, setUserId] = useState("demo-user");
   const [balance, setBalance] = useState(0);
   const [chip, setChip] = useState<number>(100);
   const [amount, setAmount] = useState<number>(100);
   const [placing, setPlacing] = useState(false);
+
+  // 本地倒數：以伺服器回傳為基準
+  const [lockLeft, setLockLeft] = useState(0);
+  const [endLeft,  setEndLeft]  = useState(0);
+  const baseLockRef = useRef(0);
+  const baseEndRef  = useRef(0);
+  const syncAtRef   = useRef<number>(Date.now());
+  const tickRef     = useRef<number | null>(null);
 
   useEffect(() => {
     const r = (params?.room?.toString()?.toUpperCase() as Room) || "SB_R30";
@@ -59,13 +67,25 @@ export default function SicboRoomPage() {
 
   async function fetchState() {
     const res = await fetch(`/api/casino/sicbo/state?room=${room}`, { cache: "no-store" });
-    if (res.ok) setState(await res.json());
+    if (!res.ok) return;
+    const j: StateResp = await res.json();
+    setState(j);
+
+    // 設定倒數基準
+    baseLockRef.current = Math.max(0, Math.floor(j?.timers?.lockInSec ?? 0));
+    baseEndRef.current  = Math.max(0, Math.floor(j?.timers?.endInSec  ?? 0));
+    syncAtRef.current   = Date.now();
+    // 立刻刷新一次顯示
+    setLockLeft(baseLockRef.current);
+    setEndLeft(baseEndRef.current);
   }
+
   async function fetchBalance() {
     if (!userId) return;
     const res = await fetch(`/api/wallet/balance?userId=${encodeURIComponent(userId)}`, { cache: "no-store" });
     if (res.ok) setBalance((await res.json()).balance ?? 0);
   }
+
   async function fetchHistory() {
     const r = await fetch(`/api/casino/sicbo/history?room=${room}&limit=12`, { cache: "no-store" });
     if (r.ok) {
@@ -74,15 +94,28 @@ export default function SicboRoomPage() {
     }
   }
 
-  // 首次/變更時載入
-  useEffect(() => { fetchState(); fetchBalance(); fetchHistory(); }, [room, userId]);
-  // 輪詢
+  // 啟動本地 tick（每秒遞減）
   useEffect(() => {
-    const t1 = setInterval(fetchState, 3000);
+    if (tickRef.current) window.clearInterval(tickRef.current);
+    tickRef.current = window.setInterval(() => {
+      const elapsed = Math.floor((Date.now() - syncAtRef.current) / 1000);
+      setLockLeft(Math.max(0, baseLockRef.current - elapsed));
+      setEndLeft(Math.max(0, baseEndRef.current - elapsed));
+    }, 1000);
+    return () => { if (tickRef.current) window.clearInterval(tickRef.current); };
+  }, []);
+
+  // 首次/變更載入
+  useEffect(() => { fetchState(); fetchBalance(); fetchHistory(); }, [room, userId]);
+
+  // 輪詢（修正本地時間飄移）
+  useEffect(() => {
+    const t1 = setInterval(fetchState, 5000);
     const t2 = setInterval(fetchBalance, 5000);
     const t3 = setInterval(fetchHistory, 7000);
     return () => { clearInterval(t1); clearInterval(t2); clearInterval(t3); };
   }, [room, userId]);
+
   useEffect(() => setAmount(chip), [chip]);
 
   async function place(kind: Kind, payload?: any) {
@@ -127,9 +160,6 @@ export default function SicboRoomPage() {
     if (!r.ok) return alert(j?.error || "topup 失敗");
     setBalance(j.balance);
   }
-
-  const lockLeft = state?.timers?.lockInSec ?? 0;
-  const endLeft  = state?.timers?.endInSec  ?? 0;
 
   const pairs = useMemo<[number, number][]>(() => {
     const o: [number, number][] = [];
@@ -206,10 +236,51 @@ export default function SicboRoomPage() {
     return res;
   }, [state?.round?.phase, state?.round?.dice]);
 
-  // 便捷：是否中獎（單骰）
+  // 便捷
   const singleHit = (n: number) => (winners.singles.get(n) || 0) > 0;
-  // 便捷：是否中獎（組合）
-  const comboHit = (a: number, b: number) => winners.combos.has(`${Math.min(a,b)}-${Math.max(a,b)}`);
+  const comboHit  = (a: number, b: number) => winners.combos.has(`${Math.min(a,b)}-${Math.max(a,b)}`);
+
+  // Dice 元件（含 9 個 pip，才能顯示點數 & 動畫）
+  function Dice({ n, rolling, size = "md" }: { n?: number; rolling?: boolean; size?: "sm"|"md"|"lg" }) {
+    const faceCls = n ? `face-${n}` : ""; const sizeCls = size === "sm" ? "dice-sm" : size === "lg" ? "dice-lg" : "";
+    return (
+      <span className={cx("dice", faceCls, rolling ? "rolling" : "", sizeCls)}>
+        <span className="pip p1" /><span className="pip p2" /><span className="pip p3" />
+        <span className="pip p4" /><span className="pip p5" /><span className="pip p6" />
+        <span className="pip p7" /><span className="pip p8" /><span className="pip p9" />
+      </span>
+    );
+  }
+
+  // 路子圖
+  function Roadmap({ history }: { history: { id: string; dice: number[]; endedAt: string }[] }) {
+    return (
+      <div className="roadmap glass" aria-label="sicbo-roadmap">
+        {(history ?? []).map((h) => {
+          const d = h.dice || [];
+          const s = (d[0] || 0) + (d[1] || 0) + (d[2] || 0);
+          const tag = (d[0] === d[1] && d[1] === d[2]) ? "豹子" : (s >= 11 ? "大" : "小");
+          return (
+            <div key={h.id} className="roadmap-cell">
+              <div className="dice-mini">
+                <Dice n={d[0]} size="sm" />
+                <Dice n={d[1]} size="sm" />
+                <Dice n={d[2]} size="sm" />
+              </div>
+              <div className="meta">
+                <span className="sum">{s || "-"}</span>
+                <span className="tag">{tag}</span>
+              </div>
+            </div>
+          );
+        })}
+        {(history?.length ?? 0) === 0 && <div className="roadmap-empty">暫無歷史</div>}
+      </div>
+    );
+  }
+
+  const isRevealing = state?.round?.phase === "REVEALING";
+  const noFinalDice = !(state?.round?.dice?.length === 3);
 
   return (
     <>
@@ -256,9 +327,9 @@ export default function SicboRoomPage() {
               <div className="k">結束</div><div className="v">{fmt(endLeft)}</div>
             </div>
             <div className="head-dice">
-              <Dice n={state?.round?.dice?.[0]} rolling={state?.round?.phase==="REVEALING" && !state?.round?.dice?.[0]} size="lg" />
-              <Dice n={state?.round?.dice?.[1]} rolling={state?.round?.phase==="REVEALING" && !state?.round?.dice?.[1]} size="lg" />
-              <Dice n={state?.round?.dice?.[2]} rolling={state?.round?.phase==="REVEALING" && !state?.round?.dice?.[2]} size="lg" />
+              <Dice n={state?.round?.dice?.[0]} rolling={isRevealing && noFinalDice} size="lg" />
+              <Dice n={state?.round?.dice?.[1]} rolling={isRevealing && noFinalDice} size="lg" />
+              <Dice n={state?.round?.dice?.[2]} rolling={isRevealing && noFinalDice} size="lg" />
             </div>
           </div>
 
@@ -418,43 +489,5 @@ export default function SicboRoomPage() {
         </div>
       </div>
     </>
-  );
-}
-
-function Dice({ n, rolling, size = "md" }: { n?: number; rolling?: boolean; size?: "sm"|"md"|"lg" }) {
-  const faceCls = n ? `face-${n}` : ""; const sizeCls = size === "sm" ? "dice-sm" : size === "lg" ? "dice-lg" : "";
-  return (
-    <span className={cx("dice", faceCls, rolling ? "rolling" : "", sizeCls)}>
-      <span className="pip p1" /><span className="pip p2" /><span className="pip p3" />
-      <span className="pip p4" /><span className="pip p5" /><span className="pip p6" />
-      <span className="pip p7" /><span className="pip p8" /><span className="pip p9" />
-    </span>
-  );
-}
-
-/** 路子圖元件（最近 12 局：骰子 + 總和 + 大/小/豹子） */
-function Roadmap({ history }: { history: { id: string; dice: number[]; endedAt: string }[] }) {
-  return (
-    <div className="roadmap glass" aria-label="sicbo-roadmap">
-      {(history ?? []).map((h) => {
-        const d = h.dice || [];
-        const s = (d[0] || 0) + (d[1] || 0) + (d[2] || 0);
-        const tag = (d[0] === d[1] && d[1] === d[2]) ? "豹子" : (s >= 11 ? "大" : "小");
-        return (
-          <div key={h.id} className="roadmap-cell">
-            <div className="dice-mini">
-              <span className={cx("dice","dice-sm", d[0] ? `face-${d[0]}` : "face-1")} />
-              <span className={cx("dice","dice-sm", d[1] ? `face-${d[1]}` : "face-1")} />
-              <span className={cx("dice","dice-sm", d[2] ? `face-${d[2]}` : "face-1")} />
-            </div>
-            <div className="meta">
-              <span className="sum">{s || "-"}</span>
-              <span className="tag">{tag}</span>
-            </div>
-          </div>
-        );
-      })}
-      {(history?.length ?? 0) === 0 && <div className="roadmap-empty">暫無歷史</div>}
-    </div>
   );
 }
