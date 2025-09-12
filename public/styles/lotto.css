@@ -1,90 +1,229 @@
-/* public/styles/lotto.css */
+/* public/styles/lotto.css — Dark Glass + Edge Glow + Roller + Road Map v2 */
 
-/* 基礎 */
-:root { --glass: rgba(255,255,255,0.08); --glass-b: rgba(255,255,255,0.15); --blur: 12px; --radius: 16px; }
-* { box-sizing: border-box; }
-body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+/* --- 基礎色與特效參數 --- */
+:root{
+  --glass-fill-1: rgba(16,20,34,0.55);
+  --glass-fill-2: rgba(16,20,34,0.35);
+  --glass-border: rgba(255,255,255,0.12);
+  --glass-highlight: rgba(255,255,255,0.22);
+  --edge-glow: 255,255,255;     /* 白光顏色 (RGB) */
+  --edge-strength: 0.45;        /* 邊緣白光強度(0~1) */
+  --blur: 14px;
+  --radius: 18px;
+  --text: #E9EEFF;
+  --muted: #9FB0CE;
+  --accent: #84cc16;            /* 下注/主要操作 */
+  --accent-2: #22d3ee;          /* 次要強調色(青) */
+  --danger: #ef4444;
+  --warn: #f59e0b;
+  --ok: #22c55e;
 
-.glass {
+  /* 球體大小與陰影 */
+  --ball-size: 40px;
+  --ball-shadow: 0 8px 22px rgba(0,0,0,0.35);
+  --ball-inner: inset 0 2px 4px rgba(0,0,0,0.25);
+
+  /* 動畫速度（偏快） */
+  --roller-speed: 8s;
+  --bob-speed: 1.3s;
+}
+
+*{ box-sizing:border-box; }
+html,body{ background: radial-gradient(1200px 700px at 60% -10%, #0b0f1d 20%, #070a14 60%, #05070E 100%); color:var(--text); margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+
+/* --- 可複用的玻璃面板 --- */
+.glass{
+  position: relative;
+  background: linear-gradient(180deg, var(--glass-fill-1), var(--glass-fill-2));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
   backdrop-filter: blur(var(--blur));
   -webkit-backdrop-filter: blur(var(--blur));
-  background: linear-gradient(180deg, var(--glass), rgba(255,255,255,0.04));
-  border: 1px solid var(--glass-b);
-  border-radius: var(--radius);
-  color: #e8eefc;
+  color: var(--text);
   padding: 16px;
+  box-shadow:
+    0 8px 24px rgba(0,0,0,0.35),
+    inset 0 1px 0 rgba(255,255,255,0.06);
 }
 
-/* 大廳 */
-.lotto-lobby { max-width: 1080px; margin: 24px auto; }
-.lotto-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
-.lotto-head h1 { margin: 0; font-size: 28px; }
-.lotto-head .sub { color:#a9b3c9; }
-
-.lotto-panels { display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
-.panel { padding:16px; border-radius: var(--radius); background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.1); }
-.panel h3 { margin: 0 0 8px; }
-.countdown { font-size: 40px; font-weight: 700; margin: 6px 0; }
-.status { color:#a9b3c9; margin-bottom: 6px; }
-.pools { display:flex; gap:16px; margin-bottom: 8px; }
-.muted { color:#8aa; }
-
-.btn-primary, .btn-ghost {
-  display:inline-block; padding:10px 16px; border-radius:12px; border:1px solid rgba(255,255,255,0.2);
-  text-decoration:none; color:#0d1222; background:#84cc16; font-weight:700;
+/* 白光邊緣：在 .glass 再加 .glow 即可 */
+.glass.glow::before{
+  content:"";
+  position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+  background:
+    linear-gradient(180deg, rgba(var(--edge-glow),0.05), rgba(var(--edge-glow),0.00)),
+    radial-gradient(80% 60% at 50% 0%, rgba(var(--edge-glow),var(--edge-strength)) 0%, rgba(var(--edge-glow),0) 80%);
+  mask: linear-gradient(#000,#000) padding-box, linear-gradient(#000,#000);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  border: 1px solid rgba(255,255,255,0.18);
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.08) inset,
+    0 0 24px rgba(var(--edge-glow),0.08);
 }
-.btn-ghost { background:transparent; color:#e8eefc; }
 
-/* 球球 */
-.balls, .roller-track { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-.ball {
-  width: 36px; height: 36px; border-radius: 50%;
+/* 大標頭 */
+.lotto-head{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
+.lotto-head h1{ margin:0; font-size:28px; letter-spacing:0.2px; }
+.lotto-head .sub{ color:var(--muted); }
+
+/* 大廳排版 */
+.lotto-lobby{ max-width:1120px; margin:24px auto; }
+.lotto-panels{ display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+.panel{ padding:16px; border-radius:var(--radius); background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));
+  border:1px solid var(--glass-border); box-shadow: 0 8px 24px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.06); position:relative; overflow: hidden; }
+.panel::after{ /* 面板頂部柔光掃過 */
+  content:""; position:absolute; inset:-1px; border-radius:inherit; pointer-events:none;
+  background: linear-gradient( to bottom, rgba(255,255,255,0.15), rgba(255,255,255,0) 35%);
+  mix-blend-mode: screen; opacity:.35;
+}
+
+.countdown{ font-size:44px; font-weight:800; margin:4px 0 2px; letter-spacing:0.5px; }
+.status{ color:var(--muted); margin-bottom:8px; }
+.pools{ display:flex; gap:14px; margin-bottom:6px; }
+.muted{ color:var(--muted); }
+
+/* 按鈕 */
+.btn-primary,.btn-ghost{
+  display:inline-flex; align-items:center; justify-content:center;
+  padding:10px 16px; border-radius:12px; border:1px solid rgba(255,255,255,0.18);
+  text-decoration:none; font-weight:800; letter-spacing:0.2px; cursor:pointer; user-select:none;
+  transition: transform .08s ease, box-shadow .2s ease, background .2s ease;
+}
+.btn-primary{ background: linear-gradient(180deg, #9AE62A, #84cc16); color:#0d1222; box-shadow: 0 6px 18px rgba(132,204,22,0.35); }
+.btn-primary:hover{ transform: translateY(-1px); box-shadow: 0 10px 26px rgba(132,204,22,0.45); }
+.btn-ghost{ background:rgba(255,255,255,0.06); color:var(--text); }
+.btn-ghost:hover{ background:rgba(255,255,255,0.10); }
+
+/* --- 球球視覺（更立體） --- */
+.balls,.roller-track{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+
+.ball{
+  width:var(--ball-size); height:var(--ball-size); border-radius:50%;
   display:flex; align-items:center; justify-content:center;
-  background: radial-gradient(circle at 30% 30%, #fff, #ddd 40%, #bbb 60%, #999 80%, #888 100%);
-  color:#111; font-weight:800; border: 1px solid rgba(0,0,0,0.15);
-  box-shadow: inset 0 2px 4px rgba(0,0,0,0.2), 0 4px 18px rgba(0,0,0,0.3);
+  background:
+    radial-gradient(28% 28% at 30% 30%, #fff, #e9e9e9 40%, #d3d3d3 58%, #bcbcbc 72%, #a9a9a9 100%),
+    radial-gradient(80% 80% at 35% 25%, rgba(255,255,255,0.9), rgba(255,255,255,0) 60%);
+  color:#0D1020; font-weight:900; border: 1px solid rgba(0,0,0,0.18);
+  box-shadow: var(--ball-inner), var(--ball-shadow);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.7);
 }
-.ball.special {
-  background: radial-gradient(circle at 30% 30%, #fff, #ffd966 40%, #ffc107 70%, #e0a800 100%);
+.ball.special{
+  background:
+    radial-gradient(30% 30% at 30% 30%, #fff, #ffe9a6 40%, #ffd24d 60%, #f5b400 78%, #d99a00 100%),
+    radial-gradient(80% 80% at 35% 25%, rgba(255,255,255,0.9), rgba(255,255,255,0) 60%);
 }
 
-/* 滾珠動畫展示槽 */
-.balls-roller {
-  position: relative; overflow: hidden; height: 56px; padding: 8px; border-radius: 14px;
-  background: linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
-  border: 1px solid rgba(255,255,255,0.12);
-  margin: 10px 0 14px;
+/* --- 滾珠動畫（連續無縫） --- */
+.balls-roller{
+  position:relative; overflow:hidden; height:64px; padding:10px;
+  border-radius:14px; background: linear-gradient(90deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+  border:1px solid var(--glass-border); margin: 10px 0 14px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
 }
-.roller-track { position:absolute; left:0; top:8px; animation: slide 6s linear infinite; }
-.ball.rolling { transform: translateY(0); animation: bob 1.4s ease-in-out infinite; }
-@keyframes slide { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
-@keyframes bob   { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
-
-/* 投注頁 */
-.lotto-play { max-width: 1080px; margin: 24px auto; }
-.form-row { display:flex; align-items:center; gap:10px; margin-bottom: 10px; }
-.form-row label { width: 80px; color:#a9b3c9; }
-.form-row input { flex:1; padding:10px 12px; border-radius:12px; border:1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.25); color:#e8eefc; }
-
-.chips { display:flex; gap:8px; flex-wrap:wrap; }
-.chip { padding:8px 12px; border-radius:12px; background: rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.18); color:#e8eefc; }
-.chip:hover { background: rgba(255,255,255,0.16); }
-
-.pick-grid {
-  display:grid; grid-template-columns: repeat(10, 1fr); gap:6px; margin: 12px 0;
+.roller-track{
+  position:absolute; left:0; top:50%; transform: translateY(-50%);
+  display:flex; gap:10px; padding-right:20px;
+  animation: roller var(--roller-speed) linear infinite;
+  will-change: transform;
 }
-.num {
-  padding:10px 0; text-align:center; border-radius:10px; border:1px solid rgba(255,255,255,0.15);
-  background: rgba(0,0,0,0.25); color:#e8eefc; font-weight:700;
+.roller-track .ball.rolling{
+  animation: bob var(--bob-speed) ease-in-out infinite;
 }
-.num.picked { background:#84cc16; color:#102; border-color:#a3e635; }
+@keyframes roller{
+  0%   { transform: translateX(0) translateY(-50%); }
+  100% { transform: translateX(-50%) translateY(-50%); } /* 請在 DOM 內複製一份內容以無縫循環 */
+}
+@keyframes bob{
+  0%,100%{ transform: translateY(0); }
+  50%    { transform: translateY(-8px); }
+}
 
-.picked-bar { padding:8px 10px; background: rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); border-radius: 10px; color:#cfe; }
+/* --- 投注頁表單 --- */
+.lotto-play{ max-width:1120px; margin:24px auto; }
+.form-row{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+.form-row label{ width:90px; color:var(--muted); }
+.form-row input{ flex:1; padding:10px 12px; border-radius:12px; border:1px solid var(--glass-border);
+  background: rgba(255,255,255,0.04); color:var(--text); outline:none; }
+.form-row input:focus{ border-color: var(--glass-highlight); box-shadow: 0 0 0 3px rgba(255,255,255,0.08) inset; }
 
-.actions { display:flex; gap:10px; margin-top: 12px; }
-.toast { margin-top:10px; color:#f8d7da; background:#84202933; border:1px solid #84202966; padding:8px 12px; border-radius:10px; }
+.chips{ display:flex; gap:8px; flex-wrap:wrap; }
+.chip{ padding:8px 12px; border-radius:12px; background: rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.18); color:var(--text); }
+.chip:hover{ background: rgba(255,255,255,0.14); }
 
-@media (max-width: 900px) {
-  .lotto-panels { grid-template-columns: 1fr; }
-  .pick-grid { grid-template-columns: repeat(7, 1fr); }
+.pick-grid{ display:grid; grid-template-columns: repeat(10, 1fr); gap:6px; margin:12px 0; }
+.num{
+  padding:10px 0; text-align:center; border-radius:10px; border:1px solid var(--glass-border);
+  background: rgba(255,255,255,0.05); color:var(--text); font-weight:800; letter-spacing:0.2px;
+  transition: background .15s ease, transform .06s ease;
+}
+.num:hover{ background: rgba(255,255,255,0.10); transform: translateY(-1px); }
+.num.picked{ background: linear-gradient(180deg, #a3e635, #84cc16); color:#0d1222; border-color:#c1f249; }
+
+.picked-bar{ padding:8px 10px; background: rgba(255,255,255,0.06); border:1px solid var(--glass-border); border-radius:10px; color:#dce7ff; }
+
+.actions{ display:flex; gap:10px; margin-top:12px; }
+.toast{ margin-top:10px; color:#ffdde1; background:#84202933; border:1px solid #84202966; padding:8px 12px; border-radius:10px; }
+
+/* --- 「每期路子」趨勢格 --- */
+.road{
+  margin-top:16px;
+}
+.road-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.road-title{ font-size:16px; font-weight:700; }
+.road-legend{ display:flex; gap:8px; align-items:center; color:var(--muted); }
+.road-legend .dot{ width:10px; height:10px; border-radius:50%; display:inline-block; }
+.dot-win{ background: #34d399; }     /* 高中獎（例如 5~6 中） */
+.dot-mid{ background: #fde047; }     /* 中等（4中） */
+.dot-low{ background: #60a5fa; }     /* 較低（3中） */
+.dot-miss{ background: #64748b; }    /* 未中 */
+
+.road-grid{
+  --cell: 18px;
+  display:grid;
+  grid-template-columns: repeat(30, var(--cell)); /* 最近 30 期 */
+  gap:4px;
+  padding:10px; border-radius:12px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+  border:1px solid var(--glass-border);
+}
+.road-cell{
+  width:var(--cell); height:var(--cell); border-radius:6px;
+  position:relative; overflow:hidden;
+  background: rgba(255,255,255,0.05);
+  border:1px solid rgba(255,255,255,0.10);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+}
+.road-cell::after{ /* 白光邊緣 */
+  content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+  box-shadow: 0 0 10px rgba(255,255,255,0.08);
+}
+
+/* 路子顏色（依命中數分級，可對應資料） */
+.road-win { background: linear-gradient(180deg, rgba(52,211,153,0.85), rgba(34,197,94,0.85)); border-color: rgba(34,197,94,0.9); }
+.road-mid { background: linear-gradient(180deg, rgba(253,224,71,0.85), rgba(234,179,8,0.85)); border-color: rgba(234,179,8,0.9); }
+.road-low { background: linear-gradient(180deg, rgba(96,165,250,0.85), rgba(37,99,235,0.85)); border-color: rgba(59,130,246,0.9); }
+.road-miss{ background: linear-gradient(180deg, rgba(148,163,184,0.55), rgba(100,116,139,0.55)); border-color: rgba(100,116,139,0.7); }
+
+/* 讓 cell 內可放一顆小球或分數 */
+.road-cell .tiny{
+  position:absolute; inset:auto auto 2px 2px;
+  width:10px; height:10px; border-radius:50%;
+  background:#fff; opacity:.85;
+}
+
+/* --- 響應式 --- */
+@media (max-width: 1024px){
+  .lotto-panels{ grid-template-columns: 1fr; }
+}
+@media (max-width: 640px){
+  :root{ --ball-size: 34px; }
+  .pick-grid{ grid-template-columns: repeat(7, 1fr); }
+  .road-grid{ grid-template-columns: repeat(20, var(--cell)); }
+}
+
+/* --- 無動畫偏好 --- */
+@media (prefers-reduced-motion: reduce){
+  .roller-track{ animation: none; }
+  .ball.rolling{ animation: none; }
 }

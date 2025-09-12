@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useMe } from "@/components/useMe";
 import "@/public/styles/lotto.css";
 
 type StateResp = {
@@ -15,8 +16,8 @@ function secsLeft(drawAt: string) {
 }
 
 export default function LottoPlay() {
+  const { me, loading: meLoading, reload: reloadMe } = useMe(0);
   const [s, setS] = useState<StateResp|null>(null);
-  const [userId, setUserId] = useState("");
   const [amount, setAmount] = useState<number>(100);
   const [picked, setPicked] = useState<number[]>([]);
   const [placing, setPlacing] = useState(false);
@@ -27,14 +28,15 @@ export default function LottoPlay() {
 
   const options = useMemo(() => Array.from({ length: pickMax }, (_, i) => i+1), [pickMax]);
 
+  async function pullState() {
+    const r = await fetch("/api/casino/lotto/state", { cache: "no-store" });
+    const j = await r.json();
+    setS({ current: j.current, config: j.config });
+  }
+
   useEffect(() => {
-    const pull = async () => {
-      const r = await fetch("/api/casino/lotto/state", { cache: "no-store" });
-      const j = await r.json();
-      setS({ current: j.current, config: j.config });
-    };
-    pull();
-    const t = setInterval(pull, 1000);
+    pullState();
+    const t = setInterval(pullState, 1000);
     return () => clearInterval(t);
   }, []);
 
@@ -57,7 +59,7 @@ export default function LottoPlay() {
   }
 
   async function place() {
-    if (!userId) { setToast("請輸入 User ID"); return; }
+    if (!me?.id) { setToast("尚未登入，請先登入帳號"); return; }
     if (!s?.current) { setToast("目前無可下注場次"); return; }
     if (s.current.status !== "OPEN") { setToast("已鎖盤"); return; }
     if (picked.length !== picksCount) { setToast(`需選 ${picksCount} 顆`); return; }
@@ -65,11 +67,14 @@ export default function LottoPlay() {
     try {
       const r = await fetch("/api/casino/lotto/bet", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, picks: picked, amount }),
+        body: JSON.stringify({ userId: me.id, picks: picked, amount }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "下注失敗");
       setToast("下注成功！");
+      setPicked([]);
+      await reloadMe();     // 更新餘額
+      await pullState();    // 更新當期池子
     } catch (e: any) {
       setToast(e.message);
     } finally {
@@ -80,17 +85,28 @@ export default function LottoPlay() {
   const left = s?.current ? secsLeft(s.current.drawAt) : 0;
 
   return (
-    <main className="lotto-play glass">
+    <main className="lotto-play glass glow">
       <header className="lotto-head">
         <h1>樂透投注</h1>
-        <div className="hint">本期 #{s?.current?.code ?? "-"} · 倒數 <strong>{left}</strong>s · 狀態 {s?.current?.status ?? "-"}</div>
+        <div className="hint">
+          本期 #{s?.current?.code ?? "-"} · 倒數 <strong>{left}</strong>s · 狀態 {s?.current?.status ?? "-"}
+        </div>
       </header>
 
       <section className="panel">
         <div className="form-row">
-          <label>User ID</label>
-          <input value={userId} onChange={e=>setUserId(e.target.value)} placeholder="輸入你的 User.id" />
+          <label>會員</label>
+          <div style={{display:"flex", gap:8, alignItems:"center"}}>
+            {meLoading ? <span className="muted">載入中…</span> :
+             me ? (
+              <>
+                <span><strong>{me.displayName || me.name || me.id}</strong></span>
+                <span className="muted">餘額</span><span><strong>{me.balance ?? 0}</strong></span>
+              </>
+             ) : <span className="muted">未登入</span>}
+          </div>
         </div>
+
         <div className="form-row">
           <label>注金</label>
           <input type="number" value={amount} onChange={e=>setAmount(parseInt(e.target.value||"0"))} />
@@ -113,7 +129,7 @@ export default function LottoPlay() {
         </div>
 
         <div className="actions">
-          <button className="btn-primary" disabled={placing || !s?.current || s.current.status!=="OPEN"} onClick={place}>
+          <button className="btn-primary" disabled={placing || !s?.current || s.current.status!=="OPEN" || !me?.id} onClick={place}>
             {placing ? "下注中..." : "下注"}
           </button>
           <button className="btn-ghost" onClick={()=>setPicked([])}>清除</button>
@@ -122,12 +138,17 @@ export default function LottoPlay() {
         {toast && <div className="toast">{toast}</div>}
       </section>
 
+      {/* 滾珠展示 */}
       <section className="panel">
         <h3>滾珠動畫</h3>
         <div className="balls-roller">
           <div className="roller-track">
-            {Array.from({ length: 10 }).map((_, i) => (
-              <div key={i} className="ball rolling">{((i*13)%pickMax)+1}</div>
+            {Array.from({ length: 12 }).map((_, i) => (
+              <div key={`a-${i}`} className="ball rolling">{((i*13)%pickMax)+1}</div>
+            ))}
+            {/* 複製一份內容以無縫滾動 */}
+            {Array.from({ length: 12 }).map((_, i) => (
+              <div key={`b-${i}`} className="ball rolling">{((i*13)%pickMax)+1}</div>
             ))}
           </div>
         </div>
