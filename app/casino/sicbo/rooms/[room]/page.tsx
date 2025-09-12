@@ -18,8 +18,7 @@ type StateResp = {
   locked: boolean;
 };
 
-type HistoryItem = { id: string; dice: number[]; endedAt: string };
-type HistoryResp = { room: Room; items: HistoryItem[] };
+type HistItem = { id: string; dice: number[]; endedAt: string };
 
 const TOTAL_PAYOUT: Record<number, number> = {
   4: 50, 17: 50,
@@ -39,26 +38,75 @@ function fmt(sec?: number) {
   return `${m}:${r.toString().padStart(2, "0")}`;
 }
 
+/** ======== 算中獎集合 ======== */
+function isTriple(d: number[]) { return d[0] === d[1] && d[1] === d[2]; }
+function sum(d: number[]) { return (d?.[0]||0)+(d?.[1]||0)+(d?.[2]||0); }
+function winnersFor(dice?: number[]) {
+  const s = new Set<string>();
+  if (!dice || dice.length !== 3) return s;
+  const [a,b,c] = dice;
+  const total = a+b+c;
+  const triple = isTriple(dice);
+
+  // 大小（三同負）
+  if (!triple) {
+    if (total >= 11) s.add("BIG");
+    else s.add("SMALL");
+    if (total % 2 === 0) s.add("EVEN");
+    else s.add("ODD");
+  }
+
+  // 總點
+  if (total >= 4 && total <= 17) s.add(`TOTAL_${total}`);
+
+  // 任意豹子
+  if (triple) s.add("ANY_TRIPLE");
+
+  // 指定豹子
+  if (triple) s.add(`SPECIFIC_TRIPLE_${a}`);
+
+  // 指定雙
+  if (a===b) s.add(`SPECIFIC_DOUBLE_${a}`);
+  if (a===c) s.add(`SPECIFIC_DOUBLE_${a}`);
+  if (b===c && b!==a) s.add(`SPECIFIC_DOUBLE_${b}`);
+
+  // 組合（兩數）
+  const pairs: [number,number][] = [[a,b],[a,c],[b,c]]
+    .map(([x,y]) => x<=y ? [x,y] as [number,number] : [y,x] as [number,number]);
+  const uniq = new Set(pairs.map(([x,y])=>`${x}${y}`));
+  for (const key of uniq) {
+    const x = Number(key[0]), y = Number(key[1]);
+    if (x!==y) s.add(`COMBINATION_${x}_${y}`);
+  }
+
+  // 單骰（1 中×2 / 2×3 / 3×4）
+  const counts = [0,0,0,0,0,0,0]; // index 1..6
+  counts[a]++; counts[b]++; counts[c]++;
+  for (let eye=1; eye<=6; eye++) {
+    if (counts[eye] > 0) s.add(`SINGLE_${eye}_${counts[eye]}`);
+  }
+
+  return s;
+}
+
+/** ======== Page ======== */
 export default function SicboRoomPage() {
   const params = useParams<{ room: Room }>();
   const router = useRouter();
 
   const [room, setRoom] = useState<Room>("SB_R30");
   const [state, setState] = useState<StateResp | null>(null);
-  const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [userId, setUserId] = useState("demo-user");
+  const [history, setHistory] = useState<HistItem[]>([]);
+  const [userId, setUserId] = useState("demo-user");       // 無驗證：輸入誰就扣誰
   const [balance, setBalance] = useState(0);
   const [chip, setChip] = useState<number>(100);
   const [amount, setAmount] = useState<number>(100);
   const [placing, setPlacing] = useState(false);
 
-  // 本地倒數：以伺服器回傳為基準
+  // 倒數（本地平滑 + 伺服器校正）
   const [lockLeft, setLockLeft] = useState(0);
-  const [endLeft,  setEndLeft]  = useState(0);
-  const baseLockRef = useRef(0);
-  const baseEndRef  = useRef(0);
-  const syncAtRef   = useRef<number>(Date.now());
-  const tickRef     = useRef<number | null>(null);
+  const [endLeft, setEndLeft] = useState(0);
+  const tickRef = useRef<number | null>(null);
 
   useEffect(() => {
     const r = (params?.room?.toString()?.toUpperCase() as Room) || "SB_R30";
@@ -67,53 +115,41 @@ export default function SicboRoomPage() {
 
   async function fetchState() {
     const res = await fetch(`/api/casino/sicbo/state?room=${room}`, { cache: "no-store" });
-    if (!res.ok) return;
-    const j: StateResp = await res.json();
-    setState(j);
-
-    // 設定倒數基準
-    baseLockRef.current = Math.max(0, Math.floor(j?.timers?.lockInSec ?? 0));
-    baseEndRef.current  = Math.max(0, Math.floor(j?.timers?.endInSec  ?? 0));
-    syncAtRef.current   = Date.now();
-    // 立刻刷新一次顯示
-    setLockLeft(baseLockRef.current);
-    setEndLeft(baseEndRef.current);
+    if (res.ok) {
+      const data: StateResp = await res.json();
+      setState(data);
+      // 以伺服器秒數重設本地倒數
+      setLockLeft(data?.timers?.lockInSec ?? 0);
+      setEndLeft(data?.timers?.endInSec ?? 0);
+    }
   }
-
+  async function fetchHistory() {
+    const r = await fetch(`/api/casino/sicbo/history?room=${room}&limit=12`, { cache: "no-store" });
+    if (r.ok) setHistory((await r.json()).items || []);
+  }
   async function fetchBalance() {
     if (!userId) return;
     const res = await fetch(`/api/wallet/balance?userId=${encodeURIComponent(userId)}`, { cache: "no-store" });
     if (res.ok) setBalance((await res.json()).balance ?? 0);
   }
 
-  async function fetchHistory() {
-    const r = await fetch(`/api/casino/sicbo/history?room=${room}&limit=12`, { cache: "no-store" });
-    if (r.ok) {
-      const j: HistoryResp = await r.json();
-      setHistory(j.items ?? []);
-    }
-  }
-
-  // 啟動本地 tick（每秒遞減）
   useEffect(() => {
+    fetchState(); fetchHistory(); fetchBalance();
+    // 本地每秒 -1
     if (tickRef.current) window.clearInterval(tickRef.current);
     tickRef.current = window.setInterval(() => {
-      const elapsed = Math.floor((Date.now() - syncAtRef.current) / 1000);
-      setLockLeft(Math.max(0, baseLockRef.current - elapsed));
-      setEndLeft(Math.max(0, baseEndRef.current - elapsed));
+      setLockLeft(v => Math.max(0, v - 1));
+      setEndLeft(v => Math.max(0, v - 1));
     }, 1000);
-    return () => { if (tickRef.current) window.clearInterval(tickRef.current); };
-  }, []);
 
-  // 首次/變更載入
-  useEffect(() => { fetchState(); fetchBalance(); fetchHistory(); }, [room, userId]);
+    // 每 3 秒校正一次狀態（避免飄）
+    const poll = setInterval(() => { fetchState(); fetchHistory(); }, 3000);
 
-  // 輪詢（修正本地時間飄移）
-  useEffect(() => {
-    const t1 = setInterval(fetchState, 5000);
-    const t2 = setInterval(fetchBalance, 5000);
-    const t3 = setInterval(fetchHistory, 7000);
-    return () => { clearInterval(t1); clearInterval(t2); clearInterval(t3); };
+    return () => {
+      clearInterval(poll);
+      if (tickRef.current) window.clearInterval(tickRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room, userId]);
 
   useEffect(() => setAmount(chip), [chip]);
@@ -161,126 +197,15 @@ export default function SicboRoomPage() {
     setBalance(j.balance);
   }
 
+  // 兩數組合
   const pairs = useMemo<[number, number][]>(() => {
     const o: [number, number][] = [];
     for (let a = 1; a <= 6; a++) for (let b = a + 1; b <= 6; b++) o.push([a, b]);
     return o;
   }, []);
 
-  // ====== 中獎判定（僅在 SETTLED + 有 3 顆骰值時） ======
-  const winners = useMemo(() => {
-    const dice = state?.round?.dice ?? [];
-    const phase = state?.round?.phase;
-    if (phase !== "SETTLED" || dice.length !== 3) {
-      return {
-        small: false, big: false, odd: false, even: false,
-        anyTriple: false, specTriple: new Set<number>(), specDouble: new Set<number>(),
-        total: new Set<number>(), combos: new Set<string>(),
-        singles: new Map<number, number>(),
-      };
-    }
-
-    const [d1, d2, d3] = dice as number[];
-    const s = d1 + d2 + d3;
-
-    // 計數 1..6
-    const cnt = new Map<number, number>();
-    for (let i = 1; i <= 6; i++) cnt.set(i, 0);
-    cnt.set(d1, (cnt.get(d1) || 0) + 1);
-    cnt.set(d2, (cnt.get(d2) || 0) + 1);
-    cnt.set(d3, (cnt.get(d3) || 0) + 1);
-
-    const isTriple = (cnt.get(d1) === 3); // 三同
-    const res = {
-      small: false,
-      big: false,
-      odd: false,
-      even: false,
-      anyTriple: false,
-      specTriple: new Set<number>(),
-      specDouble: new Set<number>(),
-      total: new Set<number>(),
-      combos: new Set<string>(),
-      singles: cnt,
-    };
-
-    // total
-    res.total.add(s);
-
-    // big/small、odd/even（遇三同視為輸）
-    if (!isTriple) {
-      if (s >= 4 && s <= 10) res.small = true;
-      if (s >= 11 && s <= 17) res.big = true;
-      if (s % 2 === 1) res.odd = true;
-      if (s % 2 === 0) res.even = true;
-    }
-
-    // triples / doubles
-    if (isTriple) {
-      res.anyTriple = true;
-      res.specTriple.add(d1);
-    }
-    for (let eye = 1; eye <= 6; eye++) {
-      if ((cnt.get(eye) || 0) >= 2) res.specDouble.add(eye);
-    }
-
-    // combinations（兩個不同點數）
-    const distinct = Array.from(new Set([d1, d2, d3])).sort((a,b)=>a-b);
-    for (let i = 0; i < distinct.length; i++) {
-      for (let j = i + 1; j < distinct.length; j++) {
-        const a = distinct[i], b = distinct[j];
-        res.combos.add(`${a}-${b}`);
-      }
-    }
-
-    return res;
-  }, [state?.round?.phase, state?.round?.dice]);
-
-  // 便捷
-  const singleHit = (n: number) => (winners.singles.get(n) || 0) > 0;
-  const comboHit  = (a: number, b: number) => winners.combos.has(`${Math.min(a,b)}-${Math.max(a,b)}`);
-
-  // Dice 元件（含 9 個 pip，才能顯示點數 & 動畫）
-  function Dice({ n, rolling, size = "md" }: { n?: number; rolling?: boolean; size?: "sm"|"md"|"lg" }) {
-    const faceCls = n ? `face-${n}` : ""; const sizeCls = size === "sm" ? "dice-sm" : size === "lg" ? "dice-lg" : "";
-    return (
-      <span className={cx("dice", faceCls, rolling ? "rolling" : "", sizeCls)}>
-        <span className="pip p1" /><span className="pip p2" /><span className="pip p3" />
-        <span className="pip p4" /><span className="pip p5" /><span className="pip p6" />
-        <span className="pip p7" /><span className="pip p8" /><span className="pip p9" />
-      </span>
-    );
-  }
-
-  // 路子圖
-  function Roadmap({ history }: { history: { id: string; dice: number[]; endedAt: string }[] }) {
-    return (
-      <div className="roadmap glass" aria-label="sicbo-roadmap">
-        {(history ?? []).map((h) => {
-          const d = h.dice || [];
-          const s = (d[0] || 0) + (d[1] || 0) + (d[2] || 0);
-          const tag = (d[0] === d[1] && d[1] === d[2]) ? "豹子" : (s >= 11 ? "大" : "小");
-          return (
-            <div key={h.id} className="roadmap-cell">
-              <div className="dice-mini">
-                <Dice n={d[0]} size="sm" />
-                <Dice n={d[1]} size="sm" />
-                <Dice n={d[2]} size="sm" />
-              </div>
-              <div className="meta">
-                <span className="sum">{s || "-"}</span>
-                <span className="tag">{tag}</span>
-              </div>
-            </div>
-          );
-        })}
-        {(history?.length ?? 0) === 0 && <div className="roadmap-empty">暫無歷史</div>}
-      </div>
-    );
-  }
-
-  const isRevealing = state?.round?.phase === "REVEALING";
-  const noFinalDice = !(state?.round?.dice?.length === 3);
+  // 中獎集合（用於金光標示）
+  const win = winnersFor(state?.round?.dice || []);
 
   return (
     <>
@@ -303,12 +228,17 @@ export default function SicboRoomPage() {
             </div>
             <div className="amount">
               <span className="label">下注金額</span>
-              <input type="number" min={1} value={amount} onChange={(e)=>setAmount(Math.max(1, Number(e.target.value||0)))} />
+              <input type="number" min={1} value={amount}
+                     onChange={(e)=>setAmount(Math.max(1, Number(e.target.value||0)))} />
             </div>
-            <input className="user-input" value={userId} onChange={(e)=>setUserId(e.target.value)} placeholder="userId" />
+            <input className="user-input" value={userId}
+                   onChange={(e)=>setUserId(e.target.value)} placeholder="userId" />
             <button className="btn btn--amber" onClick={refundThisRound} disabled={state?.locked}>返金本局</button>
           </div>
         </div>
+
+        {/* 路子圖 */}
+        <Roadmap history={history} />
 
         {/* 綠色賭桌（整塊容納下注區） */}
         <div className="table-outer glass">
@@ -327,22 +257,18 @@ export default function SicboRoomPage() {
               <div className="k">結束</div><div className="v">{fmt(endLeft)}</div>
             </div>
             <div className="head-dice">
-              <Dice n={state?.round?.dice?.[0]} rolling={isRevealing && noFinalDice} size="lg" />
-              <Dice n={state?.round?.dice?.[1]} rolling={isRevealing && noFinalDice} size="lg" />
-              <Dice n={state?.round?.dice?.[2]} rolling={isRevealing && noFinalDice} size="lg" />
+              <Dice n={state?.round?.dice?.[0]} rolling={state?.round?.phase==="REVEALING"} size="lg" />
+              <Dice n={state?.round?.dice?.[1]} rolling={state?.round?.phase==="REVEALING"} size="lg" />
+              <Dice n={state?.round?.dice?.[2]} rolling={state?.round?.phase==="REVEALING"} size="lg" />
             </div>
           </div>
-
-          {/* 路子圖（最近 12 局） */}
-          <Roadmap history={history} />
 
           {/* 大型賭桌（左小/中總和/右大） */}
           <div className="table-grid">
             {/* SMALL 左柱 */}
             <button
-              className={cx("tile big-left",
-                (state?.locked || placing || amount<=0) && "disabled",
-                winners.small && "winner")}
+              className={cx("tile big-left", win.has("SMALL") && "winner",
+                (state?.locked || placing || amount<=0) && "disabled")}
               disabled={!!state?.locked || placing || amount<=0}
               onClick={()=>place("SMALL")}
             >
@@ -356,8 +282,8 @@ export default function SicboRoomPage() {
               {Array.from({ length: 14 }, (_, i) => i + 4).map(total => (
                 <button key={total}
                   className={cx("sicbo-cell total",
-                    (state?.locked || placing || amount<=0) && "disabled",
-                    winners.total.has(total) && "winner")}
+                    win.has(`TOTAL_${total}`) && "winner",
+                    (state?.locked || placing || amount<=0) && "disabled")}
                   disabled={!!state?.locked || placing || amount<=0}
                   onClick={()=>place("TOTAL", { total })}
                 >
@@ -369,9 +295,8 @@ export default function SicboRoomPage() {
 
             {/* BIG 右柱 */}
             <button
-              className={cx("tile big-right",
-                (state?.locked || placing || amount<=0) && "disabled",
-                winners.big && "winner")}
+              className={cx("tile big-right", win.has("BIG") && "winner",
+                (state?.locked || placing || amount<=0) && "disabled")}
               disabled={!!state?.locked || placing || amount<=0}
               onClick={()=>place("BIG")}
             >
@@ -384,18 +309,16 @@ export default function SicboRoomPage() {
           {/* 單／雙 列 */}
           <div className="row-two">
             <button
-              className={cx("sicbo-cell",
-                (state?.locked || placing || amount<=0) && "disabled",
-                winners.odd && "winner")}
+              className={cx("sicbo-cell", win.has("ODD") && "winner",
+                (state?.locked || placing || amount<=0) && "disabled")}
               disabled={!!state?.locked || placing || amount<=0}
               onClick={()=>place("ODD")}
             >
               <div className="h1">單</div><div className="sub">1賠1（三同輸）</div>
             </button>
             <button
-              className={cx("sicbo-cell",
-                (state?.locked || placing || amount<=0) && "disabled",
-                winners.even && "winner")}
+              className={cx("sicbo-cell", win.has("EVEN") && "winner",
+                (state?.locked || placing || amount<=0) && "disabled")}
               disabled={!!state?.locked || placing || amount<=0}
               onClick={()=>place("EVEN")}
             >
@@ -409,8 +332,8 @@ export default function SicboRoomPage() {
               {Array.from({ length: 6 }, (_, i) => i + 1).map(n => (
                 <button key={`d${n}`}
                         className={cx("sicbo-cell",
-                          (state?.locked || placing || amount<=0) && "disabled",
-                          winners.specDouble.has(n) && "winner")}
+                          win.has(`SPECIFIC_DOUBLE_${n}`) && "winner",
+                          (state?.locked || placing || amount<=0) && "disabled")}
                         disabled={!!state?.locked || placing || amount<=0}
                         onClick={()=>place("SPECIFIC_DOUBLE",{ eye:n })}>
                   <div className="h2">雙 {n}{n}</div><div className="sub">1賠8</div>
@@ -419,9 +342,8 @@ export default function SicboRoomPage() {
             </div>
 
             <button
-              className={cx("sicbo-cell any-triple",
-                (state?.locked || placing || amount<=0) && "disabled",
-                winners.anyTriple && "winner")}
+              className={cx("sicbo-cell any-triple", win.has("ANY_TRIPLE") && "winner",
+                (state?.locked || placing || amount<=0) && "disabled")}
               disabled={!!state?.locked || placing || amount<=0}
               onClick={()=>place("ANY_TRIPLE")}
             >
@@ -432,8 +354,8 @@ export default function SicboRoomPage() {
               {Array.from({ length: 6 }, (_, i) => i + 1).map(n => (
                 <button key={`t${n}`}
                         className={cx("sicbo-cell",
-                          (state?.locked || placing || amount<=0) && "disabled",
-                          winners.specTriple.has(n) && "winner")}
+                          win.has(`SPECIFIC_TRIPLE_${n}`) && "winner",
+                          (state?.locked || placing || amount<=0) && "disabled")}
                         disabled={!!state?.locked || placing || amount<=0}
                         onClick={()=>place("SPECIFIC_TRIPLE",{ eye:n })}>
                   <div className="h2">豹子 {n}{n}{n}</div><div className="sub">1賠150</div>
@@ -447,8 +369,8 @@ export default function SicboRoomPage() {
             {pairs.map(([a,b]) => (
               <button key={`p${a}${b}`}
                       className={cx("sicbo-cell",
-                        (state?.locked || placing || amount<=0) && "disabled",
-                        comboHit(a,b) && "winner")}
+                        win.has(`COMBINATION_${a}_${b}`) && "winner",
+                        (state?.locked || placing || amount<=0) && "disabled")}
                       disabled={!!state?.locked || placing || amount<=0}
                       onClick={()=>place("COMBINATION",{ a,b })}>
                 <div className="h2">{a} + {b}</div><div className="sub">1賠5</div>
@@ -461,8 +383,8 @@ export default function SicboRoomPage() {
             {Array.from({ length: 6 }, (_, i) => i + 1).map(n => (
               <button key={`s${n}`}
                       className={cx("sicbo-cell",
-                        (state?.locked || placing || amount<=0) && "disabled",
-                        singleHit(n) && "winner")}
+                        (win.has(`SINGLE_${n}_1`) || win.has(`SINGLE_${n}_2`) || win.has(`SINGLE_${n}_3`)) && "winner",
+                        (state?.locked || placing || amount<=0) && "disabled")}
                       disabled={!!state?.locked || placing || amount<=0}
                       onClick={()=>place("SINGLE_DIE",{ eye:n })}>
                 <div className="h2">{n}</div><div className="sub">中1×2 / 2×3 / 3×4</div>
@@ -489,5 +411,44 @@ export default function SicboRoomPage() {
         </div>
       </div>
     </>
+  );
+}
+
+/** ===== Dice（含動畫） ===== */
+function Dice({ n, rolling, size = "md" }: { n?: number; rolling?: boolean; size?: "sm"|"md"|"lg" }) {
+  const faceCls = n ? `face-${n}` : ""; const sizeCls = size === "sm" ? "dice-sm" : size === "lg" ? "dice-lg" : "";
+  return (
+    <span className={cx("dice", faceCls, rolling ? "rolling" : "", sizeCls)}>
+      <span className="pip p1" /><span className="pip p2" /><span className="pip p3" />
+      <span className="pip p4" /><span className="pip p5" /><span className="pip p6" />
+      <span className="pip p7" /><span className="pip p8" /><span className="pip p9" />
+    </span>
+  );
+}
+
+/** ===== 路子圖（近 12 局） ===== */
+function Roadmap({ history }: { history: { id: string; dice: number[]; endedAt: string }[] }) {
+  return (
+    <div className="roadmap glass" aria-label="sicbo-roadmap">
+      {(history ?? []).map((h) => {
+        const d = h.dice || [];
+        const s = (d[0] || 0) + (d[1] || 0) + (d[2] || 0);
+        const tag = (d[0] === d[1] && d[1] === d[2]) ? "豹子" : (s >= 11 ? "大" : "小");
+        return (
+          <div key={h.id} className="roadmap-cell">
+            <div className="dice-mini">
+              <Dice size="sm" n={d[0] || 1} />
+              <Dice size="sm" n={d[1] || 1} />
+              <Dice size="sm" n={d[2] || 1} />
+            </div>
+            <div className="meta">
+              <span className="sum">{s || "-"}</span>
+              <span className="tag">{tag}</span>
+            </div>
+          </div>
+        );
+      })}
+      {(history?.length ?? 0) === 0 && <div className="roadmap-empty">暫無歷史</div>}
+    </div>
   );
 }

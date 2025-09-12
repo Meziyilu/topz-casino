@@ -31,14 +31,6 @@
 }
 .user-input{ width: 160px }
 
-/* ===== 強化頂部/資訊列可讀性 ===== */
-.topbar, .topbar * { color:#eaf6ff !important; text-shadow:0 1px 1px rgba(0,0,0,.35) }
-.topbar .btn { color:#f7fbff !important; border-color:rgba(255,255,255,.28)!important; background:rgba(255,255,255,.12)!important }
-.topbar .btn:hover { background:rgba(255,255,255,.18)!important }
-.room-pill { color:#eafff6!important; background:rgba(16,185,129,.38)!important; border-color:rgba(16,185,129,.55)!important; text-shadow:0 1px 1px rgba(0,0,0,.4) }
-.amount input,.user-input { color:#eaf6ff!important; background:rgba(0,0,0,.45)!important; border-color:rgba(255,255,255,.35)!important; font-weight:700 }
-.amount input::placeholder,.user-input::placeholder { color:rgba(234,246,255,.7)!important }
-
 /* ===== green table outer (everything is inside) ===== */
 .table-outer{
   background: radial-gradient(120% 120% at 50% 0%, #0b3b2f 0%, #042826 60%, #031e1b 100%);
@@ -51,9 +43,9 @@
 .table-head{ display:grid; gap:10px; grid-template-columns: repeat(4, minmax(0,1fr)) auto; margin-bottom:12px }
 .head-item{ background: rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:12px; padding:10px 12px }
 .head-item .k{ font-size:12px; opacity:.8 } .head-item .v{ font-size:16px; font-weight:800 }
-.table-head .head-item .k { color:#cfe9ff!important; opacity:1!important; font-weight:700 }
-.table-head .head-item .v { color:#ffffff!important; text-shadow:0 1px 1px rgba(0,0,0,.35) }
-.head-dice{ display:flex; gap:6px; align-items:center; justify-content:flex-end }
+
+/* 調整右上角骰子：加大間距、置中 */
+.head-dice{ display:flex; gap:12px; align-items:center; justify-content:center }
 
 /* main board: 2-8-2 layout like machine */
 .table-grid{ display:grid; grid-template-columns: 2fr 8fr 2fr; gap:10px }
@@ -64,12 +56,10 @@
   min-height: 130px; padding:10px; border-radius:14px; text-align:center;
   background: linear-gradient(180deg, rgba(16,185,129,.16), rgba(16,185,129,.08));
   border: 1px solid rgba(16,185,129,.35);
-  transition: transform .08s ease, background-color .12s ease, border-color .12s ease, filter .12s ease, opacity .2s ease;
 }
-.tile:hover{ filter: brightness(1.06) }
 .tile .badge{ font-size:12px; letter-spacing:.05em; opacity:.8 }
-.tile .cn{ font-size:44px; font-weight:900; line-height: 1; color:#fff; text-shadow:0 2px 4px rgba(0,0,0,.45) }
-.tile .note{ font-size:11px; opacity:.85; white-space:pre-line; color:#e0f2ff }
+.tile .cn{ font-size:44px; font-weight:900; line-height: 1; }
+.tile .note{ font-size:11px; opacity:.85; white-space:pre-line }
 .big-left{ background: linear-gradient(180deg, rgba(59,130,246,.12), rgba(59,130,246,.06)); border-color: rgba(59,130,246,.35) }
 .big-right{ background: linear-gradient(180deg, rgba(245,158,11,.18), rgba(245,158,11,.08)); border-color: rgba(245,158,11,.4) }
 .tile.disabled{ opacity:.65; cursor:not-allowed }
@@ -79,19 +69,19 @@
 .sicbo-cell{
   min-height:72px; border-radius:12px; border:1px solid rgba(255,255,255,.14);
   background: rgba(255,255,255,.06); color:#fff; display:flex; align-items:center; justify-content:center;
-  padding:.5rem .6rem; transition: transform .08s ease, background-color .12s ease, border-color .12s ease, opacity .2s ease, filter .12s ease, box-shadow .12s ease;
+  padding:.5rem .6rem; transition: transform .08s ease, background-color .12s ease, border-color .12s ease, opacity .2s ease;
 }
 .sicbo-cell:hover{ background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.3) }
 .sicbo-cell:active{ transform: translateY(1px) }
 .sicbo-cell.disabled{ opacity:.6; cursor:not-allowed; filter: grayscale(.1) }
 .sicbo-cell.total{ display:flex; flex-direction:column; gap:4px }
-.total-num{ font-size:18px; font-weight:800; color:#f7fbff; text-shadow:0 1px 1px rgba(0,0,0,.35) }
-.total-odd{ font-size:11px; opacity:.85; color:#d6e9ff }
+.total-num{ font-size:18px; font-weight:800 }
+.total-odd{ font-size:11px; opacity:.85 }
 
 /* odd/even section (two wide) */
 .row-two{ display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px; margin-top:10px }
-.row-two .h1{ font-size:22px; font-weight:900; margin-right:6px; color:#eaf6ff!important; text-shadow:0 1px 1px rgba(0,0,0,.3) }
-.row-two .sub{ font-size:11px; opacity:.85; color:#eaf6ff!important; text-shadow:0 1px 1px rgba(0,0,0,.3) }
+.row-two .h1{ font-size:22px; font-weight:900; margin-right:6px }
+.row-two .sub{ font-size:11px; opacity:.85 }
 
 /* doubles + any triple + triples */
 .row-multi{ display:grid; grid-template-columns: 5fr 2fr 5fr; gap:10px; margin-top:10px }
@@ -104,8 +94,8 @@
 /* combinations (15) */
 .combos{ display:grid; grid-template-columns: repeat(10, minmax(0,1fr)); gap:8px; margin-top:10px }
 .combos .sicbo-cell{ min-height:60px }
-.h2{ font-size:14px; font-weight:700; color:#eaf6ff!important; text-shadow:0 1px 1px rgba(0,0,0,.3) }
-.sub{ font-size:11px; opacity:.85; color:#eaf6ff!important; text-shadow:0 1px 1px rgba(0,0,0,.3) }
+.h2{ font-size:14px; font-weight:700 }
+.sub{ font-size:11px; opacity:.85 }
 
 /* single dice row */
 .singles{ display:grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap:8px; margin-top:10px }
@@ -126,9 +116,9 @@
 .chip-10{ background:#22c55e } .chip-100{ background:#3b82f6 }
 .chip-1000{ background:#a855f7 } .chip-5000{ background:#111827 }
 .chip.selected{ outline:3px solid rgba(255,255,255,.7); box-shadow:0 4px 0 rgba(0,0,0,.25), 0 0 0 6px rgba(255,255,255,.12) }
-.locked-hint{ color:#ffd7d7 !important; font-weight:700; font-size:12px }
+.locked-hint{ color:#fecaca; font-size:12px }
 
-/* ===== dice（含滾動動畫） ===== */
+/* dice */
 .dice{ --size:36px; width:var(--size); height:var(--size);
   background:linear-gradient(160deg, #fafafa, #e5e7eb); border-radius:10px; box-shadow:0 4px 0 rgba(0,0,0,.25), inset 0 0 12px rgba(0,0,0,.12);
   position:relative; display:inline-block;
@@ -137,42 +127,59 @@
 .dice .p1{ top:6px; left:6px } .dice .p2{ top:6px; left:calc(50% - 4px) } .dice .p3{ top:6px; right:6px }
 .dice .p4{ top:calc(50% - 4px); left:6px } .dice .p5{ top:calc(50% - 4px); left:calc(50% - 4px) } .dice .p6{ top:calc(50% - 4px); right:6px }
 .dice .p7{ bottom:6px; left:6px } .dice .p8{ bottom:6px; left:calc(50% - 4px) } .dice .p9{ bottom:6px; right:6px }
-.dice.face-1 .p5{opacity:1}
-.dice.face-2 .p1,.dice.face-2 .p9{opacity:1}
+.dice.face-1 .p5{opacity:1} .dice.face-2 .p1,.dice.face-2 .p9{opacity:1}
 .dice.face-3 .p1,.dice.face-3 .p5,.dice.face-3 .p9{opacity:1}
 .dice.face-4 .p1,.dice.face-4 .p3,.dice.face-4 .p7,.dice.face-4 .p9{opacity:1}
 .dice.face-5 .p1,.dice.face-5 .p3,.dice.face-5 .p5,.dice.face-5 .p7,.dice.face-5 .p9{opacity:1}
 .dice.face-6 .p1,.dice.face-6 .p3,.dice.face-6 .p4,.dice.face-6 .p6,.dice.face-6 .p7,.dice.face-6 .p9{opacity:1}
-
 @keyframes dice-roll{
-  0%{ transform:translateY(0) rotate(0) }
-  20%{ transform:translate(-2px,-4px) rotate(18deg) }
-  40%{ transform:translate(4px,-6px) rotate(42deg) }
-  60%{ transform:translate(-3px,-3px) rotate(66deg) }
-  80%{ transform:translate(3px,-2px) rotate(84deg) }
-  100%{ transform:translateY(0) rotate(90deg) }
+  0%{transform:translateY(0) rotate(0)}
+  20%{transform:translate(-2px,-4px) rotate(18deg)}
+  40%{transform:translate(4px,-6px) rotate(42deg)}
+  60%{transform:translate(-3px,-3px) rotate(66deg)}
+  80%{transform:translate(3px,-2px) rotate(84deg)}
+  100%{transform:translateY(0) rotate(90deg)}
 }
 .dice.rolling{ animation:dice-roll .6s linear infinite; box-shadow:0 6px 0 rgba(0,0,0,.35), inset 0 0 14px rgba(0,0,0,.16) }
 .dice.dice-sm{ --size:28px } .dice.dice-lg{ --size:44px }
 
-/* ====== 中獎格金光閃爍 ====== */
+/* =========================
+   Topbar/Head 強化可讀性修正
+   ========================= */
+.topbar, .topbar * { color: #eaf6ff !important; text-shadow: 0 1px 1px rgba(0, 0, 0, .35); }
+.topbar .btn { color: #f7fbff !important; border-color: rgba(255, 255, 255, 0.28) !important; background: rgba(255, 255, 255, 0.12) !important; }
+.topbar .btn:hover { background: rgba(255, 255, 255, 0.18) !important; }
+.room-pill { color: #eafff6 !important; background: rgba(16, 185, 129, .38) !important; border-color: rgba(16, 185, 129, .55) !important; text-shadow: 0 1px 1px rgba(0, 0, 0, .4); }
+.amount input, .user-input { color: #eaf6ff !important; background: rgba(0, 0, 0, .45) !important; border-color: rgba(255, 255, 255, .35) !important; font-weight: 700; }
+.amount input::placeholder, .user-input::placeholder { color: rgba(234, 246, 255, .7) !important; }
+.table-head .head-item .k { color: #cfe9ff !important; opacity: 1 !important; font-weight: 700; }
+.table-head .head-item .v { color: #ffffff !important; text-shadow: 0 1px 1px rgba(0, 0, 0, .35); }
+.sicbo-cell.total .total-num { color: #f7fbff !important; text-shadow: 0 1px 1px rgba(0, 0, 0, .35); }
+.sicbo-cell.total .total-odd { color: #d6e9ff !important; }
+.tile .badge { color: #d6f5ff !important; }
+.tile .cn { color: #ffffff !important; text-shadow: 0 2px 4px rgba(0, 0, 0, .45); }
+.tile .note { color: #e0f2ff !important; }
+.locked-hint { color: #ffd7d7 !important; font-weight: 700; }
+
+/* =========================
+   中獎格閃光動畫
+   ========================= */
 @keyframes winner-flash {
-  0%, 100% { box-shadow: 0 0 0 rgba(255,215,0,0); transform:translateY(0) scale(1); }
-  40% { box-shadow: 0 0 16px 6px rgba(255,215,0,.85), 0 0 30px rgba(255,245,157,.6); transform:translateY(-1px) scale(1.02); }
-  60% { box-shadow: 0 0 22px 10px rgba(255,215,0,.95), 0 0 40px rgba(255,245,157,.8); }
+  0%, 100% { box-shadow: 0 0 0 rgba(255, 215, 0, 0); }
+  50% {
+    box-shadow: 0 0 18px 8px rgba(255, 215, 0, .95), 0 0 25px rgba(255, 245, 157, .8);
+    border-color: rgba(255, 215, 0, .9);
+  }
 }
-.winner, .sicbo-cell.winner, .tile.winner {
-  animation: winner-flash .5s ease-in-out 4;
+.tile.winner, .sicbo-cell.winner {
+  animation: winner-flash 0.5s ease-in-out 4; /* 閃 4 下（3~5 都可） */
   position: relative;
   z-index: 2;
-  border-color: rgba(255,215,0,.9) !important;
 }
-.winner-3 { animation-iteration-count: 3 !important; }
-.winner-5 { animation-iteration-count: 5 !important; }
-.sicbo-cell.winner::after, .tile.winner::after {
+.tile.winner::after, .sicbo-cell.winner::after {
   content: ""; position: absolute; inset: 0; border-radius: inherit;
   background: radial-gradient(circle, rgba(255,255,200,.35) 0%, transparent 70%);
-  opacity: .7; pointer-events: none;
+  opacity: 0.7; pointer-events: none;
 }
 
 /* ====== SicBo Roadmap（最近 12 局） ====== */
@@ -181,6 +188,7 @@
   grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
   gap: 8px;
   margin-top: 16px;
+  margin-bottom: 20px; /* 與下注面板拉開距離 */
   padding: 10px;
   border-radius: 12px;
   background: rgba(255,255,255,.06);
@@ -195,7 +203,7 @@
   color: #fff;
   font-size: 12px;
 }
-.roadmap .dice-mini { display:flex; justify-content:center; gap:4px; margin-bottom:4px; }
-.roadmap .meta .sum { font-weight:800; margin-right:6px; }
-.roadmap .meta .tag { opacity:.85; }
-.roadmap-empty { padding: 10px; opacity:.8; }
+.roadmap .dice-mini { display: flex; justify-content: center; gap: 6px; margin-bottom: 4px; }
+.roadmap .meta .sum { font-weight: 800; margin-right: 6px; }
+.roadmap .meta .tag { opacity: .85; }
+.roadmap-empty { padding: 10px; opacity: .8; }
