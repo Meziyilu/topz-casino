@@ -227,3 +227,22 @@ html,body{ background: radial-gradient(1200px 700px at 60% -10%, #0b0f1d 20%, #0
   .roller-track{ animation: none; }
   .ball.rolling{ animation: none; }
 }
+
+/* --- reveal 動畫（展示已開出的珠子） --- */
+.balls-reveal { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.ball.reveal {
+  animation: popIn .28s ease-out forwards, glowPulse 2.2s ease-in-out infinite;
+  opacity: 0; transform: translateY(6px) scale(.9);
+}
+@keyframes popIn {
+  to { opacity:1; transform: translateY(0) scale(1); }
+}
+@keyframes glowPulse {
+  0%,100% { box-shadow: var(--ball-inner), var(--ball-shadow); }
+  50%     { box-shadow: var(--ball-inner), 0 10px 26px rgba(255,255,255,0.25); }
+}
+
+/* --- 路子 tiny 點顏色（特碼奇偶） --- */
+.tiny { position:absolute; right:2px; bottom:2px; width:8px; height:8px; border-radius:50%; box-shadow: 0 0 8px rgba(255,255,255,0.5); }
+.tiny-odd { background:#ef4444; }  /* 紅 = 特碼奇數 */
+.tiny-even{ background:#22d3ee; }  /* 青 = 特碼偶數 */

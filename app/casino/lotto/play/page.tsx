@@ -3,10 +3,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useMe } from "@/components/useMe";
-import "@/public/styles/lotto.css";
+import "/public/styles/lotto.css";
 
+type DrawLite = {
+  id:string; code:number; drawAt:string; status:"OPEN"|"LOCKED"|"DRAWN"|"SETTLED";
+  numbers:number[]; special:number|null; pool:number; jackpot:number;
+};
 type StateResp = {
-  current: { id:string; code:number; drawAt:string; status:"OPEN"|"LOCKED"; numbers:number[]; special:number|null; pool:number; jackpot:number } | null;
+  current: DrawLite | null;
+  last: { id:string; code:number; numbers:number[]; special:number|null } | null;
   config: { drawIntervalSec:number; lockBeforeDrawSec:number; picksCount:number; pickMax:number; betTiers:number[] };
 };
 
@@ -30,8 +35,7 @@ export default function LottoPlay() {
 
   async function pullState() {
     const r = await fetch("/api/casino/lotto/state", { cache: "no-store" });
-    const j = await r.json();
-    setS({ current: j.current, config: j.config });
+    setS(await r.json());
   }
 
   useEffect(() => {
@@ -50,8 +54,7 @@ export default function LottoPlay() {
     const pool = [...options];
     for (let i = 0; i < picksCount; i++) {
       const idx = Math.floor(Math.random() * pool.length);
-      nums.push(pool[idx]);
-      pool.splice(idx, 1);
+      nums.push(pool[idx]); pool.splice(idx, 1);
     }
     nums.sort((a,b)=>a-b);
     setPicked(nums);
@@ -73,8 +76,8 @@ export default function LottoPlay() {
       if (!r.ok) throw new Error(j.error || "下注失敗");
       setToast("下注成功！");
       setPicked([]);
-      await reloadMe();     // 更新餘額
-      await pullState();    // 更新當期池子
+      await reloadMe();
+      await pullState();
     } catch (e: any) {
       setToast(e.message);
     } finally {
@@ -82,15 +85,18 @@ export default function LottoPlay() {
     }
   }
 
-  const left = s?.current ? secsLeft(s.current.drawAt) : 0;
+  const left = s?.current ? secsLeft(String(s.current.drawAt)) : 0;
+
+  // 顯示最近的已開結果
+  const showDraw = s?.current?.status === "DRAWN"
+    ? { code: s.current.code, nums: s.current.numbers ?? [], special: s.current.special ?? null }
+    : (s?.last ? { code: s.last.code, nums: s.last.numbers ?? [], special: s.last.special ?? null } : null);
 
   return (
     <main className="lotto-play glass glow">
       <header className="lotto-head">
         <h1>樂透投注</h1>
-        <div className="hint">
-          本期 #{s?.current?.code ?? "-"} · 倒數 <strong>{left}</strong>s · 狀態 {s?.current?.status ?? "-"}
-        </div>
+        <div className="hint">本期 #{s?.current?.code ?? "-"} · 倒數 <strong>{left}</strong>s · 狀態 {s?.current?.status ?? "-"}</div>
       </header>
 
       <section className="panel">
@@ -98,12 +104,10 @@ export default function LottoPlay() {
           <label>會員</label>
           <div style={{display:"flex", gap:8, alignItems:"center"}}>
             {meLoading ? <span className="muted">載入中…</span> :
-             me ? (
-              <>
+             me ? (<>
                 <span><strong>{me.displayName || me.name || me.id}</strong></span>
                 <span className="muted">餘額</span><span><strong>{me.balance ?? 0}</strong></span>
-              </>
-             ) : <span className="muted">未登入</span>}
+              </>) : <span className="muted">未登入</span>}
           </div>
         </div>
 
@@ -138,19 +142,12 @@ export default function LottoPlay() {
         {toast && <div className="toast">{toast}</div>}
       </section>
 
-      {/* 滾珠展示 */}
+      {/* 只顯示已開出的號碼（帶 reveal 動畫） */}
       <section className="panel">
-        <h3>滾珠動畫</h3>
-        <div className="balls-roller">
-          <div className="roller-track">
-            {Array.from({ length: 12 }).map((_, i) => (
-              <div key={`a-${i}`} className="ball rolling">{((i*13)%pickMax)+1}</div>
-            ))}
-            {/* 複製一份內容以無縫滾動 */}
-            {Array.from({ length: 12 }).map((_, i) => (
-              <div key={`b-${i}`} className="ball rolling">{((i*13)%pickMax)+1}</div>
-            ))}
-          </div>
+        <h3>最近開獎（#{showDraw?.code ?? "-"})</h3>
+        <div className="balls balls-reveal">
+          {showDraw?.nums.map(n => <div key={`p-${n}`} className="ball reveal">{n}</div>)}
+          {showDraw && showDraw.special != null && <div className="ball special reveal">{showDraw.special}</div>}
         </div>
       </section>
     </main>
