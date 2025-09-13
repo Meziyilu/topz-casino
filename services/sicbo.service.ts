@@ -36,7 +36,7 @@ function hasPair(d: number[], a: number, b: number) {
 }
 
 // 驗證 payload（僅允許需要的欄位）
-function validatePayload(kind: SicBoBetKind, payload: any) {
+function _validatePayload(kind: SicBoBetKind, payload: any) {
   switch (kind) {
     case "TOTAL": {
       const total = Number(payload?.total);
@@ -68,9 +68,10 @@ function validatePayload(kind: SicBoBetKind, payload: any) {
       return {};
   }
 }
+export const validatePayload = _validatePayload; // ← 給 bet route 用
 
 // 總點數賠率表（經典 SicBo）
-const TOTAL_ODDS: Record<number, number> = {
+export const TOTAL_ODDS: Record<number, number> = {
   4: 50, 17: 50,
   5: 18, 16: 18,
   6: 14, 15: 14,
@@ -242,7 +243,7 @@ export async function revealAndSettle(roundId: string) {
     const bets = await tx.sicBoBet.findMany({ where: { roundId: round.id } });
 
     for (const b of bets) {
-      const payload = validatePayload(b.kind as SicBoBetKind, b.payload);
+      const payload = _validatePayload(b.kind as SicBoBetKind, b.payload);
       const payout = calcPayout(b.kind as SicBoBetKind, b.amount, payload, dice);
 
       if (payout > 0) {
@@ -281,10 +282,6 @@ export async function getHistory(room: SicBoRoomCode, limit = 30) {
     where: { room, phase: SicBoPhase.SETTLED },
     orderBy: { endedAt: "desc" },
     take: limit,
-     select: {
-      id: true,
-      dice: true,
-      endedAt: true,
-    },
+    select: { id: true, dice: true, endedAt: true },
   });
 }
