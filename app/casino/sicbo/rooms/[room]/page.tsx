@@ -31,7 +31,9 @@ const TOTAL_PAYOUT: Record<number, number> = {
 
 const CHIP_PRESETS = [10, 100, 1000, 5000] as const;
 
-function cx(...xs: (string | false | null | undefined)[]) { return xs.filter(Boolean).join(" "); }
+function cx(...xs: (string | false | null | undefined)[]) {
+  return xs.filter(Boolean).join(" ");
+}
 function fmt(sec?: number) {
   const s = Math.max(0, Math.floor(sec ?? 0));
   const m = Math.floor(s / 60); const r = s % 60;
@@ -51,12 +53,13 @@ export default function SicboRoomPage() {
   const [placing, setPlacing] = useState(false);
   const [history, setHistory] = useState<{ id: string; dice: number[]; endedAt: string }[]>([]);
 
+  // 房間參數
   useEffect(() => {
     const r = (params?.room?.toString()?.toUpperCase() as Room) || "SB_R30";
     setRoom(["SB_R30","SB_R60","SB_R90"].includes(r) ? r : "SB_R30");
   }, [params?.room]);
 
-  // 抓目前登入使用者
+  // 使用者帳號 (從 cookie)
   useEffect(() => {
     (async () => {
       const me = await getUserFromCookie();
@@ -64,6 +67,7 @@ export default function SicboRoomPage() {
     })();
   }, []);
 
+  // 抓狀態 / 餘額 / 路子
   async function fetchState() {
     const res = await fetch(`/api/casino/sicbo/state?room=${room}`, { cache: "no-store" });
     if (res.ok) setState(await res.json());
@@ -90,6 +94,7 @@ export default function SicboRoomPage() {
   }, [room, userId]);
   useEffect(() => setAmount(chip), [chip]);
 
+  // 下單
   async function place(kind: Kind, payload?: any) {
     if (!state || state.locked || placing || amount <= 0) return;
     setPlacing(true);
@@ -97,7 +102,7 @@ export default function SicboRoomPage() {
       const res = await fetch(`/api/casino/sicbo/bet`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ room, kind, amount, payload }), // 直接帶入 cookie userId
+        body: JSON.stringify({ room, kind, amount, payload }), // userId 後端自動帶入
       });
       const js = await res.json();
       if (!res.ok) throw new Error(js?.error || "下注失敗");
@@ -124,7 +129,7 @@ export default function SicboRoomPage() {
       <Head><link rel="stylesheet" href="/styles/sicbo.css" /></Head>
 
       <div className="sicbo-wrapper">
-        {/* 頂部工具列 */}
+        {/* ====== 頂部工具列 ====== */}
         <div className="topbar glass">
           <div className="left">
             <button className="btn btn--ghost" onClick={() => router.push("/casino/sicbo")}>← 返回大廳</button>
@@ -142,16 +147,14 @@ export default function SicboRoomPage() {
           </div>
         </div>
 
-        {/* 綠色賭桌 */}
+        {/* ====== 賭桌主體 ====== */}
         <div className="table-outer glass">
-          {/* Info row */}
+          {/* Info + 開獎卡片 */}
           <div className="table-head">
             <div className="head-item"><div className="k">局號</div><div className="v">{state?.round?.id?.slice(-6) ?? "-"}</div></div>
             <div className="head-item"><div className="k">狀態</div><div className="v">{state?.round?.phase ?? "-"}</div></div>
             <div className="head-item"><div className="k">封盤</div><div className="v">{fmt(lockLeft)}</div></div>
             <div className="head-item"><div className="k">結束</div><div className="v">{fmt(endLeft)}</div></div>
-
-            {/* 開獎動畫卡片 */}
             <RevealCard
               phase={state?.round?.phase}
               dice={state?.round?.dice ?? []}
@@ -159,110 +162,110 @@ export default function SicboRoomPage() {
             />
           </div>
 
-          {/* =====下注面板（完整）===== */}
-          <div className="table-grid">
-            {/* 左：SMALL */}
-            <button className={cx("tile big-left", (state?.locked||placing||amount<=0)&&"disabled")}
-              disabled={!!state?.locked||placing||amount<=0}
-              onClick={()=>place("SMALL")}>
-              <div className="badge">SMALL</div><div className="cn">小</div><div className="note">4–10｜1賠1<br/>三同輸</div>
-            </button>
-
-            {/* 中：總和 */}
-            <div className="mid-14">
-              {Array.from({ length: 14 }, (_, i)=>i+4).map(total=>(
-                <button key={total}
-                  className={cx("sicbo-cell total",(state?.locked||placing||amount<=0)&&"disabled")}
-                  disabled={!!state?.locked||placing||amount<=0}
-                  onClick={()=>place("TOTAL",{ total })}>
-                  <div className="total-num">{total}</div>
-                  <div className="total-odd">1賠{TOTAL_PAYOUT[total]}</div>
-                </button>
-              ))}
-            </div>
-
-            {/* 右：BIG */}
-            <button className={cx("tile big-right", (state?.locked||placing||amount<=0)&&"disabled")}
-              disabled={!!state?.locked||placing||amount<=0}
-              onClick={()=>place("BIG")}>
-              <div className="badge">BIG</div><div className="cn">大</div><div className="note">11–17｜1賠1<br/>三同輸</div>
-            </button>
-          </div>
-
-          {/* 單雙 */}
-          <div className="row-two">
-            <button className={cx("sicbo-cell",(state?.locked||placing||amount<=0)&&"disabled")}
-              disabled={!!state?.locked||placing||amount<=0} onClick={()=>place("ODD")}>
-              <div className="h1">單</div><div className="sub">1賠1（三同輸）</div>
-            </button>
-            <button className={cx("sicbo-cell",(state?.locked||placing||amount<=0)&&"disabled")}
-              disabled={!!state?.locked||placing||amount<=0} onClick={()=>place("EVEN")}>
-              <div className="h1">雙</div><div className="sub">1賠1（三同輸）</div>
-            </button>
-          </div>
-
-          {/* 雙 / 豹子 */}
-          <div className="row-multi">
-            <div className="doubles">
-              {Array.from({ length: 6 }, (_,i)=>i+1).map(n=>(
-                <button key={`d${n}`} className={cx("sicbo-cell",(state?.locked||placing||amount<=0)&&"disabled")}
-                  disabled={!!state?.locked||placing||amount<=0} onClick={()=>place("SPECIFIC_DOUBLE",{eye:n})}>
-                  <div className="h2">雙 {n}{n}</div><div className="sub">1賠8</div>
-                </button>
-              ))}
-            </div>
-            <button className={cx("sicbo-cell any-triple",(state?.locked||placing||amount<=0)&&"disabled")}
-              disabled={!!state?.locked||placing||amount<=0} onClick={()=>place("ANY_TRIPLE")}>
-              <div className="h2">任意豹子</div><div className="sub">1賠30</div>
-            </button>
-            <div className="triples">
-              {Array.from({ length: 6 }, (_,i)=>i+1).map(n=>(
-                <button key={`t${n}`} className={cx("sicbo-cell",(state?.locked||placing||amount<=0)&&"disabled")}
-                  disabled={!!state?.locked||placing||amount<=0} onClick={()=>place("SPECIFIC_TRIPLE",{eye:n})}>
-                  <div className="h2">豹子 {n}{n}{n}</div><div className="sub">1賠150</div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* 組合 */}
-          <div className="combos">
-            {pairs.map(([a,b])=>(
-              <button key={`p${a}${b}`} className={cx("sicbo-cell",(state?.locked||placing||amount<=0)&&"disabled")}
-                disabled={!!state?.locked||placing||amount<=0} onClick={()=>place("COMBINATION",{a,b})}>
-                <div className="h2">{a}+{b}</div><div className="sub">1賠5</div>
-              </button>
-            ))}
-          </div>
-
-          {/* 單骰 */}
-          <div className="singles">
-            {Array.from({ length: 6 }, (_,i)=>i+1).map(n=>(
-              <button key={`s${n}`} className={cx("sicbo-cell",(state?.locked||placing||amount<=0)&&"disabled")}
-                disabled={!!state?.locked||placing||amount<=0} onClick={()=>place("SINGLE_DIE",{eye:n})}>
-                <div className="h2">{n}</div><div className="sub">中1×2 / 2×3 / 3×4</div>
-              </button>
-            ))}
-          </div>
-
-          {/* 工具條 */}
-          <div className="toolbar">
-            <div className="chips">
-              <span className="chips-label">籌碼</span>
-              {CHIP_PRESETS.map(v=>(
-                <button key={v} onClick={()=>{setChip(v);setAmount(v);}}
-                  className={cx("chip",`chip-${v}`,chip===v&&"selected")} title={`${v}`}>{v}</button>
-              ))}
-              <button className="btn btn--ghost" onClick={()=>setAmount(chip)}>用此籌碼額</button>
-              <button className="btn btn--ghost" onClick={()=>setAmount(v=>Math.max(1,v*2))}>x2</button>
-              <button className="btn btn--ghost" onClick={()=>setAmount(v=>Math.max(1,Math.floor(v/2)))}>½</button>
-            </div>
-            {state?.locked && <div className="locked-hint">已封盤，請等待下一局</div>}
-          </div>
+          {/* ====== 下注面板 ====== */}
+          <BettingBoard state={state} placing={placing} amount={amount} place={place} chip={chip} setChip={setChip} setAmount={setAmount} pairs={pairs} />
         </div>
 
-        {/* 路子圖 */}
+        {/* ====== 路子圖 ====== */}
         <Roadmap history={history} />
+      </div>
+    </>
+  );
+}
+
+/** === 下單區塊 === */
+function BettingBoard({ state, placing, amount, place, chip, setChip, setAmount, pairs }: any) {
+  return (
+    <>
+      {/* Small/Big/Total */}
+      <div className="table-grid">
+        <button className={cx("tile big-left",(state?.locked||placing||amount<=0)&&"disabled")}
+          disabled={!!state?.locked||placing||amount<=0} onClick={()=>place("SMALL")}>
+          <div className="badge">SMALL</div><div className="cn">小</div><div className="note">4–10｜1賠1<br/>三同輸</div>
+        </button>
+        <div className="mid-14">
+          {Array.from({ length: 14 }, (_,i)=>i+4).map(total=>(
+            <button key={total} className={cx("sicbo-cell total",(state?.locked||placing||amount<=0)&&"disabled")}
+              disabled={!!state?.locked||placing||amount<=0} onClick={()=>place("TOTAL",{ total })}>
+              <div className="total-num">{total}</div><div className="total-odd">1賠{TOTAL_PAYOUT[total]}</div>
+            </button>
+          ))}
+        </div>
+        <button className={cx("tile big-right",(state?.locked||placing||amount<=0)&&"disabled")}
+          disabled={!!state?.locked||placing||amount<=0} onClick={()=>place("BIG")}>
+          <div className="badge">BIG</div><div className="cn">大</div><div className="note">11–17｜1賠1<br/>三同輸</div>
+        </button>
+      </div>
+
+      {/* Odd / Even */}
+      <div className="row-two">
+        <button className={cx("sicbo-cell",(state?.locked||placing||amount<=0)&&"disabled")}
+          disabled={!!state?.locked||placing||amount<=0} onClick={()=>place("ODD")}>
+          <div className="h1">單</div><div className="sub">1賠1（三同輸）</div>
+        </button>
+        <button className={cx("sicbo-cell",(state?.locked||placing||amount<=0)&&"disabled")}
+          disabled={!!state?.locked||placing||amount<=0} onClick={()=>place("EVEN")}>
+          <div className="h1">雙</div><div className="sub">1賠1（三同輸）</div>
+        </button>
+      </div>
+
+      {/* Doubles + Triples */}
+      <div className="row-multi">
+        <div className="doubles">
+          {Array.from({ length: 6 }, (_,i)=>i+1).map(n=>(
+            <button key={`d${n}`} className={cx("sicbo-cell",(state?.locked||placing||amount<=0)&&"disabled")}
+              disabled={!!state?.locked||placing||amount<=0} onClick={()=>place("SPECIFIC_DOUBLE",{eye:n})}>
+              <div className="h2">雙 {n}{n}</div><div className="sub">1賠8</div>
+            </button>
+          ))}
+        </div>
+        <button className={cx("sicbo-cell any-triple",(state?.locked||placing||amount<=0)&&"disabled")}
+          disabled={!!state?.locked||placing||amount<=0} onClick={()=>place("ANY_TRIPLE")}>
+          <div className="h2">任意豹子</div><div className="sub">1賠30</div>
+        </button>
+        <div className="triples">
+          {Array.from({ length: 6 }, (_,i)=>i+1).map(n=>(
+            <button key={`t${n}`} className={cx("sicbo-cell",(state?.locked||placing||amount<=0)&&"disabled")}
+              disabled={!!state?.locked||placing||amount<=0} onClick={()=>place("SPECIFIC_TRIPLE",{eye:n})}>
+              <div className="h2">豹子 {n}{n}{n}</div><div className="sub">1賠150</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Combinations */}
+      <div className="combos">
+        {pairs.map(([a,b]:[number,number])=>(
+          <button key={`p${a}${b}`} className={cx("sicbo-cell",(state?.locked||placing||amount<=0)&&"disabled")}
+            disabled={!!state?.locked||placing||amount<=0} onClick={()=>place("COMBINATION",{a,b})}>
+            <div className="h2">{a}+{b}</div><div className="sub">1賠5</div>
+          </button>
+        ))}
+      </div>
+
+      {/* Singles */}
+      <div className="singles">
+        {Array.from({ length: 6 }, (_,i)=>i+1).map(n=>(
+          <button key={`s${n}`} className={cx("sicbo-cell",(state?.locked||placing||amount<=0)&&"disabled")}
+            disabled={!!state?.locked||placing||amount<=0} onClick={()=>place("SINGLE_DIE",{eye:n})}>
+            <div className="h2">{n}</div><div className="sub">中1×2 / 2×3 / 3×4</div>
+          </button>
+        ))}
+      </div>
+
+      {/* Toolbar */}
+      <div className="toolbar">
+        <div className="chips">
+          <span className="chips-label">籌碼</span>
+          {CHIP_PRESETS.map(v=>(
+            <button key={v} onClick={()=>{setChip(v);setAmount(v);}}
+              className={cx("chip",`chip-${v}`,chip===v&&"selected")} title={`${v}`}>{v}</button>
+          ))}
+          <button className="btn btn--ghost" onClick={()=>setAmount(chip)}>用此籌碼額</button>
+          <button className="btn btn--ghost" onClick={()=>setAmount(v=>Math.max(1,v*2))}>x2</button>
+          <button className="btn btn--ghost" onClick={()=>setAmount(v=>Math.max(1,Math.floor(v/2)))}>½</button>
+        </div>
+        {state?.locked && <div className="locked-hint">已封盤，請等待下一局</div>}
       </div>
     </>
   );
@@ -283,7 +286,7 @@ function RevealCard({ phase, dice, rolling }: { phase?: Phase; dice: number[]; r
   );
 }
 
-/** 骰子 */
+/** 骰子元件 */
 function Dice({ n, rolling, size="md" }: { n?: number; rolling?:boolean; size?: "sm"|"md"|"lg" }) {
   const faceCls = n ? `face-${n}`:""; const sizeCls = size==="sm"?"dice-sm":size==="lg"?"dice-lg":"";
   return (
@@ -308,7 +311,10 @@ function Roadmap({ history }: { history: { id:string; dice:number[]; endedAt:str
             <div className="dice-mini">
               <Dice n={d[0]} size="sm" /><Dice n={d[1]} size="sm" /><Dice n={d[2]} size="sm" />
             </div>
-            <div className="meta"><span className="sum">{s||"-"}</span><span className="tag">{tag}</span></div>
+            <div className="meta">
+              <span className="sum">{s||"-"}</span>
+              <span className="tag">{tag}</span>
+            </div>
           </div>
         );
       })}
