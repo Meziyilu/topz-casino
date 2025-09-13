@@ -13,10 +13,9 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
-    "prisma:seed": "node prisma/seed.cjs",
+    "prisma:seed": "node prisma/seed.js",
     "db:push": "prisma db push",
     "db:reset": "prisma migrate reset --force",
-    "setup:db": "prisma migrate reset --force && prisma migrate dev -n init_v112 && prisma db seed",
     "validate:structure": "ts-node --transpile-only scripts/validate-structure.ts",
     "postinstall": "prisma generate",
     "auto:baccarat": "node --require esbuild-register scripts/auto-baccarat.ts"
@@ -57,7 +56,7 @@
     "typescript": "5.9.2"
   },
   "prisma": {
-    "seed": "node prisma/seed.cjs"
+    "seed": "node prisma/seed.js"
   },
   "engines": {
     "node": "20.x"
