@@ -1,7 +1,7 @@
 "use client";
 
 import Head from "next/head";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 type Phase = "BETTING" | "REVEALING" | "SETTLED";
@@ -35,6 +35,69 @@ function fmt(sec?: number) {
   const s = Math.max(0, Math.floor(sec ?? 0));
   const m = Math.floor(s / 60); const r = s % 60;
   return `${m}:${r.toString().padStart(2, "0")}`;
+}
+
+/** 將秒數目標換成 deadline（ms），本地平滑倒數 */
+function useSmoothTimers(state: StateResp | null) {
+  const [lockLeft, setLockLeft]   = useState(0);
+  const [endLeft,  setEndLeft]    = useState(0);
+  const lockDeadlineRef = useRef<number | null>(null);
+  const endDeadlineRef  = useRef<number | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const tickTimer = useRef<number | null>(null);
+
+  // 當 server 狀態改變時，重置目標時間（用現在時間 + 伺服器剩餘秒數）
+  useEffect(() => {
+    if (!state) return;
+    const now = Date.now();
+    const ld = (state.timers?.lockInSec ?? 0) > 0 ? now + (state.timers.lockInSec * 1000) : now;
+    const ed = (state.timers?.endInSec ?? 0) > 0 ? now + (state.timers.endInSec * 1000) : now;
+    lockDeadlineRef.current = ld;
+    endDeadlineRef.current  = ed;
+    // 立即刷新一次
+    setLockLeft((ld - now) / 1000);
+    setEndLeft((ed - now) / 1000);
+  }, [state?.round?.id, state?.timers?.lockInSec, state?.timers?.endInSec]);
+
+  // 本地平滑更新：首選 rAF，每禎計算；退而求其次 200ms interval
+  useEffect(() => {
+    const useRAF = typeof window !== "undefined" && !!window.requestAnimationFrame;
+    let last = performance.now?.() ?? Date.now();
+    const step = () => {
+      const now = Date.now();
+      if (lockDeadlineRef.current != null) {
+        setLockLeft((lockDeadlineRef.current - now) / 1000);
+      }
+      if (endDeadlineRef.current != null) {
+        setEndLeft((endDeadlineRef.current - now) / 1000);
+      }
+      rafRef.current = requestAnimationFrame(step);
+      last = performance.now?.() ?? Date.now();
+    };
+
+    if (useRAF) {
+      rafRef.current = requestAnimationFrame(step);
+      return () => {
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      };
+    } else {
+      tickTimer.current = window.setInterval(() => {
+        const now = Date.now();
+        if (lockDeadlineRef.current != null) {
+          setLockLeft((lockDeadlineRef.current - now) / 1000);
+        }
+        if (endDeadlineRef.current != null) {
+          setEndLeft((endDeadlineRef.current - now) / 1000);
+        }
+      }, 200);
+      return () => { if (tickTimer.current) clearInterval(tickTimer.current); };
+    }
+  }, []);
+
+  // 不讓數值變成負很多
+  const lock = Math.max(0, lockLeft);
+  const end  = Math.max(0, endLeft);
+  return { lockLeft: lock, endLeft: end };
 }
 
 export default function SicboRoomPage() {
@@ -87,12 +150,15 @@ export default function SicboRoomPage() {
 
   useEffect(() => { fetchState(); fetchBalance(); fetchHistory(); }, [room, userId]);
   useEffect(() => {
-    const t1 = setInterval(fetchState, 2000);
+    const t1 = setInterval(fetchState, 2000);   // 每 2s 校正一次
     const t2 = setInterval(fetchBalance, 5000);
     const t3 = setInterval(fetchHistory, 8000);
     return () => { clearInterval(t1); clearInterval(t2); clearInterval(t3); };
   }, [room, userId]);
   useEffect(() => setAmount(chip), [chip]);
+
+  // 本地平滑倒數（關鍵）
+  const { lockLeft, endLeft } = useSmoothTimers(state);
 
   // 下注
   async function place(kind: Kind, payload?: any) {
@@ -114,9 +180,6 @@ export default function SicboRoomPage() {
       fetchState();
     }
   }
-
-  const lockLeft = state?.timers?.lockInSec ?? 0;
-  const endLeft  = state?.timers?.endInSec  ?? 0;
 
   const pairs = useMemo<[number, number][]>(() => {
     const o: [number, number][] = [];
@@ -160,7 +223,7 @@ export default function SicboRoomPage() {
             <RevealCard
               phase={state?.round?.phase}
               dice={state?.round?.dice ?? []}
-              rolling={!!(state && (state.round.phase === "REVEALING" || (lockLeft === 0 && endLeft > 0 && (state.round.dice?.length ?? 0) === 0)))}
+              rolling={!!(state && (state.round.phase === "REVEALING" || (Math.floor(lockLeft) === 0 && endLeft > 0 && (state.round.dice?.length ?? 0) === 0)))}
             />
           </div>
 
