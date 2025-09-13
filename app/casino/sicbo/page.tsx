@@ -121,7 +121,7 @@ export default function SicboLobby() {
     <>
       <Head>
         {/* 大廳專用 CSS（含流光背景與卡片樣式） */}
-        <link rel="stylesheet" href="/styles/sicbo-lobby.css" />
+        <link rel="stylesheet" href="/styles/sicbo.css" />
       </Head>
 
       <div className="lobby-wrap">
