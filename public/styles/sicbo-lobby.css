@@ -1,78 +1,54 @@
-/* ===== 背景：深色流光 Aurora ===== */
-html, body { background:#0a0f14; min-height:100%; color:#fff; }
-.lobby-bg { position:relative; min-height:100vh; overflow:hidden; }
-.lobby-bg::before, .lobby-bg::after{
-  content:""; position:fixed; inset:-20%; pointer-events:none; z-index:-1;
-  filter: blur(100px); opacity:.55;
-  background:
-    radial-gradient(40% 35% at 20% 30%, rgba(0,205,172,.55), transparent 60%),
-    radial-gradient(30% 30% at 80% 20%, rgba(59,130,246,.40), transparent 60%),
-    radial-gradient(35% 35% at 60% 80%, rgba(245,158,11,.40), transparent 60%);
-  animation: aurora-pan 26s linear infinite;
-}
-.lobby-bg::after{ animation-duration: 34s; mix-blend-mode: screen; opacity: .4; }
-@keyframes aurora-pan{
-  0%{transform:translate3d(0,0,0) rotate(0) scale(1)}
-  50%{transform:translate3d(-6%,4%,0) rotate(15deg) scale(1.05)}
-  100%{transform:translate3d(0,0,0) rotate(0) scale(1)}
+.sicbo-lobby {
+  min-height: 100vh;
+  background: radial-gradient(circle at top, #0f2027, #203a43, #2c5364);
+  animation: bg-flow 18s ease-in-out infinite alternate;
+  color: #fff;
+  padding: 30px;
 }
 
-/* ===== 容器 ===== */
-.lobby-wrap{ max-width: 1180px; margin: 0 auto; padding: 24px 16px; color:#fff; }
-.lobby-title{ font-size:28px; font-weight:900; letter-spacing:.02em; margin-bottom:16px; text-shadow:0 2px 8px rgba(0,0,0,.4) }
+@keyframes bg-flow {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 100% 50%; }
+}
 
-/* ===== 卡片網格 ===== */
-.room-grid{ display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:16px }
+.sicbo-lobby .title {
+  font-size: 28px;
+  font-weight: 800;
+  margin-bottom: 24px;
+}
 
-/* ===== 玻璃卡片 ===== */
-.glass{
-  background: rgba(255,255,255,.07);
-  border: 1px solid rgba(255,255,255,.14);
+.rooms {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 20px;
+}
+
+.room-card {
+  padding: 20px;
   border-radius: 16px;
-  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  cursor: pointer;
+  transition: transform .12s ease, box-shadow .2s ease;
 }
-.room-card{
-  position:relative; padding:14px; display:flex; flex-direction:column; gap:12px;
-  box-shadow: 0 12px 32px rgba(0,0,0,.30), inset 0 0 18px rgba(255,255,255,.05);
-  transition: transform .08s ease, background-color .12s ease, border-color .12s ease;
+.room-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0,0,0,.4);
 }
-.room-card:hover{ transform: translateY(-2px); background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.2) }
 
-/* ===== 卡片頭 ===== */
-.card-head{ display:flex; align-items:center; justify-content:space-between }
-.room-name{ font-size:18px; font-weight:800; letter-spacing:.03em }
-.btn{
-  padding:8px 12px; border-radius:10px; font-weight:700; cursor:pointer; color:#fff;
-  border:1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.12);
+.room-name {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 8px;
 }
-.btn:hover{ background: rgba(255,255,255,.18) }
 
-/* ===== 狀態列 ===== */
-.meta-line{ font-size:13px; opacity:.9; display:flex; gap:12px; flex-wrap:wrap }
-.meta-line b{ font-weight:800 }
-
-/* ===== 骰子 ===== */
-.dice-strip{ display:flex; align-items:center; gap:6px }
-.dice{ --size:28px; width:var(--size); height:var(--size);
-  background:linear-gradient(160deg, #fafafa, #e5e7eb); border-radius:8px; box-shadow:0 3px 0 rgba(0,0,0,.25), inset 0 0 10px rgba(0,0,0,.12);
-  position:relative; display:inline-block;
+.room-phase,
+.room-timer {
+  font-size: 14px;
+  margin: 4px 0;
+  opacity: .9;
 }
-.dice .pip{ --pip:6px; width:var(--pip); height:var(--pip); background:#111827; border-radius:9999px; position:absolute; opacity:0; transition:opacity .15s ease }
-.dice .p1{ top:5px; left:5px } .dice .p2{ top:5px; left:calc(50% - 3px) } .dice .p3{ top:5px; right:5px }
-.dice .p4{ top:calc(50% - 3px); left:5px } .dice .p5{ top:calc(50% - 3px); left:calc(50% - 3px) } .dice .p6{ top:calc(50% - 3px); right:5px }
-.dice .p7{ bottom:5px; left:5px } .dice .p8{ bottom:5px; left:calc(50% - 3px) } .dice .p9{ bottom:5px; right:5px }
-.dice.face-1 .p5{opacity:1} .dice.face-2 .p1,.dice.face-2 .p9{opacity:1}
-.dice.face-3 .p1,.dice.face-3 .p5,.dice.face-3 .p9{opacity:1}
-.dice.face-4 .p1,.dice.face-4 .p3,.dice.face-4 .p7,.dice.face-4 .p9{opacity:1}
-.dice.face-5 .p1,.dice.face-5 .p3,.dice.face-5 .p5,.dice.face-5 .p7,.dice.face-5 .p9{opacity:1}
-.dice.face-6 .p1,.dice.face-6 .p3,.dice.face-6 .p4,.dice.face-6 .p6,.dice.face-6 .p7,.dice.face-6 .p9{opacity:1}
-@keyframes dice-roll{0%{transform:translateY(0) rotate(0)}20%{transform:translate(-2px,-4px) rotate(18deg)}40%{transform:translate(4px,-6px) rotate(42deg)}60%{transform:translate(-3px,-3px) rotate(66deg)}80%{transform:translate(3px,-2px) rotate(84deg)}100%{transform:translateY(0) rotate(90deg)}}
-.dice.rolling{ animation:dice-roll .6s linear infinite; box-shadow:0 5px 0 rgba(0,0,0,.35), inset 0 0 12px rgba(0,0,0,.16) }
 
-/* ===== 卡片底部 ===== */
-.card-foot{ display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:13px; opacity:.92 }
-.tag{ padding:2px 8px; border-radius:999px; border:1px solid rgba(255,255,255,.18); background:rgba(16,185,129,.22); font-weight:800 }
-.countdown{ font-variant-numeric: tabular-nums; font-weight:800 }
-
-/* 小字顏色提升 */
-.dim{ opacity:.85 }
+.room-join {
+  margin-top: 12px;
+  font-weight: 700;
+  color: #34d399;
+}
