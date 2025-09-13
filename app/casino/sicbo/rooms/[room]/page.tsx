@@ -37,69 +37,6 @@ function fmt(sec?: number) {
   return `${m}:${r.toString().padStart(2, "0")}`;
 }
 
-/** 將秒數目標換成 deadline（ms），本地平滑倒數 */
-function useSmoothTimers(state: StateResp | null) {
-  const [lockLeft, setLockLeft]   = useState(0);
-  const [endLeft,  setEndLeft]    = useState(0);
-  const lockDeadlineRef = useRef<number | null>(null);
-  const endDeadlineRef  = useRef<number | null>(null);
-  const rafRef = useRef<number | null>(null);
-  const tickTimer = useRef<number | null>(null);
-
-  // 當 server 狀態改變時，重置目標時間（用現在時間 + 伺服器剩餘秒數）
-  useEffect(() => {
-    if (!state) return;
-    const now = Date.now();
-    const ld = (state.timers?.lockInSec ?? 0) > 0 ? now + (state.timers.lockInSec * 1000) : now;
-    const ed = (state.timers?.endInSec ?? 0) > 0 ? now + (state.timers.endInSec * 1000) : now;
-    lockDeadlineRef.current = ld;
-    endDeadlineRef.current  = ed;
-    // 立即刷新一次
-    setLockLeft((ld - now) / 1000);
-    setEndLeft((ed - now) / 1000);
-  }, [state?.round?.id, state?.timers?.lockInSec, state?.timers?.endInSec]);
-
-  // 本地平滑更新：首選 rAF，每禎計算；退而求其次 200ms interval
-  useEffect(() => {
-    const useRAF = typeof window !== "undefined" && !!window.requestAnimationFrame;
-    let last = performance.now?.() ?? Date.now();
-    const step = () => {
-      const now = Date.now();
-      if (lockDeadlineRef.current != null) {
-        setLockLeft((lockDeadlineRef.current - now) / 1000);
-      }
-      if (endDeadlineRef.current != null) {
-        setEndLeft((endDeadlineRef.current - now) / 1000);
-      }
-      rafRef.current = requestAnimationFrame(step);
-      last = performance.now?.() ?? Date.now();
-    };
-
-    if (useRAF) {
-      rafRef.current = requestAnimationFrame(step);
-      return () => {
-        if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      };
-    } else {
-      tickTimer.current = window.setInterval(() => {
-        const now = Date.now();
-        if (lockDeadlineRef.current != null) {
-          setLockLeft((lockDeadlineRef.current - now) / 1000);
-        }
-        if (endDeadlineRef.current != null) {
-          setEndLeft((endDeadlineRef.current - now) / 1000);
-        }
-      }, 200);
-      return () => { if (tickTimer.current) clearInterval(tickTimer.current); };
-    }
-  }, []);
-
-  // 不讓數值變成負很多
-  const lock = Math.max(0, lockLeft);
-  const end  = Math.max(0, endLeft);
-  return { lockLeft: lock, endLeft: end };
-}
-
 export default function SicboRoomPage() {
   const params = useParams<{ room: Room }>();
   const router = useRouter();
@@ -113,13 +50,37 @@ export default function SicboRoomPage() {
   const [placing, setPlacing] = useState(false);
   const [history, setHistory] = useState<{ id: string; dice: number[]; endedAt: string }[]>([]);
 
+  // ➕ 我的注單
+  type MyBetsResp = {
+    current: {
+      roundId: string | null;
+      total: number;
+      byKind: Record<string, number>;
+      items: { id: string; kind: Kind; amount: number; payload: any; createdAt: string }[];
+    };
+    recent: {
+      id: string;
+      roundId: string;
+      roundShort: string;
+      kind: Kind;
+      amount: number;
+      payload: any;
+      createdAt: string;
+      roundPhase: Phase | null;
+      dice: number[];
+      status: "WIN" | "LOSE" | "PENDING";
+      returnAmount: number;
+    }[];
+  } | null;
+  const [myBets, setMyBets] = useState<MyBetsResp>(null);
+
   // 房間參數
   useEffect(() => {
     const r = (params?.room?.toString()?.toUpperCase() as Room) || "SB_R30";
-    setRoom(["SB_R30", "SB_R60", "SB_R90"].includes(r) ? r : "SB_R30");
+    setRoom(["SB_R30","SB_R60","SB_R90"].includes(r) ? r : "SB_R30");
   }, [params?.room]);
 
-  // 抓目前登入使用者
+  // 取得目前登入使用者（後端 cookie 解析）
   useEffect(() => {
     (async () => {
       const res = await fetch("/api/users/me", { cache: "no-store" });
@@ -130,7 +91,7 @@ export default function SicboRoomPage() {
     })();
   }, []);
 
-  // 取得狀態、餘額、路子
+  // 拉資料
   async function fetchState() {
     const res = await fetch(`/api/casino/sicbo/state?room=${room}`, { cache: "no-store" });
     if (res.ok) setState(await res.json());
@@ -147,18 +108,45 @@ export default function SicboRoomPage() {
       setHistory(js.items ?? []);
     }
   }
+  async function fetchMyBets() {
+    const res = await fetch(`/api/casino/sicbo/my-bets?room=${room}&limit=30`, { cache: "no-store" });
+    if (res.ok) setMyBets(await res.json());
+  }
 
-  useEffect(() => { fetchState(); fetchBalance(); fetchHistory(); }, [room, userId]);
+  useEffect(() => { fetchState(); fetchBalance(); fetchHistory(); fetchMyBets(); }, [room, userId]);
+
+  // ✅ 平滑倒數（不跳秒）
+  const [lockLeft, setLockLeft] = useState(0);
+  const [endLeft, setEndLeft] = useState(0);
+  const rafRef = useRef<number | null>(null);
   useEffect(() => {
-    const t1 = setInterval(fetchState, 2000);   // 每 2s 校正一次
+    const L = state?.timers?.lockInSec ?? 0;
+    const E = state?.timers?.endInSec ?? 0;
+    setLockLeft(L);
+    setEndLeft(E);
+
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    const startAt = performance.now();
+    const loop = (t: number) => {
+      const dt = Math.floor((t - startAt) / 1000);
+      setLockLeft(Math.max(0, L - dt));
+      setEndLeft(Math.max(0, E - dt));
+      rafRef.current = requestAnimationFrame(loop);
+    };
+    rafRef.current = requestAnimationFrame(loop);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [state?.timers?.lockInSec, state?.timers?.endInSec]);
+
+  // 定時刷新資料（保持新鮮）
+  useEffect(() => {
+    const t1 = setInterval(fetchState, 2000);
     const t2 = setInterval(fetchBalance, 5000);
     const t3 = setInterval(fetchHistory, 8000);
-    return () => { clearInterval(t1); clearInterval(t2); clearInterval(t3); };
+    const t4 = setInterval(fetchMyBets, 3000);
+    return () => { clearInterval(t1); clearInterval(t2); clearInterval(t3); clearInterval(t4); };
   }, [room, userId]);
-  useEffect(() => setAmount(chip), [chip]);
 
-  // 本地平滑倒數（關鍵）
-  const { lockLeft, endLeft } = useSmoothTimers(state);
+  useEffect(() => setAmount(chip), [chip]);
 
   // 下注
   async function place(kind: Kind, payload?: any) {
@@ -172,7 +160,7 @@ export default function SicboRoomPage() {
       });
       const js = await res.json();
       if (!res.ok) throw new Error(js?.error || "下注失敗");
-      await fetchBalance();
+      await Promise.all([fetchBalance(), fetchMyBets()]);
     } catch (e: any) {
       alert(e?.message || String(e));
     } finally {
@@ -223,7 +211,7 @@ export default function SicboRoomPage() {
             <RevealCard
               phase={state?.round?.phase}
               dice={state?.round?.dice ?? []}
-              rolling={!!(state && (state.round.phase === "REVEALING" || (Math.floor(lockLeft) === 0 && endLeft > 0 && (state.round.dice?.length ?? 0) === 0)))}
+              rolling={!!(state && (state.round.phase === "REVEALING" || (lockLeft === 0 && endLeft > 0 && (state.round.dice?.length ?? 0) === 0)))}
             />
           </div>
 
@@ -331,6 +319,9 @@ export default function SicboRoomPage() {
 
         {/* 路子圖 */}
         <Roadmap history={history} />
+
+        {/* 我的注單卡片 */}
+        <MyBetsCard data={myBets} />
       </div>
     </>
   );
@@ -355,7 +346,7 @@ function RevealCard({ phase, dice, rolling }: { phase?: Phase; dice: number[]; r
 function Dice({ n, rolling, size="md" }: { n?: number; rolling?:boolean; size?: "sm"|"md"|"lg" }) {
   const faceCls = n ? `face-${n}`:""; const sizeCls = size==="sm"?"dice-sm":size==="lg"?"dice-lg":"";
   return (
-    <span className={cx("dice",faceCls,rolling?"rolling":"",sizeCls)}>
+    <span className={cx("dice", faceCls, rolling ? "rolling" : "", sizeCls)}>
       <span className="pip p1" /><span className="pip p2" /><span className="pip p3" />
       <span className="pip p4" /><span className="pip p5" /><span className="pip p6" />
       <span className="pip p7" /><span className="pip p8" /><span className="pip p9" />
@@ -381,6 +372,77 @@ function Roadmap({ history }: { history: { id:string; dice:number[]; endedAt:str
         );
       })}
       {(history?.length??0)===0 && <div className="roadmap-empty">暫無歷史</div>}
+    </div>
+  );
+}
+
+/** 我的注單卡片 */
+function MyBetsCard({ data }: {
+  data: {
+    current?: { roundId: string | null; total: number; byKind: Record<string, number> };
+    recent?: { id: string; roundShort: string; kind: Kind; amount: number; status: "WIN"|"LOSE"|"PENDING"; returnAmount: number; createdAt: string }[];
+  } | null
+}) {
+  const cur = data?.current;
+  const recent = data?.recent || [];
+  return (
+    <div className="glass" style={{ marginTop: 12, padding: 12 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+        <div style={{ fontWeight:900 }}>我的注單</div>
+        <div style={{ opacity:.8, fontSize:12 }}>
+          本局：{cur?.roundId ? cur.roundId.slice(-6) : "-"} | 合計 <b>{(cur?.total||0).toLocaleString()}</b>
+        </div>
+      </div>
+
+      {/* 本局彙總 */}
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:10 }}>
+        {Object.entries(cur?.byKind || {}).map(([k, v])=>(
+          <div key={k} className="glass" style={{ padding:"6px 10px", borderRadius:10, fontSize:12 }}>
+            <b>{k}</b>：{Number(v).toLocaleString()}
+          </div>
+        ))}
+        {(!cur || Object.keys(cur.byKind||{}).length===0) && (
+          <div style={{ opacity:.7, fontSize:12 }}>本局尚未下注</div>
+        )}
+      </div>
+
+      {/* 最近注單 */}
+      <div style={{ overflowX:"auto" }}>
+        <table style={{ width:"100%", borderCollapse:"separate", borderSpacing:"0 6px" }}>
+          <thead>
+            <tr style={{ textAlign:"left", fontSize:12, opacity:.85 }}>
+              <th style={{ padding:"4px 8px" }}>時間</th>
+              <th style={{ padding:"4px 8px" }}>局號</th>
+              <th style={{ padding:"4px 8px" }}>注項</th>
+              <th style={{ padding:"4px 8px" }}>金額</th>
+              <th style={{ padding:"4px 8px" }}>狀態</th>
+              <th style={{ padding:"4px 8px" }}>返還(含本)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {recent.map(r=>(
+              <tr key={r.id} className="glass" style={{ fontSize:13 }}>
+                <td style={{ padding:"6px 8px" }}>{new Date(r.createdAt).toLocaleTimeString()}</td>
+                <td style={{ padding:"6px 8px" }}>{r.roundShort}</td>
+                <td style={{ padding:"6px 8px" }}>{r.kind}</td>
+                <td style={{ padding:"6px 8px" }}>{r.amount.toLocaleString()}</td>
+                <td style={{ padding:"6px 8px",
+                  color: r.status==="WIN" ? "#fde047" : r.status==="LOSE" ? "#fca5a5" : "#93c5fd",
+                  fontWeight: 800
+                }}>
+                  {r.status==="WIN" ? "中獎" : r.status==="LOSE" ? "未中" : "等待"}
+                </td>
+                <td style={{ padding:"6px 8px" }}>
+                  {r.returnAmount > 0 ? r.returnAmount.toLocaleString() : "-"}
+                </td>
+              </tr>
+            ))}
+            {recent.length===0 && (
+              <tr><td colSpan={6} style={{ padding:"10px", opacity:.75 }}>暫無注單</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
