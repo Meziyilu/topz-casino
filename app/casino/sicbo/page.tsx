@@ -40,7 +40,6 @@ function useRoom(room: Room) {
       setLockIn(j.timers?.lockInSec ?? 0);
       setEndIn(j.timers?.endInSec ?? 0);
     } catch {
-      // 讓卡片顯示「取得失敗」但仍保留其它房間
       setState(null);
       setLockIn(0);
       setEndIn(0);
@@ -49,7 +48,7 @@ function useRoom(room: Room) {
 
   useEffect(() => {
     load();
-    const sync = setInterval(load, 5000); // 每 5 秒與伺服器同步修正
+    const sync = setInterval(load, 5000);
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = window.setInterval(() => {
       setLockIn((v) => (v > 0 ? v - 1 : 0));
@@ -59,7 +58,6 @@ function useRoom(room: Room) {
       clearInterval(sync);
       if (timerRef.current) clearInterval(timerRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room]);
 
   return { state, lockIn, endIn, reload: load };
@@ -121,20 +119,22 @@ export default function SicboLobby() {
     <>
       <Head>
         {/* 大廳專用 CSS（含流光背景與卡片樣式） */}
-        <link rel="stylesheet" href="/styles/sicbo.css" />
+        <link rel="stylesheet" href="/styles/sicbo-lobby.css" />
       </Head>
 
-      <div className="lobby-wrap">
-        <header className="lobby-head">
-          <h1>🎲 骰寶大廳</h1>
-          <p className="sub">選擇一個房間開始遊戲</p>
-        </header>
+      <div className="sicbo-lobby-bg">
+        <div className="sicbo-lobby">
+          <header className="lobby-head">
+            <h1>🎲 骰寶大廳</h1>
+            <p className="sub">選擇一個房間開始遊戲</p>
+          </header>
 
-        <section className="room-grid">
-          {ROOMS.map((r) => (
-            <RoomCard key={r} room={r} />
-          ))}
-        </section>
+          <section className="room-grid">
+            {ROOMS.map((r) => (
+              <RoomCard key={r} room={r} />
+            ))}
+          </section>
+        </div>
       </div>
     </>
   );
