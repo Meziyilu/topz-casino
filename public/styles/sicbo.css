@@ -1,31 +1,52 @@
-/* ============ 背景：深色流光 Aurora ============ */
-html, body { background: #0a0f14; min-height: 100%; color: #fff; }
-.sicbo-bg { position: relative; min-height: 100vh; overflow: hidden; }
-.sicbo-bg::before, .sicbo-bg::after {
-  content: ""; position: fixed; inset: -20%; pointer-events: none; z-index: -1;
-  filter: blur(80px); opacity: 0.55;
-  background:
-    radial-gradient(40% 35% at 20% 30%, rgba(0,205,172,.55), transparent 60%),
-    radial-gradient(30% 30% at 80% 20%, rgba(59,130,246,.40), transparent 60%),
-    radial-gradient(35% 35% at 60% 80%, rgba(245,158,11,.40), transparent 60%);
-  animation: aurora-pan 24s linear infinite;
-}
-.sicbo-bg::after { animation-duration: 32s; mix-blend-mode: screen; opacity: 0.4; }
-@keyframes aurora-pan {
-  0% { transform: translate3d(0,0,0) rotate(0deg) scale(1); }
-  50%{ transform: translate3d(-6%,4%,0) rotate(15deg) scale(1.05); }
-  100%{ transform: translate3d(0,0,0) rotate(0deg) scale(1); }
-}
+/* =========================
+   Sicbo Room — FULL CSS
+   放置位置：/public/styles/sicbo.css
+   ========================= */
 
 /* ===== page wrapper / glass ===== */
-.sicbo-wrapper { max-width: 1180px; margin: 0 auto; padding: 16px; color: #fff; }
+.sicbo-wrapper {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 16px;
+  color: #fff;
+
+  /* 深色流光背景動畫（頁面本體） */
+  position: relative;
+  min-height: calc(100vh - 32px);
+  background: radial-gradient(120% 120% at 80% 0%, #0b1020 0%, #090f1a 45%, #0b1321 85%);
+  overflow: hidden;
+}
+.sicbo-wrapper::before,
+.sicbo-wrapper::after {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: conic-gradient(from 0deg, rgba(56,189,248,.06), rgba(99,102,241,.06), rgba(16,185,129,.06), rgba(56,189,248,.06));
+  filter: blur(48px);
+  animation: flow-bg 22s linear infinite;
+  pointer-events: none;
+}
+.sicbo-wrapper::after {
+  animation-duration: 32s;
+  animation-direction: reverse;
+  opacity: .7;
+}
+@keyframes flow-bg {
+  0% { transform: rotate(0deg) scale(1.05); }
+  50% { transform: rotate(180deg) scale(1.07); }
+  100% { transform: rotate(360deg) scale(1.05); }
+}
+
 .glass {
   background: rgba(255,255,255,0.06);
   border: 1px solid rgba(255,255,255,0.12);
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   border-radius: 16px;
+  box-shadow: 0 6px 28px rgba(0,0,0,.28), inset 0 0 12px rgba(255,255,255,.06);
 }
-.btn { padding: 8px 12px; border-radius: 10px; font-weight: 700;
+
+.btn {
+  padding: 8px 12px; border-radius: 10px; font-weight: 700;
   border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.08); color:#fff; cursor:pointer;
   transition: transform .06s ease, background-color .12s ease, border-color .12s ease;
 }
@@ -39,17 +60,29 @@ html, body { background: #0a0f14; min-height: 100%; color: #fff; }
 .topbar{ display:flex; align-items:center; justify-content:space-between; padding:10px 12px; margin-bottom:12px }
 .topbar .left{ display:flex; align-items:center; gap:8px }
 .topbar .right{ display:flex; align-items:center; gap:10px; flex-wrap:wrap }
-.room-pill{ padding:4px 10px; border-radius:999px; border:1px solid rgba(255,255,255,.18); background:rgba(16,185,129,.25); font-weight:800 }
+.room-pill{
+  padding:4px 10px; border-radius:999px;
+  border:1px solid rgba(255,255,255,.18);
+  background:linear-gradient(180deg, rgba(16,185,129,.45), rgba(16,185,129,.22));
+  font-weight:800;
+  box-shadow: inset 0 0 10px rgba(16,185,129,.35);
+}
 .wallet{ display:flex; gap:6px; align-items:center }
-.wallet .label{ opacity:.8; font-size:12px }
-.wallet .val{ font-weight:800 }
+.wallet .label{ opacity:.85; font-size:12px }
+.wallet .val{ font-weight:800; text-shadow:0 1px 1px rgba(0,0,0,.35) }
 .amount{ display:flex; gap:6px; align-items:center }
-.amount .label{ opacity:.8; font-size:12px }
+.amount .label{ opacity:.85; font-size:12px }
 .amount input{
-  width: 140px; background: rgba(0,0,0,.35); color:#fff; border:1px solid rgba(255,255,255,.2); border-radius:10px; padding:6px 8px;
+  width: 140px; background: rgba(0,0,0,.35); color:#fff; border:1px solid rgba(255,255,255,.28); border-radius:10px; padding:6px 8px;
+  font-weight:700;
 }
 
-/* ===== green table outer (everything is inside) ===== */
+/* 文字可讀性提升 */
+.topbar, .topbar * { color: #eaf6ff; text-shadow: 0 1px 1px rgba(0,0,0,.35) }
+.topbar .btn { color: #f7fbff; border-color: rgba(255,255,255,.28); background: rgba(255,255,255,.12) }
+.topbar .btn:hover { background: rgba(255,255,255,.18) }
+
+/* ===== green table outer (everything inside) ===== */
 .table-outer{
   background: radial-gradient(120% 120% at 50% 0%, #0b3b2f 0%, #042826 60%, #031e1b 100%);
   border: 1px solid rgba(16,185,129,.25);
@@ -58,46 +91,72 @@ html, body { background: #0a0f14; min-height: 100%; color: #fff; }
 }
 
 /* info head row */
-.table-head{ display:grid; gap:10px; grid-template-columns: repeat(4, minmax(0,1fr)) auto; margin-bottom:12px }
-.head-item{ background: rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:12px; padding:10px 12px }
-.head-item .k{ font-size:12px; opacity:.8 } .head-item .v{ font-size:16px; font-weight:800 }
-.head-dice{ display:flex; gap:10px; align-items:center; justify-content:flex-end }
+.table-head{ display:grid; gap:10px; grid-template-columns: repeat(4, minmax(0,1fr)) auto; margin-bottom:12px; align-items:stretch }
+.head-item{
+  background: rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+  border-radius:12px; padding:10px 12px; display:flex; flex-direction:column; justify-content:center
+}
+.head-item .k{ font-size:12px; opacity:1; color:#cfe9ff; font-weight:700 }
+.head-item .v{ font-size:16px; font-weight:800; color:#fff; text-shadow:0 1px 1px rgba(0,0,0,.35) }
 
-/* main board: 2-8-2 layout like machine */
+/* reveal card（右上角開獎卡片） */
+.reveal-card{
+  display:flex; flex-direction:column; justify-content:center; align-items:center;
+  padding:10px 12px; border-radius:12px;
+  background: linear-gradient(180deg, rgba(59,130,246,.14), rgba(99,102,241,.14));
+  border:1px solid rgba(99,102,241,.35);
+  box-shadow: inset 0 0 12px rgba(255,255,255,.08);
+}
+.reveal-title{
+  font-weight:900; letter-spacing:.06em; margin-bottom:6px; color:#eaf2ff; text-shadow:0 1px 1px rgba(0,0,0,.35)
+}
+.reveal-dice{ display:flex; gap:8px; align-items:center; justify-content:center; min-height:52px; padding:2px 0 }
+.reveal-dice.rolling .dice{ animation: dice-roll .6s linear infinite }
+.reveal-dice.popped .dice{ animation: dice-pop .7s ease-in-out both }
+
+@keyframes dice-pop{
+  0%{ transform: scale(.7) translateY(-6px); filter: drop-shadow(0 0 0 rgba(255,215,0,0)); }
+  60%{ transform: scale(1.08) translateY(0); filter: drop-shadow(0 0 10px rgba(255,215,0,.65)); }
+  100%{ transform: scale(1) translateY(0); filter: drop-shadow(0 0 0 rgba(255,215,0,0)); }
+}
+
+/* main board: 2-8-2 layout */
 .table-grid{ display:grid; grid-template-columns: 2fr 8fr 2fr; gap:10px }
 
-/* left SMALL / right BIG column */
+/* left SMALL / right BIG */
 .tile{
   display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
   min-height: 130px; padding:10px; border-radius:14px; text-align:center;
   background: linear-gradient(180deg, rgba(16,185,129,.16), rgba(16,185,129,.08));
   border: 1px solid rgba(16,185,129,.35);
+  position: relative; overflow: hidden;
 }
-.tile .badge{ font-size:12px; letter-spacing:.05em; opacity:.8 }
-.tile .cn{ font-size:44px; font-weight:900; line-height: 1; }
-.tile .note{ font-size:11px; opacity:.85; white-space:pre-line }
+.tile .badge{ font-size:12px; letter-spacing:.05em; opacity:.9 }
+.tile .cn{ font-size:44px; font-weight:900; line-height: 1; color:#fff; text-shadow:0 2px 4px rgba(0,0,0,.45) }
+.tile .note{ font-size:11px; opacity:.9; white-space:pre-line; color:#e0f2ff }
 .big-left{ background: linear-gradient(180deg, rgba(59,130,246,.12), rgba(59,130,246,.06)); border-color: rgba(59,130,246,.35) }
 .big-right{ background: linear-gradient(180deg, rgba(245,158,11,.18), rgba(245,158,11,.08)); border-color: rgba(245,158,11,.4) }
 .tile.disabled{ opacity:.65; cursor:not-allowed }
 
-/* central totals (14 cols like picture) */
+/* central totals (14 col) */
 .mid-14{ display:grid; grid-template-columns: repeat(14, minmax(0,1fr)); gap:8px }
 .sicbo-cell{
   min-height:72px; border-radius:12px; border:1px solid rgba(255,255,255,.14);
   background: rgba(255,255,255,.06); color:#fff; display:flex; align-items:center; justify-content:center;
-  padding:.5rem .6rem; transition: transform .08s ease, background-color .12s ease, border-color .12s ease, opacity .2s ease;
+  padding:.5rem .6rem; transition: transform .08s ease, background-color .12s ease, border-color .12s ease, opacity .2s ease, box-shadow .2s ease;
+  position: relative; overflow: hidden;
 }
 .sicbo-cell:hover{ background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.3) }
 .sicbo-cell:active{ transform: translateY(1px) }
 .sicbo-cell.disabled{ opacity:.6; cursor:not-allowed; filter: grayscale(.1) }
 .sicbo-cell.total{ display:flex; flex-direction:column; gap:4px }
-.total-num{ font-size:18px; font-weight:800 }
-.total-odd{ font-size:11px; opacity:.85 }
+.total-num{ font-size:18px; font-weight:800; color:#f7fbff; text-shadow:0 1px 1px rgba(0,0,0,.35) }
+.total-odd{ font-size:11px; opacity:.9; color:#d6e9ff }
 
-/* odd/even section (two wide) */
+/* odd/even */
 .row-two{ display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px; margin-top:10px }
-.row-two .h1{ font-size:22px; font-weight:900; margin-right:6px }
-.row-two .sub{ font-size:11px; opacity:.85 }
+.row-two .h1{ font-size:22px; font-weight:900; margin-right:6px; color:#eaf6ff; text-shadow:0 1px 1px rgba(0,0,0,.3) }
+.row-two .sub{ font-size:11px; opacity:.9; color:#eaf6ff }
 
 /* doubles + any triple + triples */
 .row-multi{ display:grid; grid-template-columns: 5fr 2fr 5fr; gap:10px; margin-top:10px }
@@ -110,8 +169,8 @@ html, body { background: #0a0f14; min-height: 100%; color: #fff; }
 /* combinations (15) */
 .combos{ display:grid; grid-template-columns: repeat(10, minmax(0,1fr)); gap:8px; margin-top:10px }
 .combos .sicbo-cell{ min-height:60px }
-.h2{ font-size:14px; font-weight:700 }
-.sub{ font-size:11px; opacity:.85 }
+.h2{ font-size:14px; font-weight:700; color:#eaf6ff; text-shadow:0 1px 1px rgba(0,0,0,.3) }
+.sub{ font-size:11px; opacity:.9; color:#eaf6ff }
 
 /* single dice row */
 .singles{ display:grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap:8px; margin-top:10px }
@@ -122,73 +181,103 @@ html, body { background: #0a0f14; min-height: 100%; color: #fff; }
   border-top:1px dashed rgba(255,255,255,.18);
 }
 .chips{ display:flex; align-items:center; gap:8px; flex-wrap:wrap }
-.chips-label{ opacity:.8; font-size:12px; margin-right:4px }
+.chips-label{ opacity:.9; font-size:12px; margin-right:4px }
 .chip{
   width:48px; height:48px; border-radius:9999px; border:4px solid #fff;
   display:flex; align-items:center; justify-content:center; font-weight:800;
   box-shadow: 0 6px 0 rgba(0,0,0,.25), inset 0 0 8px rgba(255,255,255,.35);
-  background:#3b82f6;
+  background:#3b82f6; color:#fff;
 }
 .chip-10{ background:#22c55e } .chip-100{ background:#3b82f6 }
 .chip-1000{ background:#a855f7 } .chip-5000{ background:#111827 }
 .chip.selected{ outline:3px solid rgba(255,255,255,.7); box-shadow:0 4px 0 rgba(0,0,0,.25), 0 0 0 6px rgba(255,255,255,.12) }
-.locked-hint{ color:#fecaca; font-size:12px }
+.locked-hint{ color:#fecaca; font-size:12px; font-weight:700 }
 
-/* ========================= 強化可讀性（上排/小字） ========================= */
-.topbar,.topbar *{ color:#eaf6ff!important; text-shadow:0 1px 1px rgba(0,0,0,.35) }
-.topbar .btn{ color:#f7fbff!important; border-color:rgba(255,255,255,.28)!important; background:rgba(255,255,255,.12)!important }
-.topbar .btn:hover{ background:rgba(255,255,255,.18)!important }
-.room-pill{ color:#eafff6!important; background:rgba(16,185,129,.38)!important; border-color:rgba(16,185,129,.55)!important; text-shadow:0 1px 1px rgba(0,0,0,.4) }
-.amount input{ color:#eaf6ff!important; background:rgba(0,0,0,.45)!important; border-color:rgba(255,255,255,.35)!important; font-weight:700 }
-.amount input::placeholder{ color:rgba(234,246,255,.7)!important }
-.table-head .head-item .k{ color:#cfe9ff!important; opacity:1!important; font-weight:700 }
-.table-head .head-item .v{ color:#ffffff!important; text-shadow:0 1px 1px rgba(0,0,0,.35) }
-.sicbo-cell.total .total-num{ color:#f7fbff!important; text-shadow:0 1px 1px rgba(0,0,0,.35) }
-.sicbo-cell.total .total-odd{ color:#d6e9ff!important }
-.row-two .h1,.row-two .sub,.h2,.sub{ color:#eaf6ff!important; text-shadow:0 1px 1px rgba(0,0,0,.3) }
-.tile .badge{ color:#d6f5ff!important } .tile .cn{ color:#fff!important; text-shadow:0 2px 4px rgba(0,0,0,.45) }
-.tile .note{ color:#e0f2ff!important }
-.locked-hint { color:#ffd7d7!important; font-weight:700 }
+/* ========= 中獎格閃光 ========== */
+@keyframes winner-flash {
+  0%, 100% { box-shadow: 0 0 0 rgba(255, 215, 0, 0); }
+  50% {
+    box-shadow: 0 0 18px 8px rgba(255, 215, 0, .95), 0 0 25px rgba(255, 245, 157, .8);
+    border-color: rgba(255, 215, 0, .9);
+  }
+}
+.tile.winner,
+.sicbo-cell.winner {
+  animation: winner-flash 0.5s ease-in-out 4; /* 閃 4 下 */
+  z-index: 2;
+}
+.tile.winner::after,
+.sicbo-cell.winner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle, rgba(255,255,200,.35) 0%, transparent 70%);
+  opacity: 0.7;
+  pointer-events: none;
+}
 
-/* 🎲 骰子與動畫 */
-.dice{ --size:36px; width:var(--size); height:var(--size);
-  background:linear-gradient(160deg, #fafafa, #e5e7eb); border-radius:10px; box-shadow:0 4px 0 rgba(0,0,0,.25), inset 0 0 12px rgba(0,0,0,.12);
+/* ===== dice ===== */
+.dice{
+  --size:36px; width:var(--size); height:var(--size);
+  background:linear-gradient(160deg, #fafafa, #e5e7eb);
+  border-radius:10px; box-shadow:0 4px 0 rgba(0,0,0,.25), inset 0 0 12px rgba(0,0,0,.12);
   position:relative; display:inline-block;
 }
 .dice .pip{ --pip:8px; width:var(--pip); height:var(--pip); background:#111827; border-radius:9999px; position:absolute; opacity:0; transition:opacity .15s ease }
 .dice .p1{ top:6px; left:6px } .dice .p2{ top:6px; left:calc(50% - 4px) } .dice .p3{ top:6px; right:6px }
 .dice .p4{ top:calc(50% - 4px); left:6px } .dice .p5{ top:calc(50% - 4px); left:calc(50% - 4px) } .dice .p6{ top:calc(50% - 4px); right:6px }
 .dice .p7{ bottom:6px; left:6px } .dice .p8{ bottom:6px; left:calc(50% - 4px) } .dice .p9{ bottom:6px; right:6px }
-.dice.face-1 .p5{opacity:1} .dice.face-2 .p1,.dice.face-2 .p9{opacity:1}
+
+/* faces */
+.dice.face-1 .p5{opacity:1}
+.dice.face-2 .p1,.dice.face-2 .p9{opacity:1}
 .dice.face-3 .p1,.dice.face-3 .p5,.dice.face-3 .p9{opacity:1}
 .dice.face-4 .p1,.dice.face-4 .p3,.dice.face-4 .p7,.dice.face-4 .p9{opacity:1}
 .dice.face-5 .p1,.dice.face-5 .p3,.dice.face-5 .p5,.dice.face-5 .p7,.dice.face-5 .p9{opacity:1}
 .dice.face-6 .p1,.dice.face-6 .p3,.dice.face-6 .p4,.dice.face-6 .p6,.dice.face-6 .p7,.dice.face-6 .p9{opacity:1}
-@keyframes dice-roll{0%{transform:translateY(0) rotate(0)}20%{transform:translate(-2px,-4px) rotate(18deg)}40%{transform:translate(4px,-6px) rotate(42deg)}60%{transform:translate(-3px,-3px) rotate(66deg)}80%{transform:translate(3px,-2px) rotate(84deg)}100%{transform:translateY(0) rotate(90deg)}}
+
+@keyframes dice-roll{
+  0%{transform:translateY(0) rotate(0)}
+  20%{transform:translate(-2px,-4px) rotate(18deg)}
+  40%{transform:translate(4px,-6px) rotate(42deg)}
+  60%{transform:translate(-3px,-3px) rotate(66deg)}
+  80%{transform:translate(3px,-2px) rotate(84deg)}
+  100%{transform:translateY(0) rotate(90deg)}
+}
 .dice.rolling{ animation:dice-roll .6s linear infinite; box-shadow:0 6px 0 rgba(0,0,0,.35), inset 0 0 14px rgba(0,0,0,.16) }
 .dice.dice-sm{ --size:28px } .dice.dice-lg{ --size:44px }
 
-/* 🟡 中獎格閃光 */
-@keyframes winner-flash {
-  0%, 100% { box-shadow: 0 0 0 rgba(255, 215, 0, 0); }
-  50% { 
-    box-shadow: 0 0 18px 8px rgba(255, 215, 0, .95), 0 0 25px rgba(255, 245, 157, .8);
-    border-color: rgba(255, 215, 0, .9);
-  }
+/* ===== Roadmap ===== */
+.roadmap {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.12);
 }
-.winner{ animation: winner-flash 0.5s ease-in-out 4; position: relative; z-index: 2; }
+.roadmap-cell {
+  background: rgba(0,0,0,.38);
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 10px;
+  padding: 8px;
+  text-align: center;
+  color: #fff;
+  font-size: 12px;
+}
+.roadmap .dice-mini {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.roadmap .dice-mini .dice { --size: 24px } /* 更清晰 */
+.roadmap .meta .sum { font-weight: 800; margin-right: 6px; font-size: 13px }
+.roadmap .meta .tag { opacity: .9; font-size: 12px }
+.roadmap-empty { padding: 10px; opacity: .8 }
 
-/* ========= 路子圖（最近 12 局） ========= */
-.roadmap { display:grid; grid-template-columns:repeat(auto-fill,minmax(88px,1fr));
-  gap:8px; margin-top:16px; padding:10px; border-radius:12px;
-  background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
-}
-.roadmap-cell { background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.18);
-  border-radius:10px; padding:6px; text-align:center; font-size:12px;
-}
-.roadmap .dice-mini { display:flex; justify-content:center; gap:4px; margin-bottom:4px }
-.roadmap .meta .sum { font-weight: 800; margin-right: 6px }
-.roadmap .meta .tag { opacity: .85 }
-
-/* ===== 段落間距，避免路子貼太近 ===== */
-.block-gap { margin-top: 14px; }
+/* 讓路子與下注桌面有呼吸距（避免太貼近） */
+.table-outer { margin-bottom: 16px }
