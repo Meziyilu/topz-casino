@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
-    "render:build": "npx prisma generate && npx prisma db push && node prisma/seed.cjs && next build",
+    "render:build": "npx prisma generate && npx prisma migrate deploy && npx prisma db seed && next build",
     "render:start": "next start",
     "lint": "next lint",
     "prisma:generate": "prisma generate",
@@ -16,6 +16,7 @@
     "prisma:seed": "node prisma/seed.cjs",
     "db:push": "prisma db push",
     "db:reset": "prisma migrate reset --force",
+    "setup:db": "prisma migrate reset --force && prisma migrate dev -n init_v112 && prisma db seed",
     "validate:structure": "ts-node --transpile-only scripts/validate-structure.ts",
     "postinstall": "prisma generate",
     "auto:baccarat": "node --require esbuild-register scripts/auto-baccarat.ts"
