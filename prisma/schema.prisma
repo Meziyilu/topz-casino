@@ -153,6 +153,17 @@ enum SicBoBetKind {
   SINGLE_DIE
 }
 
+// ======================== Lotto Extra Enums (新增) ========================
+enum TailParity {
+  ODD
+  EVEN
+}
+
+enum TailSize {
+  BIG   // 尾數 5-9
+  SMALL // 尾數 0-4
+}
+
 // ======================== User ========================
 model User {
   id        String  @id @default(cuid())
@@ -531,7 +542,14 @@ model LottoDraw {
   status    String   @default("OPEN")
   createdAt DateTime @default(now())
 
+  // ★ 新增：以台北日切儲存的日期（存 UTC 對應點）與當日序號
+  day      DateTime  @default(now())
+  daySeq   Int       @default(1)
+
   bets LottoBet[]
+
+  @@index([day, daySeq])
+  @@unique([day, daySeq])
 }
 
 model LottoBet {
@@ -543,11 +561,17 @@ model LottoBet {
   amount    Int
   createdAt DateTime @default(now())
 
+  // ★ 新增：總和尾數玩法
+  tailParity TailParity?
+  tailSize   TailSize?
+
   user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   draw LottoDraw @relation(fields: [drawId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
   @@index([drawId])
+  @@index([drawId, tailParity])
+  @@index([drawId, tailSize])
 }
 
 // ======================== SicBo ========================

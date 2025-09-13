@@ -6,16 +6,25 @@ import { readConfig, ensureOpenDraw, lockIfNeeded, drawIfDue, settleIfDrawn } fr
 type SchedulerState = {
   timer?: ReturnType<typeof setInterval>;
   running: boolean;
+  resetting: boolean; // ★ 新增：重製中
 };
 
 const g = globalThis as any;
 if (!g.__LOTTO_SCHED__) {
-  g.__LOTTO_SCHED__ = { running: false } as SchedulerState;
+  g.__LOTTO_SCHED__ = { running: false, resetting: false } as SchedulerState;
 }
 const state: SchedulerState = g.__LOTTO_SCHED__;
 
-// 每秒滴答：確保有 OPEN、到點鎖盤、到點開獎、開過就結算
+// 提供給 API 呼叫：設定/解除重製旗標
+export function setResetting(on: boolean) {
+  state.resetting = on;
+}
+export function isResetting() {
+  return !!state.resetting;
+}
+
 async function tick() {
+  if (state.resetting) return; // ★ 重製中，不做任何事
   const now = new Date();
   const cfg = await readConfig();
   await ensureOpenDraw(now, cfg);
@@ -31,10 +40,7 @@ export function startLottoScheduler() {
 }
 
 export function stopLottoScheduler() {
-  if (state.timer) {
-    // 在不同 TS lib 設定（DOM vs Node）都可通過型別檢查
-    clearInterval(state.timer);
-  }
+  if (state.timer) clearInterval(state.timer);
   state.timer = undefined;
   state.running = false;
 }
