@@ -21,8 +21,6 @@ interface StateResp {
   table: {
     banker: number[];
     player: number[];
-    bankerThird?: number;
-    playerThird?: number;
     total?: { player: number; banker: number };
     outcome?: "PLAYER" | "BANKER" | "TIE";
   };
@@ -42,18 +40,19 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
   const [history, setHistory] = useState<any[]>([]);
   const [time, setTime] = useState<string>("");
   const [balance, setBalance] = useState<number>(0);
+  const [chip, setChip] = useState<number>(100);
 
-  // Lottie 動畫引用
+  // Lottie 動畫
   const lottieRef = useRef<HTMLDivElement>(null);
   const lottieAnimRef = useRef<any>(null);
 
-  // 每秒更新時間
+  // 每秒時間
   useEffect(() => {
     const t = setInterval(() => setTime(new Date().toLocaleTimeString("zh-TW")), 1000);
     return () => clearInterval(t);
   }, []);
 
-  // 輪詢狀態
+  // 拉 state
   useEffect(() => {
     const tick = async () => {
       const res = await fetch(`/api/casino/baccarat/state?room=${params.room}`);
@@ -65,7 +64,7 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
     return () => clearInterval(id);
   }, [params.room]);
 
-  // 拉下注流水
+  // 拉下注紀錄
   useEffect(() => {
     const fetchHistory = async () => {
       const res = await fetch(`/api/casino/baccarat/history?room=${params.room}&take=10`, {
@@ -77,18 +76,17 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
     fetchHistory();
   }, [params.room, state?.round?.id]);
 
-  // 錢包餘額
+  // 錢包
   useEffect(() => {
     const fetchBalance = async () => {
-      const res = await fetch("/api/wallet/balance", {
-        headers: { "x-user-id": "demo-user" },
-      });
+      const res = await fetch("/api/wallet/balance", { headers: { "x-user-id": "demo-user" } });
       const data = await res.json();
       setBalance(data.wallet ?? 0);
     };
     fetchBalance();
   }, [state?.round?.id]);
 
+  // 下單
   async function place(side: string, amt: number) {
     if (!state) return;
     setPlacing(true);
@@ -101,21 +99,19 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
     setBets((prev) => ({ ...prev, [side]: (prev[side] || 0) + amt }));
   }
 
-  // 翻牌動畫 class
-  const revealClass = state?.round.phase === "REVEALING" ? "flip-cards" : "";
+  // 翻牌特效
+  const revealClass = state?.round.phase === "REVEALING" ? "flip-cards reveal-gold" : "";
 
-  // 勝利閃爍 class
+  // 勝家閃爍
   const winClass =
     state?.round.phase === "SETTLED" ? `winner-${state.table.outcome?.toLowerCase()}` : "";
 
-  // 當局結算 → 播放 Lottie 動畫
+  // 播放 Lottie
   useEffect(() => {
     if (state?.round.phase === "SETTLED" && lottieRef.current) {
       (async () => {
-        const lottie = (await import("lottie-web")) as any;
-        if (lottieAnimRef.current) {
-          lottieAnimRef.current.destroy();
-        }
+        const lottie = (await import("lottie-web/build/player/lottie_light")) as any;
+        if (lottieAnimRef.current) lottieAnimRef.current.destroy();
         lottieAnimRef.current = lottie.loadAnimation({
           container: lottieRef.current,
           renderer: "svg",
@@ -127,6 +123,7 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
     }
   }, [state?.round.phase]);
 
+  // 賭注項目
   const betOptions: { side: string; label: string; odds: string }[] = [
     { side: "PLAYER", label: "閒", odds: "1倍" },
     { side: "BANKER", label: "莊", odds: "0.95倍" },
@@ -139,14 +136,22 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
   ];
 
   return (
-    <div className="baccarat-room dark-bg">
+    <div className="baccarat-room dark-theme">
+      {/* Header */}
       <header className="room-header">
-        <h1>百家樂 {params.room}</h1>
-        <div>局號：{state?.round.seq ?? 0}</div>
-        <div>狀態：{state?.round.phase}</div>
-        <div>倒數：{state?.timers.endInSec ?? 0} 秒</div>
-        <div>目前時間：{time}</div>
-        <div>💰 錢包：{balance}</div>
+        <div className="title">
+          <h1>百家樂 {params.room}</h1>
+          <span>局號：{state?.round.seq ?? 0}　狀態：{state?.round.phase}　倒數：{state?.timers.endInSec ?? 0}s</span>
+          <span>目前時間：{time}</span>
+        </div>
+        <div className="wallet">💰 錢包：{balance}</div>
+        <div className="chips">
+          {[50, 100, 500, 1000].map((c) => (
+            <button key={c} className={`chip ${chip === c ? "active" : ""}`} onClick={() => setChip(c)}>
+              💵 {c}
+            </button>
+          ))}
+        </div>
       </header>
 
       {/* 翻牌區 */}
@@ -155,9 +160,7 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
           <h2>閒</h2>
           <div className="cards">
             {state?.table.player.map((c, i) => (
-              <div key={i} className="card">
-                {c}
-              </div>
+              <div key={i} className="card">{c}</div>
             ))}
           </div>
         </div>
@@ -165,16 +168,14 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
           <h2>莊</h2>
           <div className="cards">
             {state?.table.banker.map((c, i) => (
-              <div key={i} className="card">
-                {c}
-              </div>
+              <div key={i} className="card">{c}</div>
             ))}
           </div>
         </div>
       </div>
 
       {/* 勝利特效 */}
-      <div ref={lottieRef} className="lottie-win"></div>
+      <div ref={lottieRef} className="win-fx-overlay"></div>
 
       {/* 下注面板 */}
       <div className="betting-panel green-panel">
@@ -182,14 +183,14 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
           <button
             key={opt.side}
             disabled={state?.locked || placing}
-            onClick={() => place(opt.side, 100)}
-            className={
-              state?.round.phase === "SETTLED" && state?.table.outcome === opt.side
-                ? "glow"
-                : ""
-            }
+            onClick={() => place(opt.side, chip)}
+            className={`bet-btn ${
+              state?.round.phase === "SETTLED" && state?.table.outcome === opt.side ? "glow-win" : ""
+            }`}
           >
-            {opt.label} {opt.odds} （{bets[opt.side] || 0}）
+            <span>{opt.label}</span>
+            <span className="amt">{opt.odds}</span>
+            <span className="amt">已下 {bets[opt.side] || 0}</span>
           </button>
         ))}
       </div>
@@ -203,16 +204,18 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
         ))}
       </div>
 
-      {/* 近 10 局下注流水 */}
+      {/* 歷史 */}
       <div className="history">
         <h3>近 10 局下注與派彩</h3>
-        {history.map((h, i) => (
-          <div key={i} className="history-item">
-            <div>局號 {h.seq}</div>
-            <div>下注 {h.bets.map((b: Bet) => `${b.side}:${b.amount}`).join(", ")}</div>
-            <div>派彩 {h.payouts.map((p: any) => p.amount).join(", ")}</div>
-          </div>
-        ))}
+        <div className="history-list">
+          {history.map((h, i) => (
+            <div key={i} className="history-card">
+              <div className="round-id">局號 {h.seq}</div>
+              <div className="bets">下注 {h.bets.map((b: Bet) => `${b.side}:${b.amount}`).join(", ")}</div>
+              <div className="payouts">派彩 {h.payouts.map((p: any) => p.amount).join(", ")}</div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
