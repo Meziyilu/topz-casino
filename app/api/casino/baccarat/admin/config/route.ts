@@ -1,21 +1,17 @@
-import { NextRequest, NextResponse } from "next/server";
-import { ROOMS, getConfig, setConfig } from "../_utils";
+export const runtime = "nodejs"; export const dynamic = "force-dynamic";
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
-export const dynamic = "force-dynamic";
-
-export async function GET(req: NextRequest) {
-  const url = new URL(req.url);
-  const room = (url.searchParams.get("room") || "").toUpperCase();
-  if (!ROOMS.includes(room as any)) return NextResponse.json({ error: "BAD_ROOM" }, { status: 400 });
-  return NextResponse.json({ ok: true, room, config: getConfig(room as any) });
+export async function GET(){
+  const keys = await prisma.gameConfig.findMany({ where:{ gameCode:"BACCARAT" }, orderBy:[{ key:"asc" }]});
+  return NextResponse.json({ items: keys });
 }
-
-export async function POST(req: NextRequest) {
-  const url = new URL(req.url);
-  const room = (url.searchParams.get("room") || "").toUpperCase();
-  if (!ROOMS.includes(room as any)) return NextResponse.json({ error: "BAD_ROOM" }, { status: 400 });
-  const body = await req.json().catch(() => ({}));
-  const { betSeconds, revealSeconds } = body || {};
-  const cfg = setConfig(room as any, Number(betSeconds), Number(revealSeconds));
-  return NextResponse.json({ ok: true, room, config: cfg });
+export async function POST(req:Request){
+  const { key, valueInt, valueString } = await req.json();
+  const item = await prisma.gameConfig.upsert({
+    where:{ gameCode_key:{ gameCode:"BACCARAT", key } },
+    create:{ gameCode:"BACCARAT", key, valueInt, valueString },
+    update:{ valueInt, valueString }
+  });
+  return NextResponse.json({ item });
 }

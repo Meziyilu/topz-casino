@@ -1,23 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+export const runtime = "nodejs"; export const dynamic = "force-dynamic";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ROOMS, refundUsers } from "../_utils";
 
-export const dynamic = "force-dynamic";
-
-export async function POST(req: NextRequest) {
-  const url = new URL(req.url);
-  const room = (url.searchParams.get("room") || "").toUpperCase();
-  if (!ROOMS.includes(room as any)) return NextResponse.json({ error: "BAD_ROOM" }, { status: 400 });
-
-  const now = new Date();
-  await prisma.$transaction(async (tx) => {
-    const actives = await tx.round.findMany({ where: { room: room as any, NOT: { phase: "SETTLED" } }, select: { id: true } });
-    if (!actives.length) return;
-    const ids = actives.map(r => r.id);
-    const bets = await tx.bet.findMany({ where: { roundId: { in: ids } }, select: { userId: true, amount: true } });
-    await refundUsers(tx as any, bets);
-    await tx.round.updateMany({ where: { id: { in: ids } }, data: { phase: "SETTLED", outcome: null, endedAt: now } });
-  });
-
-  return NextResponse.json({ ok: true });
+export async function POST(req:Request){
+  const { room } = await req.json() as { room:"R30"|"R60"|"R90" };
+  // 將當前局強制 SETTLED，下一次拉 state 會自動開新局
+  const cur = await prisma.baccaratRound.findFirst({ where:{ room }, orderBy:[{ createdAt:"desc" }]});
+  if (cur) await prisma.baccaratRound.update({ where:{ id:cur.id }, data:{ phase:"SETTLED" }});
+  return NextResponse.json({ ok:true });
 }

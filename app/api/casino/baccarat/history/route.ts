@@ -3,12 +3,11 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(req:Request){
-  const userId = req.headers.get("x-user-id") || "demo-user";
   const { searchParams } = new URL(req.url);
   const room = (searchParams.get("room") ?? "R30") as any;
-  // 最近 10 局下注
-  const list = await prisma.baccaratBet.findMany({
-    where:{ userId, room }, orderBy:[{ createdAt:"desc" }], take: 50
+  const list = await prisma.baccaratRound.findMany({
+    where:{ room, resultJson:{ not:null }}, orderBy:[{ createdAt:"desc" }], take:50
   });
-  return NextResponse.json({ items:list });
+  const items = list.map(x=>({ id:x.id, seq:x.seq, createdAt:x.createdAt, result: JSON.parse(x.resultJson!) }));
+  return NextResponse.json({ items });
 }
