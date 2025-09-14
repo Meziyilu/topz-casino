@@ -40,6 +40,7 @@ type State = {
 const REVEAL_SEC = 8;
 const BET_SEC = 30;
 
+/** 確保每個房間都有 seed（洗牌種子） */
 export async function ensureRoomSeed(room: RoomCode) {
   const meta = await prisma.gameConfig.findUnique({
     where: { gameCode_key: { gameCode: "BACCARAT", key: `room:${room}:shoeSeed` } },
@@ -51,9 +52,11 @@ export async function ensureRoomSeed(room: RoomCode) {
   }
 }
 
+/** 取得目前狀態（必要時自動開新局 / 推進局相位） */
 export async function currentState(room: RoomCode): Promise<State> {
   await ensureRoomSeed(room);
 
+  // 取最新一局
   let r = await prisma.round.findFirst({
     where: { room },
     orderBy: [{ startedAt: "desc" }],
@@ -64,12 +67,12 @@ export async function currentState(room: RoomCode): Promise<State> {
   // 沒有局或上一局已結束 → 開新局
   if (!r || r.phase === "SETTLED") {
     const day = taipeiDay(now);
-    const seq =
-      (await prisma.round.count({ where: { room, day } })) + 1;
-    const seed = await prisma.gameConfig.findUnique({
+    const seq = (await prisma.round.count({ where: { room, day } })) + 1;
+    const seedCfg = await prisma.gameConfig.findUnique({
       where: { gameCode_key: { gameCode: "BACCARAT", key: `room:${room}:shoeSeed` } },
     });
-    const shoe = initShoe(seed?.valueInt ?? Date.now());
+    const shoe = initShoe(seedCfg?.valueInt ?? Date.now());
+
     r = await prisma.round.create({
       data: {
         room,
@@ -83,15 +86,25 @@ export async function currentState(room: RoomCode): Promise<State> {
     });
   }
 
-  // 推進相位
-  const phaseInfo = nextPhases(now, new Date(r.startedAt));
+  // 計算當前相位（根據 startedAt）
+  const np0 = nextPhases(now, new Date(r.startedAt));
 
-  if (phaseInfo.phase === "REVEALING" && r.phase === "BETTING") {
-    // 進入開獎：發牌+保存結果
-    const shoe = JSON.parse(r.shoeJson) as number[];
-    const dealt = dealRound(shoe);
-    await prisma.round.update({
-      where: { id: r.id },
+  // ---- 原子轉場：BETTING -> REVEALING（避免多請求重複發牌） ----
+  if (np0.phase === "REVEALING" && r.phase === "BETTING") {
+    // 在同一筆交易內先讀取牌靴並發牌
+    const dealt = (() => {
+      try {
+        const shoe = JSON.parse(r!.shoeJson) as number[];
+        return dealRound(shoe);
+      } catch {
+        // 異常時重新初始化一副牌，避免整桌卡住
+        const fallbackShoe = initShoe(Date.now());
+        return dealRound(fallbackShoe);
+      }
+    })();
+
+    const updated = await prisma.round.updateMany({
+      where: { id: r.id, phase: "BETTING" }, // 條件：仍是 BETTING 才允許切換
       data: {
         phase: "REVEALING",
         endsAt: addSeconds(new Date(r.startedAt), BET_SEC + REVEAL_SEC),
@@ -99,28 +112,45 @@ export async function currentState(room: RoomCode): Promise<State> {
         shoeJson: JSON.stringify(dealt.shoe),
       },
     });
+
+    if (updated > 0) {
+      r = await prisma.round.findUnique({ where: { id: r.id } });
+    } else {
+      // 其他請求已經切過相位；再拉一次最新資料
+      r = await prisma.round.findUnique({ where: { id: r.id } });
+    }
+  }
+
+  // 重新計算相位（可能剛切過）
+  const np1 = nextPhases(new Date(), new Date(r.startedAt));
+
+  // ---- 原子轉場：-> SETTLED（只做一次結算） ----
+  if (np1.phase === "SETTLED" && r.phase !== "SETTLED") {
+    await settleRound(r.id);
+
+    // 從結果萃取 outcome
+    const outcome = extractOutcome(r.resultJson);
+
+    await prisma.round.updateMany({
+      where: { id: r.id, NOT: { phase: "SETTLED" } },
+      data: { phase: "SETTLED", outcome: (outcome as any) ?? null, endedAt: new Date() },
+    });
+
     r = await prisma.round.findUnique({ where: { id: r.id } });
   }
 
-  if (phaseInfo.phase === "SETTLED" && r.phase !== "SETTLED") {
-    await settleRound(r.id);
-    r = await prisma.round.update({
-      where: { id: r.id },
-      data: { phase: "SETTLED", outcome: extractOutcome(r.resultJson) ?? null, endedAt: new Date() },
-    });
-  }
+  const result = parseResult(r.resultJson);
 
-  const result = r.resultJson ? (JSON.parse(r.resultJson) as DealResult) : null;
-
-  // 路子（取最近 60 局）
-  const bead = await prisma.round.findMany({
+  // 路子（取最近 60 局，老到新）
+  const beadRows = await prisma.round.findMany({
     where: { room, resultJson: { not: null } },
     orderBy: [{ startedAt: "desc" }],
     take: 60,
+    select: { resultJson: true },
   });
-  const beadList = bead.reverse().map((x) => {
-    const d = JSON.parse(x.resultJson!) as DealResult;
-    return d.outcome as "BANKER" | "PLAYER" | "TIE";
+  const beadList = beadRows.reverse().map((x) => {
+    const d = parseResult(x.resultJson);
+    return (d?.outcome ?? "TIE") as "BANKER" | "PLAYER" | "TIE";
   });
 
   const np = nextPhases(new Date(), new Date(r.startedAt));
@@ -150,16 +180,21 @@ export async function currentState(room: RoomCode): Promise<State> {
   };
 }
 
-function extractOutcome(resultJson?: string | null): "PLAYER" | "BANKER" | "TIE" | null {
-  if (!resultJson) return null;
+function parseResult(json?: string | null): DealResult | null {
+  if (!json) return null;
   try {
-    const r = JSON.parse(resultJson) as DealResult;
-    return r.outcome as any;
+    return JSON.parse(json) as DealResult;
   } catch {
     return null;
   }
 }
 
+function extractOutcome(json?: string | null): "PLAYER" | "BANKER" | "TIE" | null {
+  const r = parseResult(json);
+  return (r?.outcome as any) ?? null;
+}
+
+/** 下單（下注） */
 export async function placeBet(
   userId: string,
   room: RoomCode,
@@ -169,6 +204,7 @@ export async function placeBet(
 ) {
   const round = await prisma.round.findUnique({ where: { id: roundId } });
   if (!round) throw new Error("ROUND_NOT_FOUND");
+
   const phase = nextPhases(new Date(), new Date(round.startedAt));
   if (phase.locked) throw new Error("BET_LOCKED");
   if (amount <= 0) throw new Error("INVALID_AMOUNT");
@@ -187,7 +223,7 @@ export async function placeBet(
       data: {
         userId,
         type: "BET_PLACED",
-        target: "WALLET",     // ✅ 你的 Ledger 需要 target
+        target: "WALLET", // Ledger 需要 target
         amount,
         room,
         roundId,
@@ -196,23 +232,30 @@ export async function placeBet(
   });
 }
 
+/** 結算一局（派彩） */
 export async function settleRound(roundId: string) {
   const r = await prisma.round.findUnique({ where: { id: roundId } });
   if (!r || !r.resultJson) return;
 
-  const result = JSON.parse(r.resultJson) as DealResult;
+  const result = parseResult(r.resultJson);
+  if (!result) return;
+
   const bets = await prisma.bet.findMany({ where: { roundId } });
 
   await prisma.$transaction(async (tx) => {
     for (const b of bets) {
       const payout = settleOne({ side: b.side as any, amount: b.amount }, result) ?? 0;
       if (payout > 0) {
-        await tx.user.update({ where: { id: b.userId }, data: { balance: { increment: payout } } });
+        await tx.user.update({
+          where: { id: b.userId },
+          data: { balance: { increment: payout } },
+        });
+
         await tx.ledger.create({
           data: {
             userId: b.userId,
             type: "PAYOUT",
-            target: "WALLET",   // ✅ 同上
+            target: "WALLET",
             amount: payout,
             room: r.room,
             roundId,

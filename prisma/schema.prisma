@@ -1,5 +1,3 @@
-// Topzcasino v1.1.2 — Full Schema Baseline (Validated + Auth Augmented)
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,7 +7,548 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ======================== Profile Enums ========================
+model User {
+  id                  String               @id @default(cuid())
+  email               String               @unique
+  password            String
+  name                String?
+  avatarUrl           String?
+  isAdmin             Boolean              @default(false)
+  balance             Int                  @default(0)
+  bankBalance         Int                  @default(0)
+  createdAt           DateTime             @default(now())
+  nickname            String?
+  about               String?
+  country             String?
+  lastSeenAt          DateTime?
+  xp                  Int                  @default(0)
+  level               Int                  @default(1)
+  vipTier             Int                  @default(0)
+  vipExpireAt         DateTime?
+  headframe           HeadframeCode        @default(NONE)
+  panelStyle          PanelPreset          @default(GLASS_DARK)
+  panelTint           String?
+  publicSlug          String?              @unique
+  totalBets           Int                  @default(0)
+  totalStaked         BigInt               @default(0)
+  totalPayout         BigInt               @default(0)
+  totalWins           Int                  @default(0)
+  totalLosses         Int                  @default(0)
+  netProfit           BigInt               @default(0)
+  weeklyNetProfit     BigInt               @default(0)
+  favoriteGame        String?
+  displayName         String               @unique
+  isBanned            Boolean              @default(false)
+  isMuted             Boolean              @default(false)
+  emailVerifiedAt     DateTime?
+  registeredIp        String?
+  lastLoginAt         DateTime?
+  lastLoginIp         String?
+  referralCode        String?              @unique
+  inviterId           String?
+  bets                Bet[]
+  chatMessages        ChatMessage[]
+  checkinClaims       DailyCheckinClaim[]
+  emailVerifyToken    EmailVerifyToken?
+  eventParticipations EventParticipation[]
+  topups              ExternalTopup[]
+  friendsA            Friendship[]         @relation("friendA")
+  friendsB            Friendship[]         @relation("friendB")
+  ledgers             Ledger[]
+  lottoBets           LottoBet[]
+  passwordResetToken  PasswordResetToken?
+  promoImpressions    PromoImpression[]
+  rewardClaims        RewardClaim[]
+  rounds              Round[]              @relation("RoundDealer")
+  sicboBets           SicBoBet[]
+  sicboRoundsDealt    SicBoRound[]         @relation("SicBoDealer")
+  inviter             User?                @relation("InviteRelation", fields: [inviterId], references: [id])
+  invitees            User[]               @relation("InviteRelation")
+  achievements        UserAchievement[]
+  badges              UserBadge[]
+  checkinState        UserCheckinState?
+  collectibles        UserCollectible[]
+  personaTags         UserPersonaTag[]
+  profileModules      UserProfileModule[]
+  profileSettings     UserProfileSettings?
+  statSnapshots       UserStatSnapshot[]
+  wallComments        WallComment[]
+  likes               WallLike[]
+  posts               WallPost[]
+}
+
+model Ledger {
+  id           String         @id @default(cuid())
+  userId       String
+  type         LedgerType
+  target       BalanceTarget
+  amount       Int
+  createdAt    DateTime       @default(now())
+  roundId      String?
+  room         RoomCode?
+  sicboRoundId String?
+  sicboRoom    SicBoRoomCode?
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+  @@index([room, createdAt])
+  @@index([roundId])
+  @@index([sicboRoom, createdAt])
+  @@index([sicboRoundId])
+}
+
+model GameConfig {
+  id          String   @id @default(cuid())
+  gameCode    GameCode
+  key         String
+  valueString String?
+  valueInt    Int?
+  valueFloat  Float?
+  valueBool   Boolean?
+  json        Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([gameCode, key])
+  @@index([gameCode, key])
+}
+
+model UserProfileSettings {
+  userId     String   @id
+  layoutJson Json?
+  bgImageUrl String?
+  bgBlur     Int      @default(10)
+  bgDim      Int      @default(20)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserProfileModule {
+  id        String            @id @default(cuid())
+  userId    String
+  code      ProfileModuleCode
+  enabled   Boolean           @default(true)
+  sortOrder Int               @default(100)
+  config    Json?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, code])
+  @@index([userId, sortOrder])
+}
+
+model Badge {
+  id         String      @id @default(cuid())
+  code       String      @unique
+  name       String
+  iconUrl    String?
+  rarity     Int         @default(1)
+  animated   Boolean     @default(false)
+  desc       String?
+  createdAt  DateTime    @default(now())
+  userBadges UserBadge[]
+}
+
+model UserBadge {
+  id         String   @id @default(cuid())
+  userId     String
+  badgeId    String
+  pinned     Boolean  @default(false)
+  level      Int      @default(1)
+  acquiredAt DateTime @default(now())
+  badge      Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+  @@index([userId, pinned])
+}
+
+model Achievement {
+  id               String            @id @default(cuid())
+  code             String            @unique
+  name             String
+  desc             String?
+  target           Int               @default(1)
+  userAchievements UserAchievement[]
+}
+
+model UserAchievement {
+  id            String      @id @default(cuid())
+  userId        String
+  achievementId String
+  progress      Int         @default(0)
+  unlocked      Boolean     @default(false)
+  unlockedAt    DateTime?
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+  @@index([userId, unlocked])
+}
+
+model UserPersonaTag {
+  id        String   @id @default(cuid())
+  userId    String
+  tag       String
+  score     Int      @default(0)
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tag])
+}
+
+model Collectible {
+  id               String            @id @default(cuid())
+  code             String            @unique
+  name             String
+  imageUrl         String?
+  type             String
+  rarity           Int               @default(1)
+  userCollectibles UserCollectible[]
+}
+
+model UserCollectible {
+  id            String      @id @default(cuid())
+  userId        String
+  collectibleId String
+  quantity      Int         @default(1)
+  favorite      Boolean     @default(false)
+  acquiredAt    DateTime    @default(now())
+  collectible   Collectible @relation(fields: [collectibleId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, collectibleId])
+  @@index([userId, favorite])
+}
+
+model Friendship {
+  id      String   @id @default(cuid())
+  userAId String
+  userBId String
+  since   DateTime @default(now())
+  weight  Int      @default(0)
+  userA   User     @relation("friendA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB   User     @relation("friendB", fields: [userBId], references: [id], onDelete: Cascade)
+
+  @@unique([userAId, userBId])
+  @@index([userAId])
+  @@index([userBId])
+}
+
+model EventParticipation {
+  id       String   @id @default(cuid())
+  userId   String
+  eventId  String
+  rank     Int?
+  reward   Int      @default(0)
+  joinedAt DateTime @default(now())
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, eventId])
+}
+
+model WallPost {
+  id        String        @id @default(cuid())
+  userId    String
+  body      String
+  imageUrl  String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  hidden    Boolean       @default(false)
+  comments  WallComment[]
+  likes     WallLike[]
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model WallComment {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  body      String
+  createdAt DateTime @default(now())
+  hidden    Boolean  @default(false)
+  post      WallPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt])
+}
+
+model WallLike {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+  post      WallPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  enabled   Boolean  @default(true)
+}
+
+model MarqueeMessage {
+  id        String   @id @default(cuid())
+  text      String
+  priority  Int      @default(0)
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model Round {
+  id         String        @id @default(cuid())
+  room       RoomCode
+  phase      RoundPhase
+  outcome    RoundOutcome?
+  startedAt  DateTime      @default(now())
+  endedAt    DateTime?
+  endsAt     DateTime
+  day        String
+  seq        Int
+  shoeJson   String
+  resultJson String?
+  dealerId   String?
+  bets       Bet[]
+  dealer     User?         @relation("RoundDealer", fields: [dealerId], references: [id])
+
+  @@unique([room, day, seq])
+  @@index([room, startedAt])
+}
+
+model Bet {
+  id        String   @id @default(cuid())
+  userId    String
+  roundId   String
+  side      BetSide
+  amount    Int
+  createdAt DateTime @default(now())
+  round     Round    @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([roundId, side])
+  @@index([userId, createdAt])
+}
+
+model LottoDraw {
+  id        String     @id @default(cuid())
+  code      Int
+  drawAt    DateTime
+  numbers   Int[]
+  special   Int?
+  pool      Int        @default(0)
+  jackpot   Int        @default(0)
+  status    String     @default("OPEN")
+  createdAt DateTime   @default(now())
+  day       DateTime   @default(now())
+  daySeq    Int        @default(1)
+  bets      LottoBet[]
+
+  @@unique([day, daySeq])
+  @@index([day, daySeq])
+}
+
+model LottoBet {
+  id         String      @id @default(cuid())
+  userId     String
+  drawId     String
+  picks      Int[]
+  special    Int?
+  amount     Int
+  createdAt  DateTime    @default(now())
+  tailParity TailParity?
+  tailSize   TailSize?
+  draw       LottoDraw   @relation(fields: [drawId], references: [id], onDelete: Cascade)
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([drawId])
+  @@index([drawId, tailParity])
+  @@index([drawId, tailSize])
+}
+
+model SicBoRound {
+  id        String        @id @default(cuid())
+  room      SicBoRoomCode
+  phase     SicBoPhase
+  dice      Int[]
+  startedAt DateTime      @default(now())
+  endedAt   DateTime?
+  dealerId  String?
+  bets      SicBoBet[]
+  dealer    User?         @relation("SicBoDealer", fields: [dealerId], references: [id])
+}
+
+model SicBoBet {
+  id        String       @id @default(cuid())
+  userId    String
+  roundId   String
+  kind      SicBoBetKind
+  amount    Int
+  payload   Json?
+  createdAt DateTime     @default(now())
+  round     SicBoRound   @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([roundId, kind])
+  @@index([userId, createdAt])
+}
+
+model UserStatSnapshot {
+  id          String     @id @default(cuid())
+  userId      String
+  period      StatPeriod
+  windowStart DateTime
+  windowEnd   DateTime
+  room        RoomCode?
+  gameBet     BigInt     @default(0)
+  gamePayout  BigInt     @default(0)
+  bonusIncome BigInt     @default(0)
+  betsCount   Int        @default(0)
+  winsCount   Int        @default(0)
+  lossesCount Int        @default(0)
+  netProfit   BigInt     @default(0)
+  updatedAt   DateTime   @updatedAt
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, period, windowStart, windowEnd, room])
+  @@index([period, room, windowStart, netProfit])
+  @@index([userId, period, room])
+}
+
+model UserCheckinState {
+  userId          String    @id
+  lastClaimedYmd  DateTime?
+  streak          Int       @default(0)
+  totalClaims     Int       @default(0)
+  nextAvailableAt DateTime?
+  updatedAt       DateTime  @updatedAt
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model DailyCheckinClaim {
+  id           String   @id @default(cuid())
+  userId       String
+  ymd          DateTime
+  amount       Int
+  streakBefore Int
+  streakAfter  Int
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, ymd])
+  @@index([userId, createdAt])
+}
+
+model RewardCampaign {
+  id             String             @id @default(cuid())
+  code           String             @unique
+  kind           RewardCampaignKind
+  title          String
+  subtitle       String?
+  body           String?
+  imageUrl       String?
+  popupTrigger   PopupTrigger       @default(LOGIN)
+  autoPopup      Boolean            @default(true)
+  enabled        Boolean            @default(true)
+  priority       Int                @default(100)
+  coinAmount     Int                @default(0)
+  claimOnce      Boolean            @default(true)
+  startAt        DateTime?
+  endAt          DateTime?
+  minTopupAmount Int?
+  topupSince     DateTime?
+  topupUntil     DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  impressions    PromoImpression[]
+  claims         RewardClaim[]
+
+  @@index([enabled, priority])
+  @@index([kind, startAt, endAt])
+}
+
+model RewardClaim {
+  id         String         @id @default(cuid())
+  campaignId String
+  userId     String
+  amount     Int            @default(0)
+  createdAt  DateTime       @default(now())
+  campaign   RewardCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, userId])
+  @@index([userId, createdAt])
+}
+
+model PromoImpression {
+  id         String         @id @default(cuid())
+  campaignId String
+  userId     String
+  shownAt    DateTime       @default(now())
+  campaign   RewardCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, campaignId, shownAt])
+}
+
+model ExternalTopup {
+  id        String   @id @default(cuid())
+  userId    String
+  amount    Int
+  status    String   @default("COMPLETED")
+  provider  String?
+  refCode   String?  @unique
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model ChatMessage {
+  id        String          @id @default(cuid())
+  room      String
+  userId    String
+  type      ChatMessageType @default(USER)
+  body      String
+  hidden    Boolean         @default(false)
+  createdAt DateTime        @default(now())
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([room, createdAt])
+  @@index([userId, createdAt])
+}
+
+model EmailVerifyToken {
+  id        String    @id @default(cuid())
+  userId    String    @unique
+  token     String    @unique
+  expiredAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String    @unique
+  token     String    @unique
+  expiredAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
 enum HeadframeCode {
   NONE
   GOLD
@@ -46,7 +585,6 @@ enum ProfileModuleCode {
   FEED
 }
 
-// ======================== Bank / Ledger Enums ========================
 enum LedgerType {
   DEPOSIT
   WITHDRAW
@@ -65,14 +603,12 @@ enum BalanceTarget {
   BANK
 }
 
-// ======================== Leaderboard Enums ========================
 enum StatPeriod {
   DAILY
   WEEKLY
   ALL_TIME
 }
 
-// ======================== Campaign / Promo Enums ========================
 enum RewardCampaignKind {
   EVENT
   TOPUP
@@ -83,13 +619,11 @@ enum PopupTrigger {
   MANUAL
 }
 
-// ======================== Chat Enums ========================
 enum ChatMessageType {
   USER
   SYSTEM
 }
 
-// ======================== Game Config Enums ========================
 enum GameCode {
   GLOBAL
   BACCARAT
@@ -97,7 +631,6 @@ enum GameCode {
   SICBO
 }
 
-// ======================== Baccarat Enums ========================
 enum RoomCode {
   R30
   R60
@@ -127,7 +660,6 @@ enum BetSide {
   BANKER_SUPER_SIX
 }
 
-// ======================== SicBo (骰寶) Enums ========================
 enum SicBoRoomCode {
   SB_R30
   SB_R60
@@ -153,622 +685,12 @@ enum SicBoBetKind {
   SINGLE_DIE
 }
 
-// ======================== Lotto Extra Enums (新增) ========================
 enum TailParity {
   ODD
   EVEN
 }
 
 enum TailSize {
-  BIG   // 尾數 5-9
-  SMALL // 尾數 0-4
-}
-
-// ======================== User ========================
-model User {
-  id        String  @id @default(cuid())
-  email     String  @unique
-  password  String
-  name      String?
-  avatarUrl String?
-  isAdmin   Boolean @default(false)
-
-  // 銀行/錢包
-  balance     Int @default(0)
-  bankBalance Int @default(0)
-
-  createdAt DateTime @default(now())
-
-  // Profile 擴充
-  nickname   String?
-  about      String?
-  country    String?
-  lastSeenAt DateTime?
-
-  xp          Int           @default(0)
-  level       Int           @default(1)
-  vipTier     Int           @default(0)
-  vipExpireAt DateTime?
-  headframe   HeadframeCode @default(NONE)
-  panelStyle  PanelPreset   @default(GLASS_DARK)
-  panelTint   String?
-  publicSlug  String?       @unique
-
-  // 累計
-  totalBets       Int     @default(0)
-  totalStaked     BigInt  @default(0)
-  totalPayout     BigInt  @default(0)
-  totalWins       Int     @default(0)
-  totalLosses     Int     @default(0)
-  netProfit       BigInt  @default(0)
-  weeklyNetProfit BigInt  @default(0)
-  favoriteGame    String?
-
-  // ===== Auth 增量（非破壞式） =====
-  displayName     String    @unique
-  isBanned        Boolean   @default(false)
-  isMuted         Boolean   @default(false)
-  emailVerifiedAt DateTime?
-  registeredIp    String?
-  lastLoginAt     DateTime?
-  lastLoginIp     String?
-  referralCode    String?   @unique
-  inviterId       String?
-  inviter         User?     @relation("InviteRelation", fields: [inviterId], references: [id])
-  invitees        User[]    @relation("InviteRelation")
-
-  // 反向關聯（Token）
-  emailVerifyToken   EmailVerifyToken?
-  passwordResetToken PasswordResetToken?
-
-  // 關聯
-  ledgers             Ledger[]
-  profileSettings     UserProfileSettings?
-  profileModules      UserProfileModule[]
-  badges              UserBadge[]
-  achievements        UserAchievement[]
-  personaTags         UserPersonaTag[]
-  collectibles        UserCollectible[]
-  friendsA            Friendship[]         @relation("friendA")
-  friendsB            Friendship[]         @relation("friendB")
-  posts               WallPost[]
-  likes               WallLike[]
-  wallComments        WallComment[]
-  eventParticipations EventParticipation[]
-  bets                Bet[]
-  rounds              Round[]              @relation("RoundDealer")
-  lottoBets           LottoBet[]
-  sicboBets           SicBoBet[]
-  sicboRoundsDealt    SicBoRound[]         @relation("SicBoDealer")
-  checkinState        UserCheckinState?
-  checkinClaims       DailyCheckinClaim[]
-  statSnapshots       UserStatSnapshot[]
-  rewardClaims        RewardClaim[]
-  promoImpressions    PromoImpression[]
-  topups              ExternalTopup[]
-  chatMessages        ChatMessage[]
-}
-
-// ======================== Bank ========================
-model Ledger {
-  id        String        @id @default(cuid())
-  userId    String
-  type      LedgerType
-  target    BalanceTarget
-  amount    Int
-  createdAt DateTime      @default(now())
-
-  // 遊戲追蹤
-  roundId      String?
-  room         RoomCode?
-  sicboRoundId String?
-  sicboRoom    SicBoRoomCode?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, createdAt])
-  @@index([type, createdAt])
-  @@index([room, createdAt])
-  @@index([roundId])
-  @@index([sicboRoom, createdAt])
-  @@index([sicboRoundId])
-}
-
-// ======================== Game Config ========================
-model GameConfig {
-  id          String   @id @default(cuid())
-  gameCode    GameCode
-  key         String
-  valueString String?
-  valueInt    Int?
-  valueFloat  Float?
-  valueBool   Boolean?
-  json        Json?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@unique([gameCode, key])
-  @@index([gameCode, key])
-}
-
-// ======================== Profile ========================
-model UserProfileSettings {
-  userId     String   @id
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  layoutJson Json?
-  bgImageUrl String?
-  bgBlur     Int      @default(10)
-  bgDim      Int      @default(20)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-}
-
-model UserProfileModule {
-  id        String            @id @default(cuid())
-  userId    String
-  code      ProfileModuleCode
-  enabled   Boolean           @default(true)
-  sortOrder Int               @default(100)
-  config    Json?
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, code])
-  @@index([userId, sortOrder])
-}
-
-// ======================== Badges / Achievements ========================
-model Badge {
-  id        String   @id @default(cuid())
-  code      String   @unique
-  name      String
-  iconUrl   String?
-  rarity    Int      @default(1)
-  animated  Boolean  @default(false)
-  desc      String?
-  createdAt DateTime @default(now())
-
-  userBadges UserBadge[]
-}
-
-model UserBadge {
-  id         String   @id @default(cuid())
-  userId     String
-  badgeId    String
-  pinned     Boolean  @default(false)
-  level      Int      @default(1)
-  acquiredAt DateTime @default(now())
-
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  badge Badge @relation(fields: [badgeId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, badgeId])
-  @@index([userId, pinned])
-}
-
-model Achievement {
-  id     String  @id @default(cuid())
-  code   String  @unique
-  name   String
-  desc   String?
-  target Int     @default(1)
-
-  userAchievements UserAchievement[]
-}
-
-model UserAchievement {
-  id            String    @id @default(cuid())
-  userId        String
-  achievementId String
-  progress      Int       @default(0)
-  unlocked      Boolean   @default(false)
-  unlockedAt    DateTime?
-
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  achievement Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, achievementId])
-  @@index([userId, unlocked])
-}
-
-// ======================== Persona / Collectibles ========================
-model UserPersonaTag {
-  id        String   @id @default(cuid())
-  userId    String
-  tag       String
-  score     Int      @default(0)
-  updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, tag])
-}
-
-model Collectible {
-  id       String  @id @default(cuid())
-  code     String  @unique
-  name     String
-  imageUrl String?
-  type     String
-  rarity   Int     @default(1)
-
-  userCollectibles UserCollectible[]
-}
-
-model UserCollectible {
-  id            String   @id @default(cuid())
-  userId        String
-  collectibleId String
-  quantity      Int      @default(1)
-  favorite      Boolean  @default(false)
-  acquiredAt    DateTime @default(now())
-
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  collectible Collectible @relation(fields: [collectibleId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, collectibleId])
-  @@index([userId, favorite])
-}
-
-// ======================== Friends / Events / Wall ========================
-model Friendship {
-  id      String   @id @default(cuid())
-  userAId String
-  userBId String
-  since   DateTime @default(now())
-  weight  Int      @default(0)
-
-  userA User @relation("friendA", fields: [userAId], references: [id], onDelete: Cascade)
-  userB User @relation("friendB", fields: [userBId], references: [id], onDelete: Cascade)
-
-  @@unique([userAId, userBId])
-  @@index([userAId])
-  @@index([userBId])
-}
-
-model EventParticipation {
-  id       String   @id @default(cuid())
-  userId   String
-  eventId  String
-  rank     Int?
-  reward   Int      @default(0)
-  joinedAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, eventId])
-}
-
-model WallPost {
-  id        String   @id @default(cuid())
-  userId    String
-  body      String
-  imageUrl  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  hidden    Boolean  @default(false)
-
-  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  comments WallComment[]
-  likes    WallLike[]
-
-  @@index([userId, createdAt])
-}
-
-model WallComment {
-  id        String   @id @default(cuid())
-  postId    String
-  userId    String
-  body      String
-  createdAt DateTime @default(now())
-  hidden    Boolean  @default(false)
-
-  post WallPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([postId, createdAt])
-}
-
-model WallLike {
-  id        String   @id @default(cuid())
-  postId    String
-  userId    String
-  createdAt DateTime @default(now())
-
-  post WallPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([postId, userId])
-}
-
-// ======================== Admin ========================
-model Announcement {
-  id        String   @id @default(cuid())
-  title     String
-  body      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  enabled   Boolean  @default(true)
-}
-
-model MarqueeMessage {
-  id        String   @id @default(cuid())
-  text      String
-  priority  Int      @default(0)
-  enabled   Boolean  @default(true)
-  createdAt DateTime @default(now())
-}
-
-// ======================== Baccarat ========================
-model Round {
-  id        String        @id @default(cuid())
-  room      RoomCode
-  phase     RoundPhase
-  outcome   RoundOutcome?
-  startedAt DateTime      @default(now())
-  endedAt   DateTime?
-
-  // ✅ 新增：百家樂自動局序與結果保存
-  endsAt     DateTime
-  day        String
-  seq        Int
-  shoeJson   String
-  resultJson String?
-
-  dealerId  String?
-  dealer    User?        @relation("RoundDealer", fields: [dealerId], references: [id])
-  bets      Bet[]
-
-  @@unique([room, day, seq])
-  @@index([room, startedAt])
-}
-
-model Bet {
-  id        String   @id @default(cuid())
-  userId    String
-  roundId   String
-  side      BetSide
-  amount    Int
-  createdAt DateTime @default(now())
-
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
-
-  @@index([roundId, side])
-  @@index([userId, createdAt])
-}
-
-// ======================== Lotto ========================
-model LottoDraw {
-  id        String   @id @default(cuid())
-  code      Int
-  drawAt    DateTime
-  numbers   Int[]
-  special   Int?
-  pool      Int      @default(0)
-  jackpot   Int      @default(0)
-  status    String   @default("OPEN")
-  createdAt DateTime @default(now())
-
-  // ★ 以台北日切儲存的日期與當日序號
-  day      DateTime  @default(now())
-  daySeq   Int       @default(1)
-
-  bets LottoBet[]
-
-  @@index([day, daySeq])
-  @@unique([day, daySeq])
-}
-
-model LottoBet {
-  id        String   @id @default(cuid())
-  userId    String
-  drawId    String
-  picks     Int[]
-  special   Int?
-  amount    Int
-  createdAt DateTime @default(now())
-
-  // ★ 總和尾數玩法
-  tailParity TailParity?
-  tailSize   TailSize?
-
-  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  draw LottoDraw @relation(fields: [drawId], references: [id], onDelete: Cascade)
-
-  @@index([userId, createdAt])
-  @@index([drawId])
-  @@index([drawId, tailParity])
-  @@index([drawId, tailSize])
-}
-
-// ======================== SicBo ========================
-model SicBoRound {
-  id        String        @id @default(cuid())
-  room      SicBoRoomCode
-  phase     SicBoPhase
-  dice      Int[]
-  startedAt DateTime      @default(now())
-  endedAt   DateTime?
-  dealerId  String?
-
-  dealer User?      @relation("SicBoDealer", fields: [dealerId], references: [id])
-  bets   SicBoBet[]
-}
-
-model SicBoBet {
-  id        String       @id @default(cuid())
-  userId    String
-  roundId   String
-  kind      SicBoBetKind
-  amount    Int
-  payload   Json?
-  createdAt DateTime     @default(now())
-
-  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  round SicBoRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
-
-  @@index([roundId, kind])
-  @@index([userId, createdAt])
-}
-
-// ======================== Player Suite ========================
-model UserStatSnapshot {
-  id          String     @id @default(cuid())
-  userId      String
-  period      StatPeriod
-  windowStart DateTime
-  windowEnd   DateTime
-  room        RoomCode?
-
-  gameBet     BigInt   @default(0)
-  gamePayout  BigInt   @default(0)
-  bonusIncome BigInt   @default(0)
-  betsCount   Int      @default(0)
-  winsCount   Int      @default(0)
-  lossesCount Int      @default(0)
-  netProfit   BigInt   @default(0)
-  updatedAt   DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, period, windowStart, windowEnd, room])
-  @@index([period, room, windowStart, netProfit])
-  @@index([userId, period, room])
-}
-
-model UserCheckinState {
-  userId          String    @id
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  lastClaimedYmd  DateTime?
-  streak          Int       @default(0)
-  totalClaims     Int       @default(0)
-  nextAvailableAt DateTime?
-  updatedAt       DateTime  @updatedAt
-}
-
-model DailyCheckinClaim {
-  id           String   @id @default(cuid())
-  userId       String
-  ymd          DateTime
-  amount       Int
-  streakBefore Int
-  streakAfter  Int
-  createdAt    DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, ymd])
-  @@index([userId, createdAt])
-}
-
-model RewardCampaign {
-  id           String             @id @default(cuid())
-  code         String             @unique
-  kind         RewardCampaignKind
-  title        String
-  subtitle     String?
-  body         String?
-  imageUrl     String?
-  popupTrigger PopupTrigger       @default(LOGIN)
-  autoPopup    Boolean            @default(true)
-  enabled      Boolean            @default(true)
-  priority     Int                @default(100)
-
-  coinAmount Int       @default(0)
-  claimOnce  Boolean   @default(true)
-  startAt    DateTime?
-  endAt      DateTime?
-
-  minTopupAmount Int?
-  topupSince     DateTime?
-  topupUntil     DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  claims      RewardClaim[]
-  impressions PromoImpression[]
-
-  @@index([enabled, priority])
-  @@index([kind, startAt, endAt])
-}
-
-model RewardClaim {
-  id         String   @id @default(cuid())
-  campaignId String
-  userId     String
-  amount     Int      @default(0)
-  createdAt  DateTime @default(now())
-
-  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  campaign RewardCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-
-  @@unique([campaignId, userId])
-  @@index([userId, createdAt])
-}
-
-model PromoImpression {
-  id         String   @id @default(cuid())
-  campaignId String
-  userId     String
-  shownAt    DateTime @default(now())
-
-  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  campaign RewardCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-
-  @@index([userId, campaignId, shownAt])
-}
-
-model ExternalTopup {
-  id        String   @id @default(cuid())
-  userId    String
-  amount    Int
-  status    String   @default("COMPLETED") // PENDING / COMPLETED / FAILED
-  provider  String?
-  refCode   String?  @unique
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, createdAt])
-}
-
-// ======================== Chat ========================
-model ChatMessage {
-  id        String          @id @default(cuid())
-  room      String
-  userId    String
-  type      ChatMessageType @default(USER)
-  body      String
-  hidden    Boolean         @default(false)
-  createdAt DateTime        @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([room, createdAt])
-  @@index([userId, createdAt])
-}
-
-// ======================== Auth Tokens（新增） ========================
-model EmailVerifyToken {
-  id        String    @id @default(cuid())
-  userId    String    @unique
-  token     String    @unique
-  expiredAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model PasswordResetToken {
-  id        String    @id @default(cuid())
-  userId    String    @unique
-  token     String    @unique
-  expiredAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  BIG
+  SMALL
 }
