@@ -1,6 +1,5 @@
 "use client";
-
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "@/../public/styles/baccarat.css";
 
 type RoomCode = "R30" | "R60" | "R90";
@@ -30,293 +29,142 @@ interface StateResp {
   bead: ("PLAYER" | "BANKER" | "TIE")[];
 }
 
-interface HistoryItem {
+interface Bet {
   id: string;
-  seq: number;
-  startedAt: string;
-  outcome: "PLAYER" | "BANKER" | "TIE" | null;
-  result: any;
-  // 若你的 history 接口有附下注與派彩，保留以下兩行；沒有的會顯示「—」
-  bets?: { side: string; amount: number }[];
-  payouts?: { amount: number }[];
+  side: string;
+  amount: number;
 }
-
-const LOTTIE_SRC = "/lottie/baccarat-win.json"; // 放 public/lottie/baccarat-win.json
-const USER_HEADER = { "x-user-id": "demo-user" };
-
-// 中文面板與賠率
-const SIDE_LABEL: Record<string, string> = {
-  PLAYER: "閒",
-  BANKER: "莊",
-  TIE: "和",
-  PLAYER_PAIR: "閒對",
-  BANKER_PAIR: "莊對",
-  ANY_PAIR: "任意對",
-  PERFECT_PAIR: "完美對",
-  BANKER_SUPER_SIX: "超級六",
-};
-
-const SIDE_ODDS: Record<string, string> = {
-  PLAYER: "1",
-  BANKER: "0.95",
-  TIE: "8",
-  PLAYER_PAIR: "11",
-  BANKER_PAIR: "11",
-  ANY_PAIR: "5",
-  PERFECT_PAIR: "25",
-  BANKER_SUPER_SIX: "0.5", // 1:0.5 (莊家 6 點贏)
-};
-
-// 面板順序
-const SIDES = [
-  "PLAYER",
-  "BANKER",
-  "TIE",
-  "PLAYER_PAIR",
-  "BANKER_PAIR",
-  "ANY_PAIR",
-  "PERFECT_PAIR",
-  "BANKER_SUPER_SIX",
-] as const;
 
 export default function BaccaratRoomPage({ params }: { params: { room: RoomCode } }) {
   const [state, setState] = useState<StateResp | null>(null);
   const [bets, setBets] = useState<Record<string, number>>({});
   const [placing, setPlacing] = useState(false);
-  const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [wallet, setWallet] = useState<number>(0);
-  const [chip, setChip] = useState<number>(100);
-  const [smoothCountdown, setSmoothCountdown] = useState<number>(0);
+  const [history, setHistory] = useState<any[]>([]);
   const [time, setTime] = useState<string>("");
+  const [balance, setBalance] = useState<number>(0);
 
-  // Lottie
-  const lottieRef = useRef<HTMLDivElement | null>(null);
+  // Lottie 動畫引用
+  const lottieRef = useRef<HTMLDivElement>(null);
   const lottieAnimRef = useRef<any>(null);
 
-  // ====== 時鐘（現場時間顯示）======
+  // 每秒更新時間
   useEffect(() => {
     const t = setInterval(() => setTime(new Date().toLocaleTimeString("zh-TW")), 1000);
     return () => clearInterval(t);
   }, []);
 
-  // ====== 讀錢包餘額 ======
-  async function fetchWallet() {
-    try {
-      const r = await fetch("/api/wallet/balances", { headers: USER_HEADER });
-      const d = await r.json();
-      setWallet(d.wallet ?? 0);
-    } catch {
-      // ignore
-    }
-  }
+  // 輪詢狀態
   useEffect(() => {
-    fetchWallet();
-  }, []);
-
-  // ====== 狀態輪詢（2 秒）======
-  useEffect(() => {
-    let stop = false;
-
-    async function tick() {
-      try {
-        const res = await fetch(`/api/casino/baccarat/state?room=${params.room}`, { headers: USER_HEADER });
-        const data = (await res.json()) as StateResp;
-        if (!stop) setState(data);
-      } catch {
-        // ignore
-      }
-    }
-
+    const tick = async () => {
+      const res = await fetch(`/api/casino/baccarat/state?room=${params.room}`);
+      const data = await res.json();
+      setState(data);
+    };
     tick();
     const id = setInterval(tick, 2000);
-    return () => {
-      stop = true;
-      clearInterval(id);
-    };
+    return () => clearInterval(id);
   }, [params.room]);
 
-  // ====== 平滑倒數（每 100ms）======
+  // 拉下注流水
   useEffect(() => {
-    if (!state?.round?.endsAt) return;
-    let raf = 0;
-    let stop = false;
-
-    const endsAt = new Date(state.round.endsAt).getTime();
-    const loop = () => {
-      if (stop) return;
-      const leftMs = Math.max(0, endsAt - Date.now());
-      setSmoothCountdown(leftMs / 1000);
-      raf = requestAnimationFrame(loop);
+    const fetchHistory = async () => {
+      const res = await fetch(`/api/casino/baccarat/history?room=${params.room}&take=10`, {
+        headers: { "x-user-id": "demo-user" },
+      });
+      const data = await res.json();
+      setHistory(data.items || []);
     };
-    raf = requestAnimationFrame(loop);
-    return () => {
-      stop = true;
-      cancelAnimationFrame(raf);
-    };
-  }, [state?.round?.endsAt]);
-
-  // ====== 歷史（近 10 局）======
-  useEffect(() => {
-    let stop = false;
-    async function fetchHistory() {
-      try {
-        const res = await fetch(`/api/casino/baccarat/history?room=${params.room}&take=10`, {
-          headers: USER_HEADER,
-        });
-        const data = await res.json();
-        if (!stop) setHistory(data.items || data || []);
-      } catch {
-        // ignore
-      }
-    }
     fetchHistory();
-    return () => {
-      stop = true;
-    };
   }, [params.room, state?.round?.id]);
 
-  // ====== 勝利動畫與面板發光 ======
-  const outcome = state?.table.outcome; // PLAYER / BANKER / TIE
-  const phase = state?.round.phase;
-
-  // 播放 Lottie（進入 SETTLED 才播一次）
-  const prevPhaseRef = useRef<Phase | null>(null);
+  // 錢包餘額
   useEffect(() => {
-    if (!phase) return;
-    const prev = prevPhaseRef.current;
-    prevPhaseRef.current = phase;
+    const fetchBalance = async () => {
+      const res = await fetch("/api/wallet/balance", {
+        headers: { "x-user-id": "demo-user" },
+      });
+      const data = await res.json();
+      setBalance(data.wallet ?? 0);
+    };
+    fetchBalance();
+  }, [state?.round?.id]);
 
-    const shouldPlay = prev !== "SETTLED" && phase === "SETTLED" && outcome;
-    if (!shouldPlay) return;
+  async function place(side: string, amt: number) {
+    if (!state) return;
+    setPlacing(true);
+    await fetch("/api/casino/baccarat/bet", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-user-id": "demo-user" },
+      body: JSON.stringify({ room: params.room, roundId: state.round.id, side, amount: amt }),
+    });
+    setPlacing(false);
+    setBets((prev) => ({ ...prev, [side]: (prev[side] || 0) + amt }));
+  }
 
-    // lazy import lottie-web
-    (async () => {
-      try {
-        const lottie = await import("lottie-web");
+  // 翻牌動畫 class
+  const revealClass = state?.round.phase === "REVEALING" ? "flip-cards" : "";
+
+  // 勝利閃爍 class
+  const winClass =
+    state?.round.phase === "SETTLED" ? `winner-${state.table.outcome?.toLowerCase()}` : "";
+
+  // 當局結算 → 播放 Lottie 動畫
+  useEffect(() => {
+    if (state?.round.phase === "SETTLED" && lottieRef.current) {
+      (async () => {
+        const lottie = (await import("lottie-web")) as any;
         if (lottieAnimRef.current) {
           lottieAnimRef.current.destroy();
-          lottieAnimRef.current = null;
         }
-        if (lottieRef.current) {
-          lottieAnimRef.current = lottie.loadAnimation({
-            container: lottieRef.current,
-            renderer: "svg",
-            loop: false,
-            autoplay: true,
-            path: LOTTIE_SRC,
-          });
-        }
-      } catch {
-        // ignore if lottie not available
-      }
-    })();
-  }, [phase, outcome]);
-
-  // ====== 下單 ======
-  async function place(side: string, amt: number) {
-    if (!state || !state.round) return;
-    setPlacing(true);
-    try {
-      await fetch("/api/casino/baccarat/bet", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...USER_HEADER },
-        body: JSON.stringify({ room: params.room, roundId: state.round.id, side, amount: amt }),
-      });
-      // 本地顯示下注累積
-      setBets((prev) => ({ ...prev, [side]: (prev[side] || 0) + amt }));
-      // 下注成功後更新錢包
-      fetchWallet();
-    } finally {
-      setPlacing(false);
+        lottieAnimRef.current = lottie.loadAnimation({
+          container: lottieRef.current,
+          renderer: "svg",
+          loop: false,
+          autoplay: true,
+          path: "/lottie/baccarat-win.json",
+        });
+      })();
     }
-  }
+  }, [state?.round.phase]);
 
-  // 開牌動畫 class
-  const revealClass = state?.round.phase === "REVEALING" ? "flip-cards reveal-gold" : "";
-
-  // 勝利閃爍 class（區塊）
-  const winClass =
-    state?.round.phase === "SETTLED"
-      ? outcome === "PLAYER"
-        ? "winner-player"
-        : outcome === "BANKER"
-        ? "winner-banker"
-        : "winner-tie"
-      : "";
-
-  // 中文狀態
-  const phaseLabel = {
-    BETTING: "下注中",
-    REVEALING: "開牌中",
-    SETTLED: "結算完成",
-  }[state?.round.phase ?? "BETTING"];
-
-  // 勝利面板發光（按鈕）
-  function sideBtnClass(side: string) {
-    const base = "bet-btn";
-    if (phase === "SETTLED") {
-      if (outcome === "PLAYER" && side === "PLAYER") return base + " glow-win";
-      if (outcome === "BANKER" && side === "BANKER") return base + " glow-win";
-      if (outcome === "TIE" && side === "TIE") return base + " glow-win";
-    }
-    return base;
-  }
-
-  // 倒數文案（保留 1 位小數）
-  const countdownText = useMemo(() => {
-    const s = smoothCountdown;
-    return s > 0 ? `${s.toFixed(1)} 秒` : "0.0 秒";
-  }, [smoothCountdown]);
+  const betOptions: { side: string; label: string; odds: string }[] = [
+    { side: "PLAYER", label: "閒", odds: "1倍" },
+    { side: "BANKER", label: "莊", odds: "0.95倍" },
+    { side: "TIE", label: "和", odds: "8倍" },
+    { side: "PLAYER_PAIR", label: "閒對", odds: "11倍" },
+    { side: "BANKER_PAIR", label: "莊對", odds: "11倍" },
+    { side: "ANY_PAIR", label: "任意對", odds: "5倍" },
+    { side: "PERFECT_PAIR", label: "完美對", odds: "25倍" },
+    { side: "BANKER_SUPER_SIX", label: "莊超六", odds: "12倍" },
+  ];
 
   return (
-    <div className="dark-theme">
-      {/* 勝利特效 Overlay（Lottie） */}
-      <div className="win-fx-overlay" aria-hidden>
-        <div ref={lottieRef} style={{ width: "100%", height: "100%" }} />
-      </div>
-
-      {/* 頁首：標題 + 錢包 + 籌碼選擇 */}
+    <div className="baccarat-room dark-bg">
       <header className="room-header">
-        <div className="title">
-          <h1>百家樂 {params.room}</h1>
-          <span>
-            局號：{state?.round.seq ?? 0} ｜ 狀態：{phaseLabel} ｜ 倒數：{countdownText} ｜ 現在：{time}
-          </span>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-          <div className="wallet">錢包餘額：{wallet.toLocaleString()} 元</div>
-          <div className="chips">
-            {[100, 200, 500, 1000, 5000].map((c) => (
-              <button
-                key={c}
-                className={`chip ${chip === c ? "active" : ""}`}
-                onClick={() => setChip(c)}
-              >
-                ${c}
-              </button>
-            ))}
-          </div>
-        </div>
+        <h1>百家樂 {params.room}</h1>
+        <div>局號：{state?.round.seq ?? 0}</div>
+        <div>狀態：{state?.round.phase}</div>
+        <div>倒數：{state?.timers.endInSec ?? 0} 秒</div>
+        <div>目前時間：{time}</div>
+        <div>💰 錢包：{balance}</div>
       </header>
 
-      {/* 開牌區 */}
+      {/* 翻牌區 */}
       <div className={`cards-area ${revealClass} ${winClass}`}>
         <div className="side player">
           <h2>閒</h2>
           <div className="cards">
-            {(state?.table.player ?? []).map((c, i) => (
+            {state?.table.player.map((c, i) => (
               <div key={i} className="card">
                 {c}
               </div>
             ))}
           </div>
         </div>
-
         <div className="side banker">
           <h2>莊</h2>
           <div className="cards">
-            {(state?.table.banker ?? []).map((c, i) => (
+            {state?.table.banker.map((c, i) => (
               <div key={i} className="card">
                 {c}
               </div>
@@ -325,65 +173,47 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
         </div>
       </div>
 
-      {/* 下注面板（綠底、中文 + 賠率） */}
+      {/* 勝利特效 */}
+      <div ref={lottieRef} className="lottie-win"></div>
+
+      {/* 下注面板 */}
       <div className="betting-panel green-panel">
-        {SIDES.map((side) => {
-          const disabled = state?.locked || placing || !state?.round?.id;
-          return (
-            <button
-              key={side}
-              disabled={!!disabled}
-              className={sideBtnClass(side)}
-              onClick={() => place(side, chip)}
-              title={`${SIDE_LABEL[side]} 賠率 ${SIDE_ODDS[side]}`}
-            >
-              {SIDE_LABEL[side]} <small>（賠 {SIDE_ODDS[side]}）</small>
-              <span className="amt">本局投注：{(bets[side] || 0).toLocaleString()} 元</span>
-            </button>
-          );
-        })}
+        {betOptions.map((opt) => (
+          <button
+            key={opt.side}
+            disabled={state?.locked || placing}
+            onClick={() => place(opt.side, 100)}
+            className={
+              state?.round.phase === "SETTLED" && state?.table.outcome === opt.side
+                ? "glow"
+                : ""
+            }
+          >
+            {opt.label} {opt.odds} （{bets[opt.side] || 0}）
+          </button>
+        ))}
       </div>
 
-      {/* 珠盤（🔵🟡🔴） */}
+      {/* 路子 */}
       <div className="bead-road">
-        {(state?.bead ?? []).map((b, i) => (
+        {state?.bead.map((b, i) => (
           <span key={i} className={`dot ${b.toLowerCase()}`}>
             {b === "PLAYER" ? "🔵" : b === "BANKER" ? "🔴" : "🟡"}
           </span>
         ))}
       </div>
 
-      {/* 近 10 局 注單/派彩 卡片式 UI */}
-      <section className="history">
+      {/* 近 10 局下注流水 */}
+      <div className="history">
         <h3>近 10 局下注與派彩</h3>
-        <div className="history-list">
-          {history.length === 0 && (
-            <div className="history-card">
-              <div className="round-id">暫無資料</div>
-            </div>
-          )}
-          {history.map((h) => {
-            const outcomeText =
-              h.outcome === "PLAYER" ? "閒" : h.outcome === "BANKER" ? "莊" : h.outcome === "TIE" ? "和" : "—";
-            const betsText =
-              h.bets && h.bets.length
-                ? h.bets.map((b) => `${SIDE_LABEL[b.side] ?? b.side}:${b.amount}`).join("，")
-                : "—";
-            const payoutsText =
-              h.payouts && h.payouts.length ? h.payouts.map((p) => p.amount).join("，") : "—";
-
-            return (
-              <div key={h.id} className="history-card">
-                <div className="round-id">
-                  第 {h.seq} 局　｜　結果：{outcomeText}
-                </div>
-                <div className="bets">下注：{betsText}</div>
-                <div className="payouts">派彩：{payoutsText}</div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
+        {history.map((h, i) => (
+          <div key={i} className="history-item">
+            <div>局號 {h.seq}</div>
+            <div>下注 {h.bets.map((b: Bet) => `${b.side}:${b.amount}`).join(", ")}</div>
+            <div>派彩 {h.payouts.map((p: any) => p.amount).join(", ")}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
