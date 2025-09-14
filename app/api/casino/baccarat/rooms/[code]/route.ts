@@ -1,16 +1,14 @@
-// app/api/casino/baccarat/rooms/[code]/route.ts
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import { RoomCode } from "@prisma/client";
-import { getRoomInfo } from "@/services/baccarat.service";
+import { currentState } from "@/services/baccarat.service";
 
-export const dynamic = "force-dynamic";
-
-export async function GET(_: Request, { params }: { params: { code: string } }) {
-  const Schema = z.object({ code: z.nativeEnum(RoomCode) });
-  const parsed = Schema.safeParse({ code: params.code as unknown });
-  if (!parsed.success) return NextResponse.json({ ok: false, error: "BAD_ROOM" }, { status: 400 });
-
-  const data = await getRoomInfo(parsed.data.code);
-  return NextResponse.json({ ok: true, room: data });
+export async function GET(
+  _req: Request,
+  { params }: { params: { code: "R30"|"R60"|"R90" } }
+) {
+  try {
+    const data = await currentState(params.code);
+    return NextResponse.json(data);
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? "UNKNOWN_ERROR" }, { status: 500 });
+  }
 }

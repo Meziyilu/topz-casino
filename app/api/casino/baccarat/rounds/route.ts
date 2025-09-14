@@ -1,25 +1,14 @@
-// app/api/casino/baccarat/rounds/route.ts
-import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
-import { RoomCode } from "@prisma/client";
+import { NextResponse } from "next/server";
 import { getPublicRounds } from "@/services/baccarat.service";
 
-export const dynamic = "force-dynamic";
-
-export async function GET(req: NextRequest) {
-  const url = new URL(req.url);
-  const Schema = z.object({
-    room: z.nativeEnum(RoomCode),
-    limit: z.coerce.number().int().min(1).max(50).optional(),
-    cursor: z.string().optional(),
-  });
-  const parsed = Schema.safeParse({
-    room: url.searchParams.get("room") as unknown,
-    limit: url.searchParams.get("limit") ?? undefined,
-    cursor: url.searchParams.get("cursor") ?? undefined,
-  });
-  if (!parsed.success) return NextResponse.json({ ok: false, error: "BAD_QUERY" }, { status: 400 });
-
-  const { items, nextCursor } = await getPublicRounds(parsed.data.room, parsed.data.limit ?? 10, parsed.data.cursor ?? null);
-  return NextResponse.json({ ok: true, items, nextCursor });
+export async function GET(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const room = (searchParams.get("room") || "R30") as "R30"|"R60"|"R90";
+    const take = Number(searchParams.get("take") || 50);
+    const items = await getPublicRounds(room, take);
+    return NextResponse.json({ items });
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? "UNKNOWN_ERROR" }, { status: 500 });
+  }
 }

@@ -1,14 +1,18 @@
-export const runtime = "nodejs"; export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { getMyBets } from "@/services/baccarat.service";
 
-export async function GET(req:Request){
-  const userId = req.headers.get("x-user-id") || "demo-user";
-  const { searchParams } = new URL(req.url);
-  const room = (searchParams.get("room") ?? "R30") as any;
-  // 最近 10 局下注
-  const list = await prisma.baccaratBet.findMany({
-    where:{ userId, room }, orderBy:[{ createdAt:"desc" }], take: 50
-  });
-  return NextResponse.json({ items:list });
+function getUserId(req: Request) {
+  return req.headers.get("x-user-id") || "demo-user";
+}
+
+export async function GET(req: Request) {
+  try {
+    const userId = getUserId(req);
+    const { searchParams } = new URL(req.url);
+    const limit = Number(searchParams.get("limit") || 10);
+    const items = await getMyBets(userId, limit);
+    return NextResponse.json({ items });
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? "UNKNOWN_ERROR" }, { status: 500 });
+  }
 }
