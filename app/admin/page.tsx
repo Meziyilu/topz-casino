@@ -33,6 +33,18 @@ export default function AdminHome() {
           <div className="title">樂透管理</div>
           <div className="desc">開獎排程 / 開獎號碼 / 期別管理</div>
         </a>
+
+        {/* 跑馬燈管理 */}
+        <a className="tile glass" href="/admin/content/marquee">
+          <div className="title">跑馬燈管理</div>
+          <div className="desc">滾動訊息設定 / 優先度排序 / 啟用停用</div>
+        </a>
+
+        {/* 公告欄管理 */}
+        <a className="tile glass" href="/admin/content/announcement">
+          <div className="title">公告欄管理</div>
+          <div className="desc">新增公告 / 編輯公告 / 啟用停用</div>
+        </a>
       </section>
 
       {/* 既有管理首頁樣式 */}
