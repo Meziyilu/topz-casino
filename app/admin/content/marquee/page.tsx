@@ -1,63 +1,130 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import "@/../public/styles/admin-content.css";
 
 type Marquee = {
   id: string;
   text: string;
   enabled: boolean;
   priority: number;
+  createdAt?: string;
 };
 
-export default function MarqueePage() {
+export default function AdminMarqueePage() {
   const [list, setList] = useState<Marquee[]>([]);
   const [text, setText] = useState("");
+  const [priority, setPriority] = useState<number>(0);
+  const [enabled, setEnabled] = useState<boolean>(true);
+  const [busy, setBusy] = useState(false);
 
-  async function fetchList() {
-    const res = await fetch("/api/admin/marquee");
+  async function load() {
+    const res = await fetch("/api/admin/marquee", { cache: "no-store" });
     const data = await res.json();
-    setList(data.items || []);
+    setList(data.items ?? []);
   }
 
-  async function addMarquee() {
+  async function create() {
+    if (!text.trim()) return;
+    setBusy(true);
     await fetch("/api/admin/marquee", {
       method: "POST",
-      body: JSON.stringify({ text }),
-    });
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, priority, enabled }),
+    }).finally(() => setBusy(false));
     setText("");
-    fetchList();
+    setPriority(0);
+    setEnabled(true);
+    load();
   }
 
-  useEffect(() => {
-    fetchList();
-  }, []);
+  useEffect(() => { load(); }, []);
 
   return (
-    <div className="p-6 space-y-4">
-      <h1 className="text-xl font-bold">跑馬燈管理</h1>
+    <div className="admin-wrap">
+      <div className="admin-title">內容管理・跑馬燈</div>
 
-      <div className="flex gap-2">
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          className="border p-2 flex-1"
-          placeholder="輸入跑馬燈文字"
-        />
-        <button onClick={addMarquee} className="bg-blue-500 text-white px-4 py-2 rounded">
-          新增
-        </button>
-      </div>
+      <div className="admin-grid">
+        {/* 新增區 */}
+        <section className="card">
+          <h2>新增跑馬燈</h2>
+          <div className="form-row-1">
+            <input
+              className="input"
+              placeholder="輸入跑馬燈文字（例如：首儲加碼 50%！）"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              maxLength={200}
+            />
+          </div>
 
-      <ul className="space-y-2">
-        {list.map((m) => (
-          <li key={m.id} className="border p-2 rounded bg-white">
-            <div>{m.text}</div>
-            <div className="text-xs text-gray-500">
-              {m.enabled ? "啟用" : "停用"} | 優先度 {m.priority}
+          <div className="form-row" style={{ marginTop: 10 }}>
+            <div>
+              <label className="help">優先度（大者先）</label>
+              <input
+                type="number"
+                className="input"
+                value={priority}
+                onChange={(e) => setPriority(parseInt(e.target.value || "0", 10))}
+              />
             </div>
-          </li>
-        ))}
-      </ul>
+            <div style={{ display: "flex", alignItems: "end", gap: 12 }}>
+              <label className="switch" title="啟用 / 停用">
+                <input
+                  type="checkbox"
+                  checked={enabled}
+                  onChange={(e) => setEnabled(e.target.checked)}
+                />
+                <span className="pill"><span className="dot" /></span>
+                <span>{enabled ? "啟用" : "停用"}</span>
+              </label>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 14, display: "flex", gap: 10 }}>
+            <button className="btn" onClick={create} disabled={busy}>
+              新增
+            </button>
+            <button className="btn ghost" onClick={() => { setText(""); setPriority(0); setEnabled(true); }}>
+              清空
+            </button>
+          </div>
+
+          <div className="help" style={{ marginTop: 10 }}>
+            小技巧：可用 <span className="kbd">{{}}</span> 佔位符做 A/B 文案（後台批量新增）。
+          </div>
+        </section>
+
+        {/* 列表區 */}
+        <section className="card">
+          <h2>跑馬燈列表</h2>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>文字</th>
+                <th style={{ width: 110 }}>狀態</th>
+                <th style={{ width: 90 }}>優先度</th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((m) => (
+                <tr key={m.id}>
+                  <td>{m.text}</td>
+                  <td>
+                    <span className={m.enabled ? "badge ok" : "badge off"}>
+                      {m.enabled ? "啟用" : "停用"}
+                    </span>
+                  </td>
+                  <td>{m.priority}</td>
+                </tr>
+              ))}
+              {list.length === 0 && (
+                <tr><td colSpan={3} className="help">目前沒有跑馬燈，先在左側新增一筆吧。</td></tr>
+              )}
+            </tbody>
+          </table>
+        </section>
+      </div>
     </div>
   );
 }

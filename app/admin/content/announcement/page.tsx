@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import "@/../public/styles/admin-content.css";
 
 type Announcement = {
   id: string;
@@ -9,68 +10,144 @@ type Announcement = {
   enabled: boolean;
   startAt: string | null;
   endAt: string | null;
+  createdAt?: string;
 };
 
-export default function AnnouncementPage() {
+export default function AdminAnnouncementPage() {
   const [list, setList] = useState<Announcement[]>([]);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [enabled, setEnabled] = useState(true);
+  const [startAt, setStartAt] = useState<string>("");
+  const [endAt, setEndAt] = useState<string>("");
 
-  async function fetchList() {
-    const res = await fetch("/api/admin/announcement");
+  async function load() {
+    const res = await fetch("/api/admin/announcement", { cache: "no-store" });
     const data = await res.json();
-    setList(data.items || []);
+    setList(data.items ?? []);
   }
 
-  async function addAnnouncement() {
+  async function create() {
+    if (!title.trim() || !body.trim()) return;
     await fetch("/api/admin/announcement", {
       method: "POST",
-      body: JSON.stringify({ title, body }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title, body, enabled,
+        startAt: startAt ? new Date(startAt).toISOString() : null,
+        endAt: endAt ? new Date(endAt).toISOString() : null,
+      }),
     });
-    setTitle("");
-    setBody("");
-    fetchList();
+    setTitle(""); setBody(""); setEnabled(true); setStartAt(""); setEndAt("");
+    load();
   }
 
-  useEffect(() => {
-    fetchList();
-  }, []);
+  useEffect(() => { load(); }, []);
 
   return (
-    <div className="p-6 space-y-4">
-      <h1 className="text-xl font-bold">公告欄管理</h1>
+    <div className="admin-wrap">
+      <div className="admin-title">內容管理・公告欄</div>
 
-      <div className="flex flex-col gap-2 border p-4 rounded bg-gray-50">
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          className="border p-2"
-          placeholder="公告標題"
-        />
-        <textarea
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          className="border p-2"
-          placeholder="公告內容"
-        />
-        <button onClick={addAnnouncement} className="bg-blue-500 text-white px-4 py-2 rounded">
-          新增公告
-        </button>
-      </div>
+      <div className="admin-grid">
+        {/* 新增區 */}
+        <section className="card">
+          <h2>新增公告</h2>
 
-      <ul className="space-y-2">
-        {list.map((a) => (
-          <li key={a.id} className="border p-2 rounded bg-white">
-            <div className="font-bold">{a.title}</div>
-            <div>{a.body}</div>
-            <div className="text-xs text-gray-500">
-              {a.enabled ? "啟用" : "停用"}
-              {a.startAt && ` | 開始: ${new Date(a.startAt).toLocaleString()}`}
-              {a.endAt && ` | 結束: ${new Date(a.endAt).toLocaleString()}`}
+          <div className="form-row-1">
+            <input
+              className="input"
+              placeholder="公告標題"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+            <textarea
+              className="textarea"
+              placeholder="公告內容（支援多行文字）"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+            />
+          </div>
+
+          <div className="form-row" style={{ marginTop: 10 }}>
+            <div>
+              <label className="help">開始時間（選填）</label>
+              <input
+                type="datetime-local"
+                className="input"
+                value={startAt}
+                onChange={(e) => setStartAt(e.target.value)}
+              />
             </div>
-          </li>
-        ))}
-      </ul>
+            <div>
+              <label className="help">結束時間（選填）</label>
+              <input
+                type="datetime-local"
+                className="input"
+                value={endAt}
+                onChange={(e) => setEndAt(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div style={{ marginTop: 10, display: "flex", gap: 12, alignItems: "center" }}>
+            <label className="switch" title="啟用 / 停用">
+              <input
+                type="checkbox"
+                checked={enabled}
+                onChange={(e) => setEnabled(e.target.checked)}
+              />
+              <span className="pill"><span className="dot" /></span>
+              <span>{enabled ? "啟用" : "停用"}</span>
+            </label>
+
+            <button className="btn" onClick={create}>新增公告</button>
+            <button
+              className="btn ghost"
+              onClick={() => { setTitle(""); setBody(""); setEnabled(true); setStartAt(""); setEndAt(""); }}
+            >
+              清空
+            </button>
+          </div>
+        </section>
+
+        {/* 列表區 */}
+        <section className="card">
+          <h2>公告列表</h2>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>標題 / 內容</th>
+                <th style={{ width: 120 }}>時段</th>
+                <th style={{ width: 110 }}>狀態</th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((a) => (
+                <tr key={a.id}>
+                  <td>
+                    <div style={{ fontWeight: 700 }}>{a.title}</div>
+                    <div style={{ opacity: .85 }}>{a.body}</div>
+                  </td>
+                  <td>
+                    <div className="help">
+                      {a.startAt ? new Date(a.startAt).toLocaleString() : "—"} ~<br/>
+                      {a.endAt ? new Date(a.endAt).toLocaleString() : "—"}
+                    </div>
+                  </td>
+                  <td>
+                    <span className={a.enabled ? "badge ok" : "badge off"}>
+                      {a.enabled ? "啟用" : "停用"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {list.length === 0 && (
+                <tr><td colSpan={3} className="help">目前沒有公告，先在左側新增一筆吧。</td></tr>
+              )}
+            </tbody>
+          </table>
+        </section>
+      </div>
     </div>
   );
 }
