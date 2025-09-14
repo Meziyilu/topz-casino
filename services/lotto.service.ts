@@ -21,11 +21,18 @@ export const DEFAULT_CONFIG: LottoConfig = {
   betTiers: [10, 50, 100, 200, 500, 1000],
 };
 
+// 🔹 幫助函式：安全轉 number
+function asNumber(v: number | bigint | null | undefined, d: number): number {
+  if (typeof v === "bigint") return Number(v);
+  if (typeof v === "number") return v;
+  return d;
+}
+
 // 以 GameConfig 覆寫預設
 export async function readConfig(): Promise<LottoConfig> {
   const rows = await prisma.gameConfig.findMany({ where: { gameCode: "LOTTO" } });
   const map = new Map(rows.map(r => [r.key, r]));
-  const getInt = (k: string, d: number) => map.get(k)?.valueInt ?? d;
+  const getInt = (k: string, d: number) => asNumber(map.get(k)?.valueInt, d);
   const getJson = <T,>(k: string, d: T) => (map.get(k)?.json as T) ?? d;
 
   return {
@@ -70,13 +77,12 @@ export function drawNumbers(picksCount: number, pickMax: number): { numbers: num
     pool.splice(idx, 1);
   }
   numbers.sort((a, b) => a - b);
-  // special 不在 numbers 內
   const idx = rngInt(0, pool.length - 1);
   const special = pool[idx];
   return { numbers, special };
 }
 
-// 賠率表：中 3/4/5/6 顆的倍數
+// 賠率表
 const PAY_TABLE: Record<number, number> = { 3: 2, 4: 10, 5: 100, 6: 1000 };
 
 export function matchCount(win: number[], pick: number[]): number {
@@ -85,7 +91,6 @@ export function matchCount(win: number[], pick: number[]): number {
 }
 
 export async function ensureOpenDraw(now: Date, cfg: LottoConfig) {
-  // 沒有 OPEN/LOCKED 的當期就開一個
   const existing = await prisma.lottoDraw.findFirst({
     where: { status: { in: ["OPEN", "LOCKED"] } },
     orderBy: { drawAt: "asc" },
@@ -158,7 +163,6 @@ export async function settleIfDrawn() {
   }
 
   await prisma.$transaction(async (tx) => {
-    // 發獎
     for (const w of winners) {
       await tx.user.update({
         where: { id: w.userId },
@@ -170,11 +174,10 @@ export async function settleIfDrawn() {
           type: "PAYOUT",
           target: "WALLET",
           amount: w.amount,
-          roundId: drawn.id, // reuse field for Lotto
+          roundId: drawn.id,
         }
       });
     }
-    // 標註結算完成
     await tx.lottoDraw.update({ where: { id: drawn.id }, data: { status: "SETTLED" } });
   });
 }
@@ -183,11 +186,9 @@ export async function placeBet(params: { userId: string; amount: number; picks: 
   const cfg = await readConfig();
   if (params.picks.length !== cfg.picksCount) throw new Error(`需要選 ${cfg.picksCount} 顆號碼`);
 
-  // 取得可下注場次（OPEN）
   const draw = await prisma.lottoDraw.findFirst({ where: { status: "OPEN" }, orderBy: { drawAt: "asc" } });
   if (!draw) throw new Error("目前沒有開放下注的場次");
 
-  // 扣款 + 建注
   return prisma.$transaction(async (tx) => {
     const u = await tx.user.findUnique({ where: { id: params.userId } });
     if (!u) throw new Error("無此使用者");
@@ -217,7 +218,6 @@ export async function placeBet(params: { userId: string; amount: number; picks: 
       }
     });
 
-    // 累積獎池（示意：50% 進 pool，5% 進 jackpot）
     await tx.lottoDraw.update({
       where: { id: draw.id },
       data: {

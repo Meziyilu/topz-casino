@@ -13,29 +13,25 @@ import { creditTx } from "@/services/wallet.service";
 import { taipeiNow } from "@/lib/time";
 
 /* ----------------------------------------------------------------
-   工具：擲骰、payload 檢查、派彩計算（完全內建）
+   工具：擲骰、payload 檢查、派彩計算
 -----------------------------------------------------------------*/
 
-// 直接在這裡擲骰，回傳 number[3]
 function rollDice(): [number, number, number] {
   const d = () => 1 + Math.floor(Math.random() * 6);
   return [d(), d(), d()];
 }
 
-// 基本統計
 function sum3(d: number[]) { return (d?.[0] ?? 0) + (d?.[1] ?? 0) + (d?.[2] ?? 0); }
 function isTriple(d: number[]) { return d.length === 3 && d[0] === d[1] && d[1] === d[2]; }
 function countEye(d: number[], eye: number) { return d.filter(x => x === eye).length; }
 function hasPair(d: number[], a: number, b: number) {
-  // 是否包含一個 a 與一個 b（不必在相鄰位置）
   const da = d.indexOf(a);
   if (da === -1) return false;
   const tmp = d.slice();
-  tmp.splice(da, 1); // 移除一個 a 再找 b
+  tmp.splice(da, 1);
   return tmp.indexOf(b) !== -1;
 }
 
-// 驗證 payload（僅允許需要的欄位）
 function _validatePayload(kind: SicBoBetKind, payload: any) {
   switch (kind) {
     case "TOTAL": {
@@ -63,14 +59,12 @@ function _validatePayload(kind: SicBoBetKind, payload: any) {
       const [x, y] = a < b ? [a, b] : [b, a];
       return { a: x, b: y };
     }
-    // 其他不需 payload
     default:
       return {};
   }
 }
-export const validatePayload = _validatePayload; // ← 給 bet route 用
+export const validatePayload = _validatePayload;
 
-// 總點數賠率表（經典 SicBo）
 export const TOTAL_ODDS: Record<number, number> = {
   4: 50, 17: 50,
   5: 18, 16: 18,
@@ -81,76 +75,59 @@ export const TOTAL_ODDS: Record<number, number> = {
   10: 6, 11: 6,
 };
 
-// 派彩計算（回傳「賠付金額」= 不含本金的純派彩）
 function calcPayout(kind: SicBoBetKind, amount: number, payload: any, dice: [number, number, number]): number {
   const d = dice as number[];
   const s = sum3(d);
   const triple = isTriple(d);
 
   switch (kind) {
-    case "BIG":
-      // 11~17 且 非三同，1賠1
-      return (!triple && s >= 11 && s <= 17) ? amount * 1 : 0;
-
-    case "SMALL":
-      // 4~10 且 非三同，1賠1
-      return (!triple && s >= 4 && s <= 10) ? amount * 1 : 0;
-
-    case "ODD":
-      // 單，非三同，1賠1
-      return (!triple && s % 2 === 1) ? amount * 1 : 0;
-
-    case "EVEN":
-      // 雙，非三同，1賠1
-      return (!triple && s % 2 === 0) ? amount * 1 : 0;
-
-    case "ANY_TRIPLE":
-      // 任意豹子 1賠30
-      return triple ? amount * 30 : 0;
-
+    case "BIG": return (!triple && s >= 11 && s <= 17) ? amount * 1 : 0;
+    case "SMALL": return (!triple && s >= 4 && s <= 10) ? amount * 1 : 0;
+    case "ODD": return (!triple && s % 2 === 1) ? amount * 1 : 0;
+    case "EVEN": return (!triple && s % 2 === 0) ? amount * 1 : 0;
+    case "ANY_TRIPLE": return triple ? amount * 30 : 0;
     case "SPECIFIC_TRIPLE": {
       const eye = Number(payload?.eye);
       return (triple && d[0] === eye) ? amount * 150 : 0;
     }
-
     case "SPECIFIC_DOUBLE": {
-      // 至少兩顆為該點 1賠8
       const eye = Number(payload?.eye);
       return countEye(d, eye) >= 2 ? amount * 8 : 0;
     }
-
     case "TOTAL": {
       const total = Number(payload?.total);
-      const odd = TOTAL_ODDS[total as 4|5|6|7|8|9|10|11|12|13|14|15|16|17];
+      const odd = TOTAL_ODDS[total as keyof typeof TOTAL_ODDS];
       return odd ? amount * odd : 0;
     }
-
     case "COMBINATION": {
       const a = Number(payload?.a);
       const b = Number(payload?.b);
-      // 兩數組合（出現 a 與 b 各一顆即可）1賠5
       return hasPair(d, a, b) ? amount * 5 : 0;
     }
-
     case "SINGLE_DIE": {
       const eye = Number(payload?.eye);
-      const c = countEye(d, eye); // 1顆=1賠1；2顆=1賠2；3顆=1賠3
+      const c = countEye(d, eye);
       return c > 0 ? amount * c : 0;
     }
-
-    default:
-      return 0;
+    default: return 0;
   }
 }
 
 /* ----------------------------------------------------------------
-   讀設定
+   設定讀取 (BigInt-safe)
 -----------------------------------------------------------------*/
+
+function asNumber(v: number | bigint | null | undefined, d: number): number {
+  if (typeof v === "bigint") return Number(v);
+  if (typeof v === "number") return v;
+  return d;
+}
+
 async function readInt(key: string, fallback: number) {
   const row = await prisma.gameConfig.findUnique({
     where: { gameCode_key: { gameCode: "SICBO", key } },
   });
-  return row?.valueInt ?? fallback;
+  return asNumber(row?.valueInt, fallback);
 }
 async function readBool(key: string, fallback: boolean) {
   const row = await prisma.gameConfig.findUnique({
@@ -173,7 +150,7 @@ export async function getRoomMeta(room: SicBoRoomCode) {
 }
 
 /* ----------------------------------------------------------------
-   找或輪轉回合（含自動鎖盤/結算/新局）
+   找或輪轉回合
 -----------------------------------------------------------------*/
 export async function getOrRotateRound(room: SicBoRoomCode) {
   const meta = await getRoomMeta(room);
@@ -221,25 +198,22 @@ export async function getOrRotateRound(room: SicBoRoomCode) {
 }
 
 /* ----------------------------------------------------------------
-   結算（用內建 calcPayout；派彩走 creditTx；全程單一交易）
+   結算
 -----------------------------------------------------------------*/
 export async function revealAndSettle(roundId: string) {
   return await prisma.$transaction(async (tx) => {
     let round = await tx.sicBoRound.findUnique({ where: { id: roundId } });
     if (!round) throw new Error("ROUND_NOT_FOUND");
 
-    // 已結算且骰子齊全 → 直接回傳
     if (round.phase === SicBoPhase.SETTLED && (round.dice as number[] | null)?.length === 3) {
       return round;
     }
 
-    // 補骰或使用現有骰
     const dice: [number, number, number] =
       (Array.isArray(round.dice) && round.dice.length === 3
         ? (round.dice as number[])
         : rollDice()) as [number, number, number];
 
-    // 逐注單派彩
     const bets = await tx.sicBoBet.findMany({ where: { roundId: round.id } });
 
     for (const b of bets) {
@@ -247,13 +221,11 @@ export async function revealAndSettle(roundId: string) {
       const payout = calcPayout(b.kind as SicBoBetKind, b.amount, payload, dice);
 
       if (payout > 0) {
-        // 統一錢包入口：派彩（含 Ledger sicboRoom/sicboRoundId）
         await creditTx(tx, b.userId, "WALLET", payout, LedgerType.PAYOUT, {
           sicboRoom: round.room,
           sicboRoundId: round.id,
         });
 
-        // 玩家統計
         await tx.user.update({
           where: { id: b.userId },
           data: {
@@ -264,7 +236,6 @@ export async function revealAndSettle(roundId: string) {
       }
     }
 
-    // 收尾：寫骰與結束
     round = await tx.sicBoRound.update({
       where: { id: round.id },
       data: { phase: SicBoPhase.SETTLED, dice: dice as any, endedAt: taipeiNow() },

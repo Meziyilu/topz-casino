@@ -2,6 +2,13 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma, BalanceTarget, LedgerType } from "@prisma/client";
 
+/** BigInt-safe 轉換 */
+function toSafeInt(amount: number | bigint): bigint {
+  if (typeof amount === "bigint") return amount;
+  if (!Number.isInteger(amount) || amount < 0) throw new Error("AMOUNT_INVALID");
+  return BigInt(amount);
+}
+
 /** 讀環境變數（整數，含預設） */
 const envInt = (key: string, def: number) => {
   const v = Number(process.env[key]);
@@ -9,8 +16,8 @@ const envInt = (key: string, def: number) => {
 };
 
 // 單筆與每日上限（自行調整）
-const BANK_SINGLE_MAX = envInt("BANK_SINGLE_MAX", 1_000_000);       // 單筆上限
-const BANK_DAILY_OUT_MAX = envInt("BANK_DAILY_OUT_MAX", 2_000_000); // 每日銀行流出上限
+const BANK_SINGLE_MAX = envInt("BANK_SINGLE_MAX", 1_000_000);
+const BANK_DAILY_OUT_MAX = envInt("BANK_DAILY_OUT_MAX", 2_000_000);
 
 /** 取「台北時間的今天 00:00」Date，避免時區誤差 */
 function startOfTodayInTaipei(): Date {
@@ -28,12 +35,12 @@ function startOfTodayInTaipei(): Date {
   return new Date(iso);
 }
 
-/** 可寫進 Ledger 的追蹤欄位（方便報表/對帳） */
+/** 可寫進 Ledger 的追蹤欄位 */
 export type LedgerMeta = {
-  roundId?: string;          // 百家樂 roundId
-  room?: any;                // RoomCode
-  sicboRoundId?: string;     // 骰寶 roundId
-  sicboRoom?: any;           // SicBoRoomCode
+  roundId?: string;
+  room?: any;
+  sicboRoundId?: string;
+  sicboRoom?: any;
 };
 
 export async function getBalances(userId: string) {
@@ -45,30 +52,29 @@ export async function getBalances(userId: string) {
   return { wallet: u.balance, bank: u.bankBalance };
 }
 
-/* =========================== Tx 版本（建議用於下注/派彩） =========================== */
+/* =========================== Tx 版本 =========================== */
 
-/** 在「既有 transaction」裡加錢並寫 Ledger（amount 正數） */
 export async function creditTx(
   tx: Prisma.TransactionClient,
   userId: string,
   target: BalanceTarget,
-  amount: number,
+  amount: number | bigint,
   type: LedgerType,
   meta?: LedgerMeta
 ) {
-  if (!Number.isInteger(amount) || amount <= 0) throw new Error("AMOUNT_INVALID");
+  const amt = toSafeInt(amount);
 
   const upd = await tx.user.update({
     where: { id: userId },
     data: target === "WALLET"
-      ? { balance: { increment: amount } }
-      : { bankBalance: { increment: amount } },
+      ? { balance: { increment: amt } }
+      : { bankBalance: { increment: amt } },
     select: { balance: true, bankBalance: true },
   });
 
   await tx.ledger.create({
     data: {
-      userId, type, target, amount,
+      userId, type, target, amount: amt,
       roundId: meta?.roundId, room: meta?.room,
       sicboRoundId: meta?.sicboRoundId, sicboRoom: meta?.sicboRoom,
     },
@@ -77,16 +83,15 @@ export async function creditTx(
   return { wallet: upd.balance, bank: upd.bankBalance };
 }
 
-/** 在「既有 transaction」裡扣錢並寫 Ledger（amount 正數；方向靠 type/target） */
 export async function debitTx(
   tx: Prisma.TransactionClient,
   userId: string,
   target: BalanceTarget,
-  amount: number,
+  amount: number | bigint,
   type: LedgerType,
   meta?: LedgerMeta
 ) {
-  if (!Number.isInteger(amount) || amount <= 0) throw new Error("AMOUNT_INVALID");
+  const amt = toSafeInt(amount);
 
   const u = await tx.user.findUnique({
     where: { id: userId },
@@ -95,19 +100,19 @@ export async function debitTx(
   if (!u) throw new Error("USER_NOT_FOUND");
 
   const cur = target === "WALLET" ? u.balance : u.bankBalance;
-  if (cur < amount) throw new Error("INSUFFICIENT_BALANCE");
+  if (cur < amt) throw new Error("INSUFFICIENT_BALANCE");
 
   const upd = await tx.user.update({
     where: { id: userId },
     data: target === "WALLET"
-      ? { balance: { decrement: amount } }
-      : { bankBalance: { decrement: amount } },
+      ? { balance: { decrement: amt } }
+      : { bankBalance: { decrement: amt } },
     select: { balance: true, bankBalance: true },
   });
 
   await tx.ledger.create({
     data: {
-      userId, type, target, amount,
+      userId, type, target, amount: amt,
       roundId: meta?.roundId, room: meta?.room,
       sicboRoundId: meta?.sicboRoundId, sicboRoom: meta?.sicboRoom,
     },
@@ -116,41 +121,38 @@ export async function debitTx(
   return { wallet: upd.balance, bank: upd.bankBalance };
 }
 
-/* =========================== 非 Tx 版本（相容舊呼叫） =========================== */
+/* =========================== 非 Tx 版本 =========================== */
 
-/** 加錢（正向），只寫一邊餘額 + 一筆 Ledger（amount 一律正數） */
 export async function credit(
   userId: string,
   target: BalanceTarget,
-  amount: number,
+  amount: number | bigint,
   type: LedgerType,
   meta?: LedgerMeta
 ) {
   return prisma.$transaction((tx) => creditTx(tx, userId, target, amount, type, meta));
 }
 
-/** 扣錢（負向邏輯，但 Ledger.amount 仍記正數；方向靠 type/target） */
 export async function debit(
   userId: string,
   target: BalanceTarget,
-  amount: number,
+  amount: number | bigint,
   type: LedgerType,
   meta?: LedgerMeta
 ) {
   return prisma.$transaction((tx) => debitTx(tx, userId, target, amount, type, meta));
 }
 
-/** 錢包↔銀行：移轉；Ledger 只記「到達的那一邊」 */
 export async function move(
   userId: string,
   from: BalanceTarget,
   to: BalanceTarget,
-  amount: number,
-  type: LedgerType // 對銀行而言：DEPOSIT=錢包→銀行；WITHDRAW=銀行→錢包
+  amount: number | bigint,
+  type: LedgerType
 ) {
   if (from === to) throw new Error("TARGET_SAME");
-  if (!Number.isInteger(amount) || amount <= 0) throw new Error("AMOUNT_INVALID");
-  if (amount > BANK_SINGLE_MAX) throw new Error("SINGLE_LIMIT");
+  const amt = toSafeInt(amount);
+  if (amt > BigInt(BANK_SINGLE_MAX)) throw new Error("SINGLE_LIMIT");
 
   return await prisma.$transaction(async (tx) => {
     const u = await tx.user.findUnique({
@@ -160,60 +162,58 @@ export async function move(
     if (!u) throw new Error("USER_NOT_FOUND");
 
     const fromBal = from === "WALLET" ? u.balance : u.bankBalance;
-    if (fromBal < amount) throw new Error("INSUFFICIENT_BALANCE");
+    if (fromBal < amt) throw new Error("INSUFFICIENT_BALANCE");
 
     await tx.user.update({
       where: { id: userId },
       data: from === "WALLET"
-        ? { balance: { decrement: amount } }
-        : { bankBalance: { decrement: amount } },
+        ? { balance: { decrement: amt } }
+        : { bankBalance: { decrement: amt } },
     });
 
     const upd = await tx.user.update({
       where: { id: userId },
       data: to === "WALLET"
-        ? { balance: { increment: amount } }
-        : { bankBalance: { increment: amount } },
+        ? { balance: { increment: amt } }
+        : { bankBalance: { increment: amt } },
       select: { balance: true, bankBalance: true },
     });
 
-    await tx.ledger.create({ data: { userId, type, target: to, amount } });
+    await tx.ledger.create({ data: { userId, type, target: to, amount: amt } });
 
     return { wallet: upd.balance, bank: upd.bankBalance };
   });
 }
 
-/** 銀行 → 他人銀行（雙邊變動；各寫一筆 Ledger TRANSFER target=BANK） */
 export async function transferBankToOther(
   fromUserId: string,
   toUserId: string,
-  amount: number
+  amount: number | bigint
 ) {
   if (fromUserId === toUserId) throw new Error("SAME_USER");
-  if (!Number.isInteger(amount) || amount <= 0) throw new Error("AMOUNT_INVALID");
-  if (amount > BANK_SINGLE_MAX) throw new Error("SINGLE_LIMIT");
+  const amt = toSafeInt(amount);
+  if (amt > BigInt(BANK_SINGLE_MAX)) throw new Error("SINGLE_LIMIT");
 
-  // 每日流出限制
   const todayOut = await getDailyOutSum(fromUserId);
-  if (todayOut + amount > BANK_DAILY_OUT_MAX) throw new Error("DAILY_OUT_LIMIT");
+  if (BigInt(todayOut) + amt > BigInt(BANK_DAILY_OUT_MAX)) throw new Error("DAILY_OUT_LIMIT");
 
   return await prisma.$transaction(async (tx) => {
     const from = await tx.user.findUnique({ where: { id: fromUserId }, select: { bankBalance: true } });
     if (!from) throw new Error("USER_NOT_FOUND");
-    if (from.bankBalance < amount) throw new Error("INSUFFICIENT_BALANCE");
+    if (from.bankBalance < amt) throw new Error("INSUFFICIENT_BALANCE");
 
     const to = await tx.user.findUnique({ where: { id: toUserId }, select: { id: true } });
     if (!to) throw new Error("TO_USER_NOT_FOUND");
 
-    await tx.user.update({ where: { id: fromUserId }, data: { bankBalance: { decrement: amount } } });
+    await tx.user.update({ where: { id: fromUserId }, data: { bankBalance: { decrement: amt } } });
     const updTo = await tx.user.update({
       where: { id: toUserId },
-      data: { bankBalance: { increment: amount } },
+      data: { bankBalance: { increment: amt } },
       select: { bankBalance: true },
     });
 
-    await tx.ledger.create({ data: { userId: fromUserId, type: "TRANSFER", target: "BANK", amount } });
-    await tx.ledger.create({ data: { userId: toUserId,   type: "TRANSFER", target: "BANK", amount } });
+    await tx.ledger.create({ data: { userId: fromUserId, type: "TRANSFER", target: "BANK", amount: amt } });
+    await tx.ledger.create({ data: { userId: toUserId,   type: "TRANSFER", target: "BANK", amount: amt } });
 
     const updFrom = await tx.user.findUnique({
       where: { id: fromUserId },
@@ -227,7 +227,6 @@ export async function transferBankToOther(
   });
 }
 
-/** 今日（台北）銀行流出總額：WITHDRAW + TRANSFER，target = BANK */
 export async function getDailyOutSum(userId: string) {
   const start = startOfTodayInTaipei();
   const agg = await prisma.ledger.aggregate({
@@ -239,10 +238,9 @@ export async function getDailyOutSum(userId: string) {
     },
     _sum: { amount: true },
   });
-  return agg._sum.amount ?? 0;
+  return agg._sum.amount ?? BigInt(0);
 }
 
-/** 取歷史（分頁） */
 export async function listLedgers(
   userId: string,
   opts: { target?: BalanceTarget; limit?: number; cursor?: string }
