@@ -2,24 +2,24 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma, BalanceTarget, LedgerType } from "@prisma/client";
 
-/** BigInt-safe 轉換 */
-function toSafeInt(amount: number | bigint): bigint {
-  if (typeof amount === "bigint") return amount;
-  if (!Number.isInteger(amount) || amount < 0) throw new Error("AMOUNT_INVALID");
-  return BigInt(amount);
+/** 轉成正整數 number（schema 是 Int） */
+function toSafeNumber(amount: number | bigint): number {
+  const n = typeof amount === "bigint" ? Number(amount) : amount;
+  if (!Number.isInteger(n) || n <= 0) throw new Error("AMOUNT_INVALID");
+  return n;
 }
 
-/** 讀環境變數（整數，含預設） */
+/** 讀整數環境變數（含預設值） */
 const envInt = (key: string, def: number) => {
   const v = Number(process.env[key]);
   return Number.isFinite(v) && v > 0 ? Math.floor(v) : def;
 };
 
-// 單筆與每日上限（自行調整）
+// 風控上限
 const BANK_SINGLE_MAX = envInt("BANK_SINGLE_MAX", 1_000_000);
 const BANK_DAILY_OUT_MAX = envInt("BANK_DAILY_OUT_MAX", 2_000_000);
 
-/** 取「台北時間的今天 00:00」Date，避免時區誤差 */
+/** 台北時間今天 00:00 */
 function startOfTodayInTaipei(): Date {
   const fmt = new Intl.DateTimeFormat("zh-TW", {
     timeZone: "Asia/Taipei",
@@ -31,16 +31,15 @@ function startOfTodayInTaipei(): Date {
   const y = Number(parts.find(p => p.type === "year")?.value ?? "1970");
   const m = Number(parts.find(p => p.type === "month")?.value ?? "01");
   const d = Number(parts.find(p => p.type === "day")?.value ?? "01");
-  const iso = `${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}T00:00:00+08:00`;
-  return new Date(iso);
+  return new Date(`${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}T00:00:00+08:00`);
 }
 
-/** 可寫進 Ledger 的追蹤欄位 */
+/** Ledger 追蹤欄位 */
 export type LedgerMeta = {
-  roundId?: string;
-  room?: any;
-  sicboRoundId?: string;
-  sicboRoom?: any;
+  roundId?: string;      // 百家樂
+  room?: any;            // RoomCode
+  sicboRoundId?: string; // 骰寶
+  sicboRoom?: any;       // SicBoRoomCode
 };
 
 export async function getBalances(userId: string) {
@@ -62,7 +61,7 @@ export async function creditTx(
   type: LedgerType,
   meta?: LedgerMeta
 ) {
-  const amt = toSafeInt(amount);
+  const amt = toSafeNumber(amount);
 
   const upd = await tx.user.update({
     where: { id: userId },
@@ -91,7 +90,7 @@ export async function debitTx(
   type: LedgerType,
   meta?: LedgerMeta
 ) {
-  const amt = toSafeInt(amount);
+  const amt = toSafeNumber(amount);
 
   const u = await tx.user.findUnique({
     where: { id: userId },
@@ -143,6 +142,7 @@ export async function debit(
   return prisma.$transaction((tx) => debitTx(tx, userId, target, amount, type, meta));
 }
 
+/** 錢包↔銀行 移轉；Ledger 記「到達的那邊」 */
 export async function move(
   userId: string,
   from: BalanceTarget,
@@ -151,8 +151,8 @@ export async function move(
   type: LedgerType
 ) {
   if (from === to) throw new Error("TARGET_SAME");
-  const amt = toSafeInt(amount);
-  if (amt > BigInt(BANK_SINGLE_MAX)) throw new Error("SINGLE_LIMIT");
+  const amt = toSafeNumber(amount);
+  if (amt > BANK_SINGLE_MAX) throw new Error("SINGLE_LIMIT");
 
   return await prisma.$transaction(async (tx) => {
     const u = await tx.user.findUnique({
@@ -185,17 +185,18 @@ export async function move(
   });
 }
 
+/** 銀行 → 他人銀行（兩筆 TRANSFER） */
 export async function transferBankToOther(
   fromUserId: string,
   toUserId: string,
   amount: number | bigint
 ) {
   if (fromUserId === toUserId) throw new Error("SAME_USER");
-  const amt = toSafeInt(amount);
-  if (amt > BigInt(BANK_SINGLE_MAX)) throw new Error("SINGLE_LIMIT");
+  const amt = toSafeNumber(amount);
+  if (amt > BANK_SINGLE_MAX) throw new Error("SINGLE_LIMIT");
 
-  const todayOut = await getDailyOutSum(fromUserId);
-  if (BigInt(todayOut) + amt > BigInt(BANK_DAILY_OUT_MAX)) throw new Error("DAILY_OUT_LIMIT");
+  const todayOut = await getDailyOutSum(fromUserId); // number
+  if (todayOut + amt > BANK_DAILY_OUT_MAX) throw new Error("DAILY_OUT_LIMIT");
 
   return await prisma.$transaction(async (tx) => {
     const from = await tx.user.findUnique({ where: { id: fromUserId }, select: { bankBalance: true } });
@@ -227,7 +228,8 @@ export async function transferBankToOther(
   });
 }
 
-export async function getDailyOutSum(userId: string) {
+/** 今日（台北）銀行流出總額：WITHDRAW + TRANSFER，target = BANK。回傳 number。 */
+export async function getDailyOutSum(userId: string): Promise<number> {
   const start = startOfTodayInTaipei();
   const agg = await prisma.ledger.aggregate({
     where: {
@@ -238,9 +240,10 @@ export async function getDailyOutSum(userId: string) {
     },
     _sum: { amount: true },
   });
-  return agg._sum.amount ?? BigInt(0);
+  return Number(agg._sum.amount ?? 0);
 }
 
+/** 取歷史（分頁） */
 export async function listLedgers(
   userId: string,
   opts: { target?: BalanceTarget; limit?: number; cursor?: string }
