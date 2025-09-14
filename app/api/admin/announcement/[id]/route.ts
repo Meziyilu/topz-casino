@@ -6,14 +6,10 @@ import prisma from "@/lib/prisma";
 import { verifyRequest } from "@/lib/jwt";
 import { z } from "zod";
 
-const toUndef = z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().datetime().optional());
-
 const UpdateSchema = z.object({
   title: z.string().min(1).optional(),
   body: z.string().min(1).optional(),
   enabled: z.boolean().optional(),
-  startAt: toUndef,
-  endAt: toUndef,
 });
 
 // GET /api/admin/announcement/[id]
@@ -41,8 +37,6 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       title: b.title ?? undefined,
       body: b.body ?? undefined,
       enabled: b.enabled ?? undefined,
-      startAt: b.startAt ? new Date(b.startAt) : b.startAt === undefined ? undefined : null, // 允許明確傳 null 來清空
-      endAt: b.endAt ? new Date(b.endAt) : b.endAt === undefined ? undefined : null,
     },
   });
   return NextResponse.json(item);
