@@ -1,32 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
-
-async function resolveUserId(req: NextRequest) {
-  const raw = req.headers.get("x-user-id")?.trim();
-  if (!raw) return null;
-  if (raw === "demo-user") {
-    const u = await prisma.user.findUnique({
-      where: { email: "demo@example.com" },
-      select: { id: true },
-    });
-    return u?.id ?? null;
-  }
-  return raw;
-}
+import { getUserFromRequest } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  try {
-    const userId = await resolveUserId(req);
-    if (!userId) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 });
-    const u = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { balance: true, bankBalance: true },
-    });
-    return NextResponse.json({ ok: true, wallet: u?.balance ?? 0, bank: u?.bankBalance ?? 0 });
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? "FAILED" }, { status: 500 });
-  }
+  const user = await getUserFromRequest(req);
+  if (!user) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 });
+
+  return NextResponse.json({ ok: true, wallet: user.balance, bank: user.bankBalance });
 }

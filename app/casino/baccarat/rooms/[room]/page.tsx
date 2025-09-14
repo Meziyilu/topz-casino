@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect, useRef, useState } from "react";
 import "@/../public/styles/baccarat.css";
 
@@ -13,7 +12,6 @@ interface RoundState {
   startedAt: string;
   endsAt: string;
 }
-
 interface StateResp {
   room: RoomCode;
   round: RoundState;
@@ -27,7 +25,6 @@ interface StateResp {
   };
   bead: ("PLAYER" | "BANKER" | "TIE")[];
 }
-
 interface Bet {
   id: string;
   side: string;
@@ -43,35 +40,33 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
   const [balance, setBalance] = useState<number>(0);
   const [chip, setChip] = useState<number>(100);
 
-  // Lottie
   const lottieRef = useRef<HTMLDivElement>(null);
   const lottieAnimRef = useRef<any>(null);
-  const lastPhaseRef = useRef<Phase | null>(null);
-  const lastRoundIdRef = useRef<string | null>(null);
 
-  // 每秒時間
+  // 每秒更新時間
   useEffect(() => {
     const t = setInterval(() => setTime(new Date().toLocaleTimeString("zh-TW")), 1000);
     return () => clearInterval(t);
   }, []);
 
-  // 拉 state（修正模板字串）
+  // 輪詢狀態
   useEffect(() => {
     const tick = async () => {
-      const res = await fetch(`/api/casino/baccarat/state?room=${params.room}`, { cache: "no-store" });
+      const res = await fetch(`/api/casino/baccarat/state?room=${params.room}`, {
+        cache: "no-store",
+      });
       const data = await res.json();
       setState(data);
     };
     tick();
-    const id = setInterval(tick, 1000);
+    const id = setInterval(tick, 2000);
     return () => clearInterval(id);
   }, [params.room]);
 
-  // 拉下注紀錄（修正模板字串）
+  // 拉下注紀錄
   useEffect(() => {
     const fetchHistory = async () => {
       const res = await fetch(`/api/casino/baccarat/history?room=${params.room}&take=10`, {
-        headers: { "x-user-id": "demo-user" },
         cache: "no-store",
       });
       const data = await res.json();
@@ -81,84 +76,48 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
   }, [params.room, state?.round?.id]);
 
   // 錢包
-  async function refreshBalance() {
-    const res = await fetch("/api/wallet/balance", { headers: { "x-user-id": "demo-user" }, cache: "no-store" });
-    const data = await res.json();
-    setBalance(data.wallet ?? 0);
-  }
   useEffect(() => {
-    refreshBalance();
+    const fetchBalance = async () => {
+      const res = await fetch("/api/wallet/balance", { cache: "no-store" });
+      const data = await res.json();
+      setBalance(data.wallet ?? 0);
+    };
+    fetchBalance();
   }, [state?.round?.id]);
 
-  // 下單（修正 || 與模板字串）
+  // 下單
   async function place(side: string, amt: number) {
     if (!state) return;
     setPlacing(true);
-    try {
-      const res = await fetch("/api/casino/baccarat/bet", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-user-id": "demo-user" },
-        body: JSON.stringify({ room: params.room, roundId: state.round.id, side, amount: amt }),
-      });
-      // 下注失敗時提示
-      if (!res.ok) {
-        const t = await res.text();
-        alert(t || "下注失敗");
-      } else {
-        setBets((prev) => ({ ...prev, [side]: (prev[side] || 0) + amt }));
-        // 下注成功立即刷新錢包
-        refreshBalance();
-      }
-    } finally {
-      setPlacing(false);
-    }
+    await fetch("/api/casino/baccarat/bet", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ room: params.room, roundId: state.round.id, side, amount: amt }),
+    });
+    setPlacing(false);
+    setBets((prev) => ({ ...prev, [side]: (prev[side] || 0) + amt }));
   }
 
-  // 翻牌特效
   const revealClass = state?.round.phase === "REVEALING" ? "flip-cards reveal-gold" : "";
-  // 勝家閃爍
   const winClass =
     state?.round.phase === "SETTLED" ? `winner-${state.table.outcome?.toLowerCase()}` : "";
 
-  // 播放 Lottie（只在「同一局進入 SETTLED」時播放一次）
   useEffect(() => {
-    const phase = state?.round.phase;
-    const rid = state?.round.id;
-    if (!phase || !rid) return;
-
-    const becameSettled =
-      (lastRoundIdRef.current !== rid && phase === "SETTLED") ||
-      (lastRoundIdRef.current === rid &&
-        lastPhaseRef.current !== "SETTLED" &&
-        phase === "SETTLED");
-
-    if (becameSettled && lottieRef.current) {
+    if (state?.round.phase === "SETTLED" && lottieRef.current) {
       (async () => {
-        const lottie = (await import("lottie-web")).default ?? (await import("lottie-web"));
+        const lottie = (await import("lottie-web")) as any;
         if (lottieAnimRef.current) lottieAnimRef.current.destroy();
-        lottieAnimRef.current = (lottie as any).loadAnimation({
+        lottieAnimRef.current = lottie.loadAnimation({
           container: lottieRef.current,
           renderer: "svg",
           loop: false,
           autoplay: true,
-          path: "/lottie/baccarat-win.json", // 請確認檔案在 public/lottie/ 下
+          path: "/lottie/baccarat-win.json",
         });
       })();
     }
+  }, [state?.round.phase]);
 
-    lastPhaseRef.current = phase;
-    lastRoundIdRef.current = rid;
-
-    return () => {
-      // 清理動畫避免重疊
-      if (lottieAnimRef.current && phase !== "SETTLED") {
-        lottieAnimRef.current.destroy();
-        lottieAnimRef.current = null;
-      }
-    };
-  }, [state?.round.phase, state?.round.id]);
-
-  // 賭注項目
   const betOptions: { side: string; label: string; odds: string }[] = [
     { side: "PLAYER", label: "閒", odds: "1倍" },
     { side: "BANKER", label: "莊", odds: "0.95倍" },
@@ -172,7 +131,6 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
 
   return (
     <div className="baccarat-room dark-theme">
-      {/* Header */}
       <header className="room-header">
         <div className="title">
           <h1>百家樂 {params.room}</h1>
@@ -196,15 +154,12 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
         </div>
       </header>
 
-      {/* 翻牌區 */}
       <div className={`cards-area ${revealClass} ${winClass}`}>
         <div className="side player">
           <h2>閒</h2>
           <div className="cards">
             {state?.table.player.map((c, i) => (
-              <div key={i} className="card">
-                {c}
-              </div>
+              <div key={i} className="card">{c}</div>
             ))}
           </div>
         </div>
@@ -212,23 +167,20 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
           <h2>莊</h2>
           <div className="cards">
             {state?.table.banker.map((c, i) => (
-              <div key={i} className="card">
-                {c}
-              </div>
+              <div key={i} className="card">{c}</div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* 勝利 Lottie 特效：需要配合 CSS .win-fx-overlay 有寬高與 z-index */}
-      <div ref={lottieRef} className="win-fx-overlay" />
+      {/* 勝利動畫 */}
+      <div ref={lottieRef} className="win-fx-overlay"></div>
 
-      {/* 下注面板 */}
       <div className="betting-panel green-panel">
         {betOptions.map((opt) => (
           <button
             key={opt.side}
-            disabled={!!state?.locked || placing}
+            disabled={state?.locked || placing}
             onClick={() => place(opt.side, chip)}
             className={`bet-btn ${
               state?.round.phase === "SETTLED" && state?.table.outcome === opt.side
@@ -243,7 +195,6 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
         ))}
       </div>
 
-      {/* 路子 */}
       <div className="bead-road">
         {state?.bead.map((b, i) => (
           <span key={i} className={`dot ${b.toLowerCase()}`}>
@@ -252,19 +203,14 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
         ))}
       </div>
 
-      {/* 歷史 */}
       <div className="history">
         <h3>近 10 局下注與派彩</h3>
         <div className="history-list">
           {history.map((h, i) => (
             <div key={i} className="history-card">
               <div className="round-id">局號 {h.seq}</div>
-              <div className="bets">
-                下注 {h.bets.map((b: Bet) => `${b.side}:${b.amount}`).join(", ")}
-              </div>
-              <div className="payouts">
-                派彩 {h.payouts.map((p: any) => p.amount).join(", ")}
-              </div>
+              <div className="bets">下注 {h.bets.map((b: Bet) => `${b.side}:${b.amount}`).join(", ")}</div>
+              <div className="payouts">派彩 {h.payouts.map((p: any) => p.amount).join(", ")}</div>
             </div>
           ))}
         </div>
