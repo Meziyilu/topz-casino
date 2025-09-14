@@ -1,252 +1,193 @@
-/* ==========================================================================
-   TopzCasino — Baccarat (Dark + Glass + Green Panel)
-   放到 public/styles/baccarat.css
-   --------------------------------------------------------------------------
-   重點：
-   - 深色背景 + 玻璃感容器
-   - 綠色下注面板（2×4 均寬卡片）
-   - 勝利發光 + 開牌金光 + Lottie 容器
-   - 卡片式歷史 UI
-   - 頂部 Header + 錢包卡片 + 籌碼樣式
-   - 響應式調整
-   ========================================================================== */
+/* ==========================================================
+   Baccarat Glassmorphism Theme
+   ========================================================== */
 
-/* ---------- 基本色票 & 玻璃層 ---------- */
-:root{
-  --bg:#0b1220;
-  --bg-soft:#0e1628;
-  --panel:rgba(18, 33, 52, .55);
-  --panel-solid:#1b2a3f;
-  --muted:#9ca3af;
-  --text:#e5e7eb;
-  --accent:#16a34a;
-  --accent-2:#0ea5a0;
-  --green-1:#0b3f30;
-  --green-2:#0a2f24;
-  --green-3:#115e45;
-  --danger:#dc2626;
-  --primary:#2563eb;
-  --warn:#f59e0b;
-  --shadow-lg:0 20px 50px rgba(0,0,0,.55);
-  --shadow-md:0 10px 28px rgba(0,0,0,.45);
+/* 基本背景 */
+.baccarat-room {
+  min-height: 100vh;
+  background: radial-gradient(circle at 30% 10%, #1b1f3a, #0d0f1c);
+  color: #e5e7eb;
+  font-family: "Segoe UI", Roboto, sans-serif;
+  padding: 20px;
 }
 
-/* ========== 通用深色主題 ========== */
-.dark-theme{
-  min-height:100vh;
-  background:
-    radial-gradient(1200px 800px at 20% -10%, #0f1d33 0%, transparent 60%),
-    radial-gradient(1200px 800px at 120% 110%, #0d1a2e 0%, transparent 60%),
-    var(--bg);
-  color:var(--text);
-  font-family:"Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+/* Header Bar */
+.room-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(20, 24, 40, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px 20px;
+  margin-bottom: 20px;
+  backdrop-filter: blur(12px);
 }
 
-/* 微玻璃容器 */
-.glass{
-  background:linear-gradient(180deg, var(--panel) 0%, rgba(10,20,32,.65) 100%);
-  border:1px solid #24354f;
-  border-radius:16px;
-  backdrop-filter:blur(8px);
-  -webkit-backdrop-filter:blur(8px);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.06), var(--shadow-md);
+.room-header h1 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
 }
 
-/* ========== 大廳樣式 ========== */
-.lobby{ padding:24px; }
-.lobby-header{
-  display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:20px;
-}
-.room-grid{
-  display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:18px;
-}
-.room-card{
-  display:block; text-decoration:none; color:inherit;
-  padding:16px; border-radius:14px;
-  background:linear-gradient(180deg, #111a2a, #0f1a2f);
-  border:1px solid #23324a; box-shadow:var(--shadow-md);
-  transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease, background .18s ease;
-}
-.room-card:hover{ transform:translateY(-4px); border-color:#3a5279; box-shadow:var(--shadow-lg); }
-.wallet{ font-weight:700; font-size:16px; display:flex; align-items:center; gap:8px; }
-
-/* ========== 房間 Header ========== */
-.room-header{
-  display:flex; align-items:center; justify-content:space-between; gap:16px;
-  padding:14px 20px; border-bottom:1px solid #24354f; background:#0c1527;
-}
-.room-header .title{ display:flex; flex-direction:column; gap:4px; }
-.room-header h1{ font-size:22px; font-weight:800; letter-spacing:.3px; }
-.room-header span{ font-size:13px; color:var(--muted); }
-.room-header .right{ display:flex; align-items:center; gap:10px; }
-
-/* 籌碼（可作為下注金額切換） */
-.chips{ display:flex; gap:10px; }
-.chip{
-  --sz:36px;
-  width:var(--sz); height:var(--sz); border-radius:50%;
-  display:grid; place-items:center; font-weight:800; font-size:12px;
-  background:radial-gradient(circle at 30% 30%, #2b3f5c, #1a2a43);
-  border:2px solid #3b5c8a; color:#fff; cursor:pointer;
-  box-shadow:0 6px 14px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.08);
-  transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease;
-}
-.chip:hover{ transform:translateY(-1px); box-shadow:0 10px 22px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.12); }
-.chip.active{ border-color:#5fe0b9; background:radial-gradient(circle at 30% 30%, #2a5a4a, #123d2e); }
-
-/* 錢包卡片 */
-.wallet-card{
-  display:flex; align-items:center; gap:10px; padding:10px 14px;
-  border-radius:12px; border:1px solid #264e7a; background:linear-gradient(180deg, #0f1f32, #0b1726);
-  box-shadow:var(--shadow-md);
-}
-.wallet-card .ico{ font-size:18px; }
-.wallet-card .val{ font-weight:800; color:#cde6ff; }
-
-/* ========== 開牌區 ========== */
-.cards-area{
-  display:flex; justify-content:space-around; align-items:flex-start; gap:16px;
-  padding:22px; margin:22px; border-radius:16px;
-  background:linear-gradient(180deg, #0d1727, #0a1220);
-  position:relative; overflow:hidden; box-shadow:var(--shadow-md);
-}
-.side{ text-align:center; width:48%; }
-.side h2{ font-size:18px; margin-bottom:10px; letter-spacing:1px; color:#eaf2ff; }
-
-.cards{ display:flex; gap:10px; justify-content:center; }
-.card{
-  width:66px; height:94px; border-radius:10px;
-  background:linear-gradient(180deg, #1b2a44, #12243c);
-  border:1px solid #294267; color:#f9fafb; font-weight:900; font-size:18px;
-  display:flex; align-items:center; justify-content:center;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.06), 0 10px 18px rgba(0,0,0,.55);
-  transform-style:preserve-3d; transition:transform .6s cubic-bezier(.2,.8,.2,1), box-shadow .3s ease;
+/* 倒數、狀態區塊 */
+.room-header .status {
+  display: flex;
+  gap: 16px;
+  font-size: 14px;
+  color: #cbd5e1;
 }
 
-/* 開牌動畫（翻面） */
-.flip-cards .card{ transform:rotateY(180deg); }
-
-/* 開牌金光（加在 cards-area 或單張 card） */
-.reveal-gold{ animation:revealFlash 1.2s ease-in-out; }
-@keyframes revealFlash{
-  0%{ box-shadow: 0 0 0 rgba(255,215,0,.0), 0 0 0 rgba(255,215,0,.0); }
-  35%{ box-shadow: 0 0 18px rgba(255,215,0,.45), 0 0 52px rgba(255,215,0,.35); }
-  70%{ box-shadow: 0 0 32px rgba(255,215,0,.35), 0 0 90px rgba(255,215,0,.25); }
-  100%{ box-shadow: 0 0 0 rgba(255,215,0,0); }
+/* ----------- 下注面板 ----------- */
+.betting-panel {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin: 20px 0;
+  padding: 20px;
+  border-radius: 16px;
+  background: rgba(11, 30, 30, 0.45);
+  border: 1px solid rgba(0, 255, 170, 0.1);
+  backdrop-filter: blur(14px);
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.4);
 }
 
-/* 勝利側邊光暈（加在 .cards-area） */
-.winner-player{ box-shadow: inset 0 0 32px rgba(37,99,235,.35), var(--shadow-md); }
-.winner-banker{ box-shadow: inset 0 0 32px rgba(220,38,38,.35), var(--shadow-md); }
-.winner-tie{ box-shadow: inset 0 0 32px rgba(245,158,11,.35), var(--shadow-md); }
-
-/* ========== 下注面板（綠） ========== */
-.betting-panel{
-  margin:22px; padding:18px; border-radius:18px;
-  border:1px solid #1b644d;
-  background:linear-gradient(180deg, rgba(8,41,31,.82), rgba(6,30,24,.82));
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.06), var(--shadow-md);
+/* 單一卡片 */
+.bet-card {
+  padding: 18px;
+  border-radius: 14px;
+  background: rgba(20, 40, 40, 0.6);
+  border: 1px solid rgba(0, 255, 150, 0.15);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  text-align: center;
+  color: #fff;
 }
 
-/* 2x4 卡片格 */
-.betting-panel.grid-2x4{
-  display:grid; grid-template-columns:repeat(2,1fr); grid-template-rows:repeat(4,1fr); gap:14px;
+.bet-card:hover {
+  border-color: rgba(0, 255, 200, 0.4);
+  box-shadow: 0 0 16px rgba(0, 255, 200, 0.25);
+  transform: translateY(-2px);
 }
 
-/* 單張下注卡片 */
-.bet-card{
-  background:linear-gradient(180deg, #0d1d17cc, #0a2c21cc);
-  border:1px solid #1b644d; border-radius:14px; padding:14px;
-  display:flex; flex-direction:column; justify-content:space-between; min-height:74px;
-  box-shadow:inset 0 1px 0 #ffffff10, 0 10px 18px #0006;
-  transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease, background .12s ease;
-  color:#eafbf6; cursor:pointer;
-}
-.bet-card:hover:not(:disabled){
-  transform:translateY(-2px);
-  box-shadow:inset 0 1px 0 #ffffff18, 0 14px 26px #0009;
-  border-color:#2a8f71;
-}
-.bet-card:disabled{ opacity:.55; cursor:not-allowed; }
-
-.bet-card .label{ display:flex; align-items:center; gap:8px; font-weight:800; font-size:15px; }
-.bet-card .label .icon{ font-size:18px; }
-.bet-card .meta{ display:flex; justify-content:space-between; align-items:center; margin-top:8px; }
-.bet-card .odds{
-  font-size:12px; padding:2px 8px; border-radius:8px; color:#cde9e1;
-  background:#0b3f30; border:1px solid #1a6b55;
-}
-.bet-card .amt{ font-weight:800; font-size:13px; color:#eafbf6; }
-
-/* 勝利卡片閃爍（加上 .glow） */
-.bet-card.glow{
-  animation:winPulse .55s ease-out 4;
-  border-color:#38e9b3 !important;
-  box-shadow:inset 0 0 0 1px rgba(56,233,179,.35), 0 0 28px rgba(56,233,179,.18);
-}
-@keyframes winPulse{
-  0%{ box-shadow:0 0 0 rgba(56,233,179,0); transform:translateY(0); }
-  50%{ box-shadow:0 0 24px rgba(56,233,179,.35); transform:translateY(-1px); }
-  100%{ box-shadow:0 0 0 rgba(56,233,179,0); transform:translateY(0); }
+/* 卡片文字 */
+.bet-card .label {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 8px;
 }
 
-/* 備用：原本按鈕式（若仍有使用 .bet-btn） */
-.bet-btn{
-  padding:14px; border-radius:10px; font-size:15px; font-weight:800; border:none;
-  background:linear-gradient(180deg,#0e7a58,#0b6148); color:#fff; cursor:pointer;
-  box-shadow:0 10px 18px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.12);
-  transition:transform .12s ease, filter .12s ease, box-shadow .12s ease;
-}
-.bet-btn:hover:not(:disabled){ transform:translateY(-2px); filter:saturate(1.1); }
-.bet-btn:disabled{ opacity:.6; cursor:not-allowed; }
-.bet-btn .amt{ display:block; margin-top:6px; font-size:12px; font-weight:600; opacity:.9; }
-
-/* ========== 勝利 Lottie 特效容器 ========== */
-.win-fx-overlay{
-  position:fixed; inset:auto; top:50%; left:50%; transform:translate(-50%,-50%);
-  pointer-events:none; z-index:1000; width:min(420px, 64vw); height:min(420px, 64vw);
+.bet-card .odds {
+  font-size: 13px;
+  color: #38efb9;
 }
 
-/* ========== 路子：珠盤 ========== */
-.bead-road{
-  display:flex; gap:6px; padding:12px 16px; margin:22px; border-radius:12px;
-  background:linear-gradient(180deg, #111a2a, #0f1a2f); border:1px solid #23324a; box-shadow:var(--shadow-md);
-}
-.dot{
-  width:18px; height:18px; border-radius:50%;
-  display:flex; align-items:center; justify-content:center;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.15), 0 4px 10px rgba(0,0,0,.35);
-}
-.dot.player{ background:#1d4ed8; }
-.dot.banker{ background:#dc2626; }
-.dot.tie{ background:#fbbf24; }
-
-/* ========== 歷史紀錄：卡片 UI ========== */
-.history{ margin:22px; }
-.history h3{ font-size:18px; margin-bottom:12px; color:#f3f4f6; font-weight:800; letter-spacing:.3px; }
-.history-list{ display:grid; gap:12px; }
-.history-card{
-  padding:14px 16px; border-radius:12px;
-  background:linear-gradient(180deg,#111a2a,#0f1a2f); border:1px solid #23324a;
-  box-shadow:var(--shadow-md); transition:transform .15s ease, background .15s ease, border-color .15s ease;
-}
-.history-card:hover{ transform:translateY(-2px); border-color:#3a5279; }
-.history-card .round-id{ font-weight:800; color:#e5e7eb; margin-bottom:6px; }
-.history-card .bets{ font-size:13px; color:var(--muted); }
-.history-card .payouts{ font-size:13px; color:#10b981; font-weight:800; margin-top:4px; }
-
-/* ========== 通用動畫 ========== */
-.glow-win{ animation:glowPulse 1s ease-in-out infinite; }
-@keyframes glowPulse{
-  0%{ box-shadow:0 0 6px #facc15; }
-  50%{ box-shadow:0 0 22px #fde047; }
-  100%{ box-shadow:0 0 6px #facc15; }
+.bet-card .amt {
+  margin-top: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fef9c3;
 }
 
-/* ========== 響應式 ========== */
-@media (max-width: 920px){
-  .cards-area{ flex-direction:column; align-items:center; }
-  .side{ width:100%; }
-  .betting-panel.grid-2x4{ grid-template-columns:1fr; grid-template-rows:none; }
-  .room-header{ flex-direction:column; align-items:flex-start; gap:10px; }
+/* 勝利動畫發光 */
+.bet-card.glow {
+  animation: betGlow 1s ease-in-out infinite;
+}
+@keyframes betGlow {
+  0% { box-shadow: 0 0 6px #facc15; }
+  50% { box-shadow: 0 0 24px #fde047; }
+  100% { box-shadow: 0 0 6px #facc15; }
+}
+
+/* ----------- 開牌動畫區 ----------- */
+.cards-area {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+  margin: 20px auto;
+  border-radius: 16px;
+  background: rgba(20, 24, 40, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.4);
+}
+
+.card {
+  width: 70px;
+  height: 100px;
+  border-radius: 10px;
+  background: rgba(55, 65, 81, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  box-shadow: 0 8px 16px rgba(0,0,0,0.5);
+  transition: transform 0.6s ease;
+}
+
+/* 翻牌 */
+.flip-cards .card {
+  transform: rotateY(180deg);
+}
+
+/* 開牌金光 */
+.reveal-gold {
+  animation: revealFlash 1s ease-out;
+}
+@keyframes revealFlash {
+  0% { box-shadow: 0 0 0px transparent; }
+  50% { box-shadow: 0 0 40px #ffd700; }
+  100% { box-shadow: 0 0 0px transparent; }
+}
+
+/* ----------- 路子 ----------- */
+.bead-road {
+  margin: 20px;
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(20, 24, 40, 0.45);
+  backdrop-filter: blur(10px);
+  display: flex;
+  gap: 8px;
+}
+
+.dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+
+.dot.player { background: #2563eb; }
+.dot.banker { background: #dc2626; }
+.dot.tie { background: #fbbf24; }
+
+/* ----------- 歷史紀錄卡片 ----------- */
+.history {
+  margin: 20px;
+}
+
+.history-list {
+  display: grid;
+  gap: 12px;
+}
+
+.history-card {
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(20, 24, 40, 0.55);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.08);
+  transition: transform 0.2s ease;
+}
+
+.history-card:hover {
+  transform: translateY(-2px);
 }
