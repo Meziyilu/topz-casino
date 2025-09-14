@@ -1,4 +1,5 @@
 "use client";
+
 import { useEffect, useRef, useState } from "react";
 import "@/../public/styles/baccarat.css";
 
@@ -42,9 +43,11 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
   const [balance, setBalance] = useState<number>(0);
   const [chip, setChip] = useState<number>(100);
 
-  // Lottie 動畫
+  // Lottie
   const lottieRef = useRef<HTMLDivElement>(null);
   const lottieAnimRef = useRef<any>(null);
+  const lastPhaseRef = useRef<Phase | null>(null);
+  const lastRoundIdRef = useRef<string | null>(null);
 
   // 每秒時間
   useEffect(() => {
@@ -52,23 +55,24 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
     return () => clearInterval(t);
   }, []);
 
-  // 拉 state
+  // 拉 state（修正模板字串）
   useEffect(() => {
     const tick = async () => {
-      const res = await fetch(`/api/casino/baccarat/state?room=${params.room}`);
+      const res = await fetch(`/api/casino/baccarat/state?room=${params.room}`, { cache: "no-store" });
       const data = await res.json();
       setState(data);
     };
     tick();
-    const id = setInterval(tick, 2000);
+    const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [params.room]);
 
-  // 拉下注紀錄
+  // 拉下注紀錄（修正模板字串）
   useEffect(() => {
     const fetchHistory = async () => {
       const res = await fetch(`/api/casino/baccarat/history?room=${params.room}&take=10`, {
         headers: { "x-user-id": "demo-user" },
+        cache: "no-store",
       });
       const data = await res.json();
       setHistory(data.items ?? []);
@@ -77,51 +81,82 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
   }, [params.room, state?.round?.id]);
 
   // 錢包
+  async function refreshBalance() {
+    const res = await fetch("/api/wallet/balance", { headers: { "x-user-id": "demo-user" }, cache: "no-store" });
+    const data = await res.json();
+    setBalance(data.wallet ?? 0);
+  }
   useEffect(() => {
-    const fetchBalance = async () => {
-      const res = await fetch("/api/wallet/balance", { headers: { "x-user-id": "demo-user" } });
-      const data = await res.json();
-      setBalance(data.wallet ?? 0);
-    };
-    fetchBalance();
+    refreshBalance();
   }, [state?.round?.id]);
 
-  // 下單
+  // 下單（修正 || 與模板字串）
   async function place(side: string, amt: number) {
     if (!state) return;
     setPlacing(true);
-    await fetch("/api/casino/baccarat/bet", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-user-id": "demo-user" },
-      body: JSON.stringify({ room: params.room, roundId: state.round.id, side, amount: amt }),
-    });
-    setPlacing(false);
-    setBets((prev) => ({ ...prev, [side]: (prev[side] || 0) + amt }));
+    try {
+      const res = await fetch("/api/casino/baccarat/bet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-user-id": "demo-user" },
+        body: JSON.stringify({ room: params.room, roundId: state.round.id, side, amount: amt }),
+      });
+      // 下注失敗時提示
+      if (!res.ok) {
+        const t = await res.text();
+        alert(t || "下注失敗");
+      } else {
+        setBets((prev) => ({ ...prev, [side]: (prev[side] || 0) + amt }));
+        // 下注成功立即刷新錢包
+        refreshBalance();
+      }
+    } finally {
+      setPlacing(false);
+    }
   }
 
   // 翻牌特效
   const revealClass = state?.round.phase === "REVEALING" ? "flip-cards reveal-gold" : "";
-
   // 勝家閃爍
   const winClass =
     state?.round.phase === "SETTLED" ? `winner-${state.table.outcome?.toLowerCase()}` : "";
 
-  // 播放 Lottie
+  // 播放 Lottie（只在「同一局進入 SETTLED」時播放一次）
   useEffect(() => {
-    if (state?.round.phase === "SETTLED" && lottieRef.current) {
+    const phase = state?.round.phase;
+    const rid = state?.round.id;
+    if (!phase || !rid) return;
+
+    const becameSettled =
+      (lastRoundIdRef.current !== rid && phase === "SETTLED") ||
+      (lastRoundIdRef.current === rid &&
+        lastPhaseRef.current !== "SETTLED" &&
+        phase === "SETTLED");
+
+    if (becameSettled && lottieRef.current) {
       (async () => {
-        const lottie = (await import("lottie-web")) as any;
+        const lottie = (await import("lottie-web")).default ?? (await import("lottie-web"));
         if (lottieAnimRef.current) lottieAnimRef.current.destroy();
-        lottieAnimRef.current = lottie.loadAnimation({
+        lottieAnimRef.current = (lottie as any).loadAnimation({
           container: lottieRef.current,
           renderer: "svg",
           loop: false,
           autoplay: true,
-          path: "/lottie/baccarat-win.json",
+          path: "/lottie/baccarat-win.json", // 請確認檔案在 public/lottie/ 下
         });
       })();
     }
-  }, [state?.round.phase]);
+
+    lastPhaseRef.current = phase;
+    lastRoundIdRef.current = rid;
+
+    return () => {
+      // 清理動畫避免重疊
+      if (lottieAnimRef.current && phase !== "SETTLED") {
+        lottieAnimRef.current.destroy();
+        lottieAnimRef.current = null;
+      }
+    };
+  }, [state?.round.phase, state?.round.id]);
 
   // 賭注項目
   const betOptions: { side: string; label: string; odds: string }[] = [
@@ -185,15 +220,15 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
         </div>
       </div>
 
-      {/* 勝利特效 */}
-      <div ref={lottieRef} className="win-fx-overlay"></div>
+      {/* 勝利 Lottie 特效：需要配合 CSS .win-fx-overlay 有寬高與 z-index */}
+      <div ref={lottieRef} className="win-fx-overlay" />
 
       {/* 下注面板 */}
       <div className="betting-panel green-panel">
         {betOptions.map((opt) => (
           <button
             key={opt.side}
-            disabled={state?.locked || placing}
+            disabled={!!state?.locked || placing}
             onClick={() => place(opt.side, chip)}
             className={`bet-btn ${
               state?.round.phase === "SETTLED" && state?.table.outcome === opt.side
