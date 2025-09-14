@@ -31,6 +31,7 @@
     "date-fns": "^4.1.0",
     "dayjs": "1.11.13",
     "jsonwebtoken": "^9.0.2",
+    "lottie-react": "^2.4.1",
     "next": "14.2.3",
     "react": "18.3.1",
     "react-dom": "18.3.1",
