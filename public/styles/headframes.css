@@ -4,8 +4,8 @@
 /* 讓 Profile 與 Lobby 共用：.pf- 與 .lb- 兩套 class 一起匹配 */
 .pf-avatar, .lb-avatar {
   position: relative;
-  width: 120px;           /* 視覺大小可在各頁覆寫 */
-  height: 120px;
+  width: 44px;           /* 視覺大小可在各頁覆寫 */
+  height: 44px;
   border-radius: 50%;
   overflow: visible;      /* ✅ 讓外框可以伸出，不要裁掉 */
 }
