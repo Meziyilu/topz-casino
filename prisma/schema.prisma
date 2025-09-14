@@ -103,8 +103,7 @@ model GameConfig {
   gameCode    GameCode
   key         String
   valueString String?
-  valueInt    Int?
-  valueInt    BigInt?
+  valueInt    BigInt?   // ← 改為 BigInt，能存 Date.now() 這種大數
   valueFloat  Float?
   valueBool   Boolean?
   json        Json?
