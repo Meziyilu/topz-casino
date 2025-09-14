@@ -17,15 +17,30 @@ async function resolveUserId(req: NextRequest) {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
     const userId = await resolveUserId(req);
     if (!userId) return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 });
-    const u = await prisma.user.findUnique({
+
+    const { amount } = (await req.json()) as { amount: number };
+    const amt = Number(amount);
+    if (!Number.isInteger(amt) || amt <= 0) {
+      return NextResponse.json({ ok: false, error: "AMOUNT_INVALID" }, { status: 400 });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: userId }, data: { balance: { increment: amt } } });
+      await tx.ledger.create({
+        data: { userId, type: "EXTERNAL_TOPUP", target: "WALLET", amount: amt },
+      });
+    });
+
+    const bal = await prisma.user.findUnique({
       where: { id: userId },
       select: { balance: true, bankBalance: true },
     });
-    return NextResponse.json({ ok: true, wallet: u?.balance ?? 0, bank: u?.bankBalance ?? 0 });
+
+    return NextResponse.json({ ok: true, wallet: bal?.balance ?? 0, bank: bal?.bankBalance ?? 0 });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message ?? "FAILED" }, { status: 500 });
   }

@@ -71,7 +71,7 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
         headers: { "x-user-id": "demo-user" },
       });
       const data = await res.json();
-      setHistory(data.items || []);
+      setHistory(data.items ?? []);
     };
     fetchHistory();
   }, [params.room, state?.round?.id]);
@@ -110,7 +110,7 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
   useEffect(() => {
     if (state?.round.phase === "SETTLED" && lottieRef.current) {
       (async () => {
-        const lottie = (await import("lottie-web/build/player/lottie_light")) as any;
+        const lottie = (await import("lottie-web")) as any;
         if (lottieAnimRef.current) lottieAnimRef.current.destroy();
         lottieAnimRef.current = lottie.loadAnimation({
           container: lottieRef.current,
@@ -141,13 +141,20 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
       <header className="room-header">
         <div className="title">
           <h1>百家樂 {params.room}</h1>
-          <span>局號：{state?.round.seq ?? 0}　狀態：{state?.round.phase}　倒數：{state?.timers.endInSec ?? 0}s</span>
+          <span>
+            局號：{state?.round.seq ?? 0}　狀態：{state?.round.phase}　倒數：
+            {state?.timers.endInSec ?? 0}s
+          </span>
           <span>目前時間：{time}</span>
         </div>
         <div className="wallet">💰 錢包：{balance}</div>
         <div className="chips">
           {[50, 100, 500, 1000].map((c) => (
-            <button key={c} className={`chip ${chip === c ? "active" : ""}`} onClick={() => setChip(c)}>
+            <button
+              key={c}
+              className={`chip ${chip === c ? "active" : ""}`}
+              onClick={() => setChip(c)}
+            >
               💵 {c}
             </button>
           ))}
@@ -160,7 +167,9 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
           <h2>閒</h2>
           <div className="cards">
             {state?.table.player.map((c, i) => (
-              <div key={i} className="card">{c}</div>
+              <div key={i} className="card">
+                {c}
+              </div>
             ))}
           </div>
         </div>
@@ -168,7 +177,9 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
           <h2>莊</h2>
           <div className="cards">
             {state?.table.banker.map((c, i) => (
-              <div key={i} className="card">{c}</div>
+              <div key={i} className="card">
+                {c}
+              </div>
             ))}
           </div>
         </div>
@@ -185,7 +196,9 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
             disabled={state?.locked || placing}
             onClick={() => place(opt.side, chip)}
             className={`bet-btn ${
-              state?.round.phase === "SETTLED" && state?.table.outcome === opt.side ? "glow-win" : ""
+              state?.round.phase === "SETTLED" && state?.table.outcome === opt.side
+                ? "glow-win"
+                : ""
             }`}
           >
             <span>{opt.label}</span>
@@ -211,8 +224,12 @@ export default function BaccaratRoomPage({ params }: { params: { room: RoomCode 
           {history.map((h, i) => (
             <div key={i} className="history-card">
               <div className="round-id">局號 {h.seq}</div>
-              <div className="bets">下注 {h.bets.map((b: Bet) => `${b.side}:${b.amount}`).join(", ")}</div>
-              <div className="payouts">派彩 {h.payouts.map((p: any) => p.amount).join(", ")}</div>
+              <div className="bets">
+                下注 {h.bets.map((b: Bet) => `${b.side}:${b.amount}`).join(", ")}
+              </div>
+              <div className="payouts">
+                派彩 {h.payouts.map((p: any) => p.amount).join(", ")}
+              </div>
             </div>
           ))}
         </div>
