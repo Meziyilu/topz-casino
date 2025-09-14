@@ -104,6 +104,7 @@ model GameConfig {
   key         String
   valueString String?
   valueInt    Int?
+  valueInt    BigInt?
   valueFloat  Float?
   valueBool   Boolean?
   json        Json?

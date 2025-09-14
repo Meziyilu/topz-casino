@@ -6,10 +6,11 @@ export async function POST(req: Request) {
     const { room } = (await req.json()) as { room: "R30"|"R60"|"R90" };
     const key = `room:${room}:shoeSeed`;
 
+    // ✅ 用秒數存，避免 INT4 溢位
     await prisma.gameConfig.upsert({
       where: { gameCode_key: { gameCode: "BACCARAT", key } },
-      create: { gameCode: "BACCARAT", key, valueInt: Date.now() },
-      update: { valueInt: Date.now() },
+      create: { gameCode: "BACCARAT", key, valueInt: Math.floor(Date.now() / 1000) },
+      update: { valueInt: Math.floor(Date.now() / 1000) },
     });
 
     // 將最新一局結束，下一次拉 state 會用新 seed 開局

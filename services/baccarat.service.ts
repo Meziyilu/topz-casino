@@ -2,33 +2,46 @@ import { prisma } from "@/lib/prisma";
 import {
   DealResult,
   RoomCode,
-  BetSide,
   nextPhases,
   initShoe,
   dealRound,
   settleOne,
   taipeiDay,
+  BetSide,
 } from "@/lib/baccarat";
 
-// 避免外部相依
+// 內建 addSeconds
 function addSeconds(d: Date, secs: number) {
   return new Date(d.getTime() + secs * 1000);
 }
 
+type Phase = "BETTING" | "REVEALING" | "SETTLED";
+
 const REVEAL_SEC = 8;
 const BET_SEC = 30;
 
+// ✅ 改：用秒數存 seed，避免 INT4 溢位
 export async function ensureRoomSeed(room: RoomCode) {
+  const key = `room:${room}:shoeSeed`;
   const meta = await prisma.gameConfig.findUnique({
-    where: { gameCode_key: { gameCode: "BACCARAT", key: `room:${room}:shoeSeed` } },
+    where: { gameCode_key: { gameCode: "BACCARAT", key } },
   });
   if (!meta) {
     await prisma.gameConfig.create({
-      data: { gameCode: "BACCARAT", key: `room:${room}:shoeSeed`, valueInt: Date.now() },
+      data: { gameCode: "BACCARAT", key, valueInt: Math.floor(Date.now() / 1000) },
     });
   }
 }
 
+function parseResult(json?: string | null): DealResult | null {
+  if (!json) return null;
+  try { return JSON.parse(json) as DealResult; } catch { return null; }
+}
+function extractOutcome(json?: string | null): "PLAYER"|"BANKER"|"TIE"|null {
+  const r = parseResult(json); return (r?.outcome as any) ?? null;
+}
+
+/** 狀態：必要時自動開新局/推進相位 */
 export async function currentState(room: RoomCode) {
   await ensureRoomSeed(room);
 
@@ -43,10 +56,12 @@ export async function currentState(room: RoomCode) {
   if (!r || r.phase === "SETTLED") {
     const day = taipeiDay(now);
     const seq = (await prisma.round.count({ where: { room, day } })) + 1;
-    const seed = await prisma.gameConfig.findUnique({
+    const seedCfg = await prisma.gameConfig.findUnique({
       where: { gameCode_key: { gameCode: "BACCARAT", key: `room:${room}:shoeSeed` } },
+      select: { valueInt: true },
     });
-    const shoe = initShoe(seed?.valueInt ?? Date.now());
+    const seed = Number(seedCfg?.valueInt ?? Math.floor(Date.now() / 1000));
+    const shoe = initShoe(seed);
     r = await prisma.round.create({
       data: {
         room,
@@ -60,14 +75,19 @@ export async function currentState(room: RoomCode) {
     });
   }
 
-  // 推進相位
-  const phaseInfo = nextPhases(now, new Date(r.startedAt));
+  const np0 = nextPhases(now, new Date(r.startedAt));
+  if (np0.phase === "REVEALING" && r.phase === "BETTING") {
+    const dealt = (() => {
+      try {
+        const shoe = JSON.parse(r!.shoeJson) as number[];
+        return dealRound(shoe);
+      } catch {
+        return dealRound(initShoe(Math.floor(Date.now() / 1000)));
+      }
+    })();
 
-  if (phaseInfo.phase === "REVEALING" && r.phase === "BETTING") {
-    const shoe = JSON.parse(r.shoeJson) as number[];
-    const dealt = dealRound(shoe);
-    await prisma.round.update({
-      where: { id: r.id },
+    await prisma.round.updateMany({
+      where: { id: r.id, phase: "BETTING" },
       data: {
         phase: "REVEALING",
         endsAt: addSeconds(new Date(r.startedAt), BET_SEC + REVEAL_SEC),
@@ -78,31 +98,58 @@ export async function currentState(room: RoomCode) {
     r = await prisma.round.findUnique({ where: { id: r.id } });
   }
 
-  if (phaseInfo.phase === "SETTLED" && r.phase !== "SETTLED") {
+  const np1 = nextPhases(new Date(), new Date(r.startedAt));
+  if (np1.phase === "SETTLED" && r.phase !== "SETTLED") {
     await settleRound(r.id);
-    r = await prisma.round.update({
-      where: { id: r.id },
-      data: {
-        phase: "SETTLED",
-        outcome: extractOutcome(r.resultJson) ?? null,
-        endedAt: new Date(),
-      },
+    const outcome = extractOutcome(r.resultJson);
+    await prisma.round.updateMany({
+      where: { id: r.id, NOT: { phase: "SETTLED" } },
+      data: { phase: "SETTLED", outcome: (outcome as any) ?? null, endedAt: new Date() },
     });
+    r = await prisma.round.findUnique({ where: { id: r.id } });
   }
 
-  return r;
+  const result = parseResult(r.resultJson);
+
+  const beadRows = await prisma.round.findMany({
+    where: { room, resultJson: { not: null } },
+    orderBy: [{ startedAt: "desc" }],
+    take: 60,
+    select: { resultJson: true },
+  });
+  const bead = beadRows.reverse().map(x => {
+    const d = parseResult(x.resultJson);
+    return (d?.outcome ?? "TIE") as any;
+  });
+
+  const np = nextPhases(new Date(), new Date(r.startedAt));
+
+  return {
+    room,
+    round: {
+      id: r.id,
+      seq: r.seq,
+      phase: r.phase as Phase,
+      startedAt: r.startedAt.toISOString(),
+      endsAt: r.endsAt.toISOString(),
+    },
+    timers: { lockInSec: Math.max(0, np.lockInSec), endInSec: Math.max(0, np.endInSec) },
+    locked: np.locked,
+    table: result
+      ? {
+          banker: result.cards.banker,
+          player: result.cards.player,
+          bankerThird: result.cards.bankerThird ?? undefined,
+          playerThird: result.cards.playerThird ?? undefined,
+          total: result.total,
+          outcome: result.outcome,
+        }
+      : { banker: [], player: [] },
+    bead,
+  };
 }
 
-function extractOutcome(resultJson?: string | null) {
-  if (!resultJson) return null;
-  try {
-    const r = JSON.parse(resultJson) as DealResult;
-    return r.outcome;
-  } catch {
-    return null;
-  }
-}
-
+/** 下單 */
 export async function placeBet(
   userId: string,
   room: RoomCode,
@@ -137,11 +184,13 @@ export async function placeBet(
   });
 }
 
+/** 結算 */
 export async function settleRound(roundId: string) {
   const r = await prisma.round.findUnique({ where: { id: roundId } });
   if (!r || !r.resultJson) return;
+  const result = parseResult(r.resultJson);
+  if (!result) return;
 
-  const result = JSON.parse(r.resultJson) as DealResult;
   const bets = await prisma.bet.findMany({ where: { roundId } });
 
   await prisma.$transaction(async (tx) => {
