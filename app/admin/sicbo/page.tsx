@@ -70,7 +70,7 @@ function useRoom(room: RoomCode, pollMs = 3000) {
   return { state, hist, lockLeft, endLeft, reload: load };
 }
 
-/** === 骰子元件（套用 /styles/sicbo.css） === */
+/** === 骰子元件（已整合骰子 CSS） === */
 function Dice({ n, rolling, size = "md" }: { n?: number; rolling?: boolean; size?: "sm" | "md" | "lg" }) {
   const faceCls = n ? `face-${n}` : "";
   const sizeCls = size === "sm" ? "dice-sm" : size === "lg" ? "dice-lg" : "";
@@ -220,8 +220,8 @@ export default function SicboAdminPage() {
   return (
     <>
       <Head>
-        <link rel="stylesheet" href="/styles/sicbo.css" />
-        <link rel="stylesheet" href="/styles/admin-sicbo.css" />
+        {/* 單一獨立 CSS */}
+        <link rel="stylesheet" href="/styles/admin/sicbo-admin.css" />
       </Head>
 
       <main className="admin-sicbo">
@@ -277,13 +277,13 @@ export default function SicboAdminPage() {
               <button onClick={() => roll("SB_R90")} className="btn btn--blue">R90 手動開獎</button>
             </div>
 
-            <div className="manual-grid mt-3">
+            <div className="manual-grid spacer-12">
               <button onClick={() => restart("SB_R30")} className="btn btn--primary">R30 強制新局</button>
               <button onClick={() => restart("SB_R60")} className="btn btn--primary">R60 強制新局</button>
               <button onClick={() => restart("SB_R90")} className="btn btn--primary">R90 強制新局</button>
             </div>
 
-            <div className="manual-row mt-3">
+            <div className="manual-row">
               <input
                 value={settleRoundId}
                 onChange={(e) => setSettleRoundId(e.target.value)}
@@ -293,10 +293,11 @@ export default function SicboAdminPage() {
               <button onClick={settle} className="btn btn--danger">指定局結算</button>
             </div>
 
-            <div className="mt-4 flex items-center gap-3">
-              <label className="flex items-center gap-2 text-sm">
+            <div className="spacer-16">
+              <label className="switch">
                 <input type="checkbox" checked={autoRotate} onChange={toggleAutoRotate} />
-                啟用自動開局
+                <span className="pill"><span className="dot" /></span>
+                <span>啟用自動開局</span>
               </label>
             </div>
           </div>
