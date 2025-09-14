@@ -1,126 +1,217 @@
-export type RoomCode = "R30" | "R60" | "R90";
-export type RoundPhase = "BETTING" | "REVEALING" | "SETTLED";
-export type BetSide =
-  | "PLAYER" | "BANKER" | "TIE"
-  | "PLAYER_PAIR" | "BANKER_PAIR"
-  | "ANY_PAIR" | "PERFECT_PAIR"
-  | "BANKER_SUPER_SIX";
-
-export const ODDS: Record<BetSide, number> = {
-  PLAYER: 1,           // 1:1
-  BANKER: 0.95,        // 1:0.95 (抽5%佣)
-  TIE: 8,              // 1:8
-  PLAYER_PAIR: 11,     // 1:11
-  BANKER_PAIR: 11,     // 1:11
-  ANY_PAIR: 5,         // 1:5
-  PERFECT_PAIR: 25,    // 1:25
-  BANKER_SUPER_SIX: 12 // 1:12（莊以6點勝）
-};
-
-export function taipeiDay(date = new Date()) {
-  // 取台北當地日期字串 YYYY-MM-DD
-  const tz = "Asia/Taipei";
-  const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year:"numeric", month:"2-digit", day:"2-digit" });
-  return fmt.format(date);
-}
-
-export function nextPhases(now: Date, startedAt: Date) {
-  // 30s 下注 -> 8s 開獎動畫
-  const betMs = 30_000;
-  const revealMs = 8_000;
-  const el = now.getTime() - startedAt.getTime();
-  if (el < betMs) return { phase: "BETTING" as RoundPhase, lockInSec: Math.ceil((betMs - el)/1000), endInSec: Math.ceil((betMs + revealMs - el)/1000), locked:false };
-  if (el < betMs + revealMs) return { phase: "REVEALING" as RoundPhase, lockInSec:0, endInSec: Math.ceil((betMs + revealMs - el)/1000), locked:true };
-  return { phase: "SETTLED" as RoundPhase, lockInSec:0, endInSec:0, locked:true };
-}
-
-// ---- 百家樂發牌 + 補牌（標準規則） ----
-type Card = { v: number }; // 2..9 = 面值；10/J/Q/K = 0；A = 1
-function draw(deck: number[]) { return { v: deck.pop()! }; }
-function points(a:number,b:number,c?:number){ return ((a+b+(c??0))%10); }
-function isPair(a:number,b:number){ return a===b && a!==10; }
+// lib/baccarat.ts
+export type Side = "PLAYER" | "BANKER" | "TIE";
+export type PairSide = "PLAYER_PAIR" | "BANKER_PAIR" | "ANY_PAIR" | "PERFECT_PAIR" | "BANKER_SUPER_SIX";
 
 export type DealResult = {
-  shoe: number[]; // 剩餘
+  shoe: number[]; // 派牌後剩餘的鞋（會被寫回 DB）
   cards: {
-    player: number[];
-    banker: number[];
-    playerThird?: number|null;
-    bankerThird?: number|null;
+    player: number[];       // 閒最終持有（1~13，A=1, JQK=10）
+    banker: number[];       // 莊最終持有
+    playerThird?: number;   // 閒第三張（若有）
+    bankerThird?: number;   // 莊第三張（若有）
   };
-  total: { player:number; banker:number };
-  outcome: "PLAYER"|"BANKER"|"TIE";
-  bankerWinWith6: boolean;
-  pairs: { playerPair:boolean; bankerPair:boolean; anyPair:boolean; perfectPair:boolean };
+  total: { player: number; banker: number }; // 0~9
+  outcome: Side;
+  pairs: {
+    playerPair: boolean;
+    bankerPair: boolean;
+    anyPair: boolean;
+    perfectPair: boolean;   // 同點＋同花色：這裡用「同點＋同花色」= 25x（若只想同點＝完美對，可把花色判斷移除）
+  };
+  bankerSuperSix: boolean; // 莊以 6 點勝
 };
 
-export function initShoe(seed = Date.now()) {
-  // 8 副牌，洗牌（簡易 Fisher–Yates with seed）
-  const raw:number[] = [];
-  const ranks = [1,2,3,4,5,6,7,8,9,10,10,10,10]; // A=1, 10/J/Q/K=0
-  for (let d=0; d<8; d++) for (let r of ranks) for (let s=0; s<4; s++) raw.push(r);
-  let i = raw.length, rnd = lcg(seed);
-  while (i>1){ const j = Math.floor(rnd()*i--); [raw[i], raw[j]] = [raw[j], raw[i]]; }
-  return raw;
+/** ---------- 工具：時間與相位 ---------- */
+export function taipeiDay(d = new Date()): string {
+  // 台北當地 YYYYMMDD
+  const tz = "Asia/Taipei";
+  const y = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric" }).format(d);
+  const m = new Intl.DateTimeFormat("en-CA", { timeZone: tz, month: "2-digit" }).format(d);
+  const dd = new Intl.DateTimeFormat("en-CA", { timeZone: tz, day: "2-digit" }).format(d);
+  return `${y}${m}${dd}`;
 }
-function lcg(seed:number){ let s = seed>>>0; return ()=> (s = (s*1664525+1013904223)>>>0, (s/0xFFFFFFFF)); }
 
-export function dealRound(shoe:number[]): DealResult {
-  const s = [...shoe];
-  const p1 = draw(s).v, b1 = draw(s).v, p2 = draw(s).v, b2 = draw(s).v;
-  let pThird: number|null = null;
-  let bThird: number|null = null;
+export function nextPhases(now: Date, startedAt: Date, betSec = 30, revealSec = 8) {
+  const startMs = startedAt.getTime();
+  const lockAt = startMs + betSec * 1000;           // 鎖注點
+  const endAt = lockAt + revealSec * 1000;          // 本局終點
+  const nowMs = now.getTime();
 
-  let p = points(p1,p2);
-  let b = points(b1,b2);
+  const locked = nowMs >= lockAt;
+  const phase: "BETTING" | "REVEALING" | "SETTLED" =
+    nowMs < lockAt ? "BETTING" : nowMs < endAt ? "REVEALING" : "SETTLED";
 
-  // Natural 停牌
-  if (!(p>=8 || b>=8)) {
-    // 玩家補牌規則
-    if (p<=5) { pThird = draw(s).v; p = points(p1,p2,pThird); }
-    // 莊家補牌規則（依玩家第三張）
-    if (pThird===null) {
-      if (b<=5) { bThird = draw(s).v; b = points(b1,b2,bThird); }
+  return {
+    phase,
+    locked,
+    lockInSec: Math.max(0, Math.ceil((lockAt - nowMs) / 1000)),
+    endInSec: Math.max(0, Math.ceil((endAt - nowMs) / 1000)),
+  };
+}
+
+/** ---------- 洗牌/點數 ---------- */
+function rand32() {
+  if (typeof crypto !== "undefined" && (crypto as any).getRandomValues) {
+    const u = new Uint32Array(1);
+    (crypto as any).getRandomValues(u);
+    return u[0] / 0xffffffff;
+  }
+  return Math.random();
+}
+
+function fyShuffle<T>(arr: T[]) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rand32() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+/** 建立 8 副牌的鞋（52*8 = 416 張），以 1~13 表示點數，花色 0~3 */
+export function initShoe(): number[] {
+  const singleDeck: number[] = [];
+  for (let suit = 0; suit < 4; suit++) {
+    for (let rank = 1; rank <= 13; rank++) {
+      // 用 100*rank + suit 表示一張牌，方便之後判斷「完美對（同點＋同花）」
+      singleDeck.push(rank * 100 + suit);
+    }
+  }
+  // 八副牌
+  const shoe: number[] = [];
+  for (let i = 0; i < 8; i++) shoe.push(...singleDeck);
+  return fyShuffle(shoe);
+}
+
+function rankOf(card: number) {
+  return Math.floor(card / 100); // 1~13
+}
+function suitOf(card: number) {
+  return card % 100; // 0~3
+}
+
+function baccaratPoint(rank: number) {
+  if (rank >= 10) return 0; // 10,J,Q,K 都是 0
+  return rank;              // A=1, 2..9
+}
+
+function handTotal(cards: number[]) {
+  const sum = cards.reduce((a, c) => a + baccaratPoint(rankOf(c)), 0);
+  return sum % 10; // 0~9
+}
+
+function natural(totalP: number, totalB: number) {
+  return totalP >= 8 || totalB >= 8;
+}
+
+/** ---------- 發牌 + 第三張規則 ---------- */
+function draw(shoe: number[]) {
+  const x = shoe.pop();
+  if (x === undefined) throw new Error("SHOE_EMPTY");
+  return x;
+}
+
+export function dealRound(shoeIn: number[]): DealResult {
+  let shoe = shoeIn.slice();
+  if (shoe.length < 6) shoe = initShoe(); // 保底：剩太少直接洗新鞋
+
+  // 起手各兩張
+  const p: number[] = [draw(shoe), draw(shoe)];
+  const b: number[] = [draw(shoe), draw(shoe)];
+
+  let totalP = handTotal(p);
+  let totalB = handTotal(b);
+
+  // 自然勝：一方 8/9 → 不補牌
+  if (!natural(totalP, totalB)) {
+    // 閒先決定
+    let playerThird: number | undefined;
+    if (totalP <= 5) {
+      playerThird = draw(shoe);
+      p.push(playerThird);
+      totalP = handTotal(p);
+    }
+
+    // 莊家規則（依據閒第三張）
+    let bankerThird: number | undefined;
+    if (playerThird === undefined) {
+      // 閒沒補：莊 <=5 補
+      if (totalB <= 5) {
+        bankerThird = draw(shoe);
+        b.push(bankerThird);
+        totalB = handTotal(b);
+      }
     } else {
-      // 表格規則
-      if (b<=2) { bThird = draw(s).v; b = points(b1,b2,bThird); }
-      else if (b===3 && pThird!==8) { bThird = draw(s).v; b = points(b1,b2,bThird); }
-      else if (b===4 && [2,3,4,5,6,7].includes(pThird)) { bThird = draw(s).v; b = points(b1,b2,bThird); }
-      else if (b===5 && [4,5,6,7].includes(pThird)) { bThird = draw(s).v; b = points(b1,b2,bThird); }
-      else if (b===6 && [6,7].includes(pThird)) { bThird = draw(s).v; b = points(b1,b2,bThird); }
+      const pt = baccaratPoint(rankOf(playerThird));
+      // 標準規則表
+      const needDraw =
+        (totalB <= 2) ||
+        (totalB === 3 && pt !== 8) ||
+        (totalB === 4 && pt >= 2 && pt <= 7) ||
+        (totalB === 5 && pt >= 4 && pt <= 7) ||
+        (totalB === 6 && (pt === 6 || pt === 7));
+      if (needDraw) {
+        bankerThird = draw(shoe);
+        b.push(bankerThird);
+        totalB = handTotal(b);
+      }
     }
   }
 
-  const outcome = p===b ? "TIE" : (p>b ? "PLAYER" : "BANKER");
-  const bankerWinWith6 = (outcome==="BANKER" && ((b)%10)===6);
-  const pp = isPair(p1,p2), bp = isPair(b1,b2);
-  const anyPair = pp || bp;
-  const perfectPair = pp && bp && (p1===b1 && p2===b2); // 兩邊同點同牌面（簡化）
+  // 結果
+  let outcome: Side = "TIE";
+  if (totalP > totalB) outcome = "PLAYER";
+  else if (totalB > totalP) outcome = "BANKER";
+
+  // 對子 & 完美對
+  const playerPair = rankOf(p[0]) === rankOf(p[1]);
+  const bankerPair = rankOf(b[0]) === rankOf(b[1]);
+  const anyPair = playerPair || bankerPair;
+  const perfectPair = (rankOf(p[0]) === rankOf(p[1]) && suitOf(p[0]) === suitOf(p[1]))
+                   || (rankOf(b[0]) === rankOf(b[1]) && suitOf(b[0]) === suitOf(b[1]));
+
+  const bankerSuperSix = outcome === "BANKER" && handTotal(b) === 6;
+
   return {
-    shoe:s,
-    cards:{ player:[p1,p2], banker:[b1,b2], playerThird:pThird??undefined, bankerThird:bThird??undefined },
-    total:{ player:p, banker:b },
+    shoe,
+    cards: {
+      player: p,
+      banker: b,
+      playerThird: p[2],
+      bankerThird: b[2],
+    },
+    total: { player: totalP, banker: totalB },
     outcome,
-    bankerWinWith6,
-    pairs:{ playerPair:pp, bankerPair:bp, anyPair, perfectPair }
+    pairs: { playerPair, bankerPair, anyPair, perfectPair },
+    bankerSuperSix,
   };
 }
 
-export function settleOne(bet:{side:BetSide; amount:number}, r:DealResult){
+/** ---------- 結算（回傳純派彩，不含本金） ---------- */
+export function settleOne(
+  bet: { side: Side | PairSide; amount: number },
+  res: DealResult
+): number {
   const a = bet.amount;
-  switch (bet.side){
-    case "PLAYER": return r.outcome==="PLAYER" ? a + a*ODDS.PLAYER : (r.outcome==="TIE" ? a : 0);
-    case "BANKER": return r.outcome==="BANKER" ? a + a*ODDS.BANKER : (r.outcome==="TIE" ? a : 0);
-    case "TIE":    return r.outcome==="TIE"    ? a + a*ODDS.TIE    : 0;
-    case "PLAYER_PAIR": return r.pairs.playerPair ? a + a*ODDS.PLAYER_PAIR : 0;
-    case "BANKER_PAIR": return r.pairs.bankerPair ? a + a*ODDS.BANKER_PAIR : 0;
-    case "ANY_PAIR":    return r.pairs.anyPair    ? a + a*ODDS.ANY_PAIR    : 0;
-    case "PERFECT_PAIR":return r.pairs.perfectPair? a + a*ODDS.PERFECT_PAIR: 0;
-    case "BANKER_SUPER_SIX": return r.bankerWinWith6 ? a + a*ODDS.BANKER_SUPER_SIX : 0;
+  // 和局：閒/莊押注退還本金（這部分通常在外面處理；這裡只算派彩=0）
+  if (bet.side === "PLAYER") {
+    if (res.outcome === "PLAYER") return a * 1; // 1:1
+    return 0;
   }
-}
-
-export type BigRoadNode = "B"|"P"|"T";
-export function toBigRoad(history: ("BANKER"|"PLAYER"|"TIE")[]): BigRoadNode[] {
-  return history.map(v => v==="BANKER"?"B":v==="PLAYER"?"P":"T");
+  if (bet.side === "BANKER") {
+    if (res.outcome === "BANKER") {
+      // 超六版本：若莊 6 點勝 → 1:0.5 或 1:0.95 視規則；這裡採 0.95，另有「莊超六」另算 12x
+      return res.bankerSuperSix ? Math.floor(a * 0.95) : Math.floor(a * 0.95);
+    }
+    return 0;
+  }
+  if (bet.side === "TIE") {
+    if (res.outcome === "TIE") return a * 8; // 8:1
+    return 0;
+  }
+  if (bet.side === "PLAYER_PAIR") return res.pairs.playerPair ? a * 11 : 0;
+  if (bet.side === "BANKER_PAIR") return res.pairs.bankerPair ? a * 11 : 0;
+  if (bet.side === "ANY_PAIR")    return res.pairs.anyPair    ? a * 5  : 0;
+  if (bet.side === "PERFECT_PAIR")return res.pairs.perfectPair? a * 25 : 0;
+  if (bet.side === "BANKER_SUPER_SIX") return res.bankerSuperSix ? a * 12 : 0;
+  return 0;
 }
