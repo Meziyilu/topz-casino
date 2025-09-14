@@ -1,36 +1,31 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { placeBet } from "@/services/baccarat.service";
+import { BetSide, RoomCode } from "@prisma/client";
 
-function getUserId(req: Request) {
-  return req.headers.get("x-user-id") || "demo-user";
-}
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-export async function POST(req: Request) {
+// 玩家下注
+export async function POST(req: NextRequest) {
   try {
-    const body = await req.json() as {
-      room: "R30"|"R60"|"R90",
-      roundId: string,
-      side:
-        | "PLAYER" | "BANKER" | "TIE"
-        | "PLAYER_PAIR" | "BANKER_PAIR"
-        | "ANY_PAIR" | "PERFECT_PAIR"
-        | "BANKER_SUPER_SIX",
-      amount: number
-    };
+    const { userId, room, roundId, side, amount } = await req.json();
 
-    if (!body?.room || !body?.roundId || !body?.side || !Number(body?.amount))
-      return NextResponse.json({ error: "INVALID_PAYLOAD" }, { status: 400 });
+    if (!userId) throw new Error("MISSING_USER_ID");
+    if (!room) throw new Error("MISSING_ROOM");
+    if (!roundId) throw new Error("MISSING_ROUND");
+    if (!side) throw new Error("MISSING_SIDE");
+    if (!amount || amount <= 0) throw new Error("INVALID_AMOUNT");
 
-    const userId = getUserId(req);
-    await placeBet(userId, body.room, body.roundId, body.side as any, Number(body.amount));
-    return NextResponse.json({ ok: true });
+    const bet = await placeBet(
+      userId as string,
+      room as RoomCode,
+      roundId as string,
+      side as BetSide,
+      Number(amount)
+    );
+
+    return NextResponse.json({ ok: true, bet });
   } catch (e: any) {
-    const msg = String(e?.message || "");
-    const status =
-      msg === "ROUND_NOT_FOUND" ? 404 :
-      msg === "BET_LOCKED" ? 409 :
-      msg === "INSUFFICIENT_BALANCE" ? 402 :
-      msg === "INVALID_AMOUNT" ? 400 : 500;
-    return NextResponse.json({ error: msg || "UNKNOWN_ERROR" }, { status });
+    return NextResponse.json({ error: e?.message ?? "UNKNOWN_ERROR" }, { status: 400 });
   }
 }

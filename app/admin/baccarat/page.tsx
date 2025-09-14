@@ -2,192 +2,107 @@
 
 import { useEffect, useState } from "react";
 
-type ConfigMap = Record<string, string | number | boolean>;
+type ConfigMap = Record<string, number | string | boolean | null>;
 
-async function fetchConfig(): Promise<ConfigMap> {
-  const res = await fetch("/api/casino/baccarat/admin/config");
-  return res.json();
-}
-
-async function saveConfig(cfg: ConfigMap) {
-  await fetch("/api/casino/baccarat/admin/config", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(cfg),
-  });
-}
-
-export default function AdminBaccaratPage() {
-  const [cfg, setCfg] = useState<ConfigMap>({});
-  const [loading, setLoading] = useState(true);
+export default function BaccaratAdminPage() {
+  const [config, setConfig] = useState<ConfigMap>({});
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetchConfig().then((c) => {
-      setCfg(c);
-      setLoading(false);
-    });
+    (async () => {
+      const res = await fetch("/api/casino/baccarat/admin/config");
+      const data = await res.json();
+      setConfig(data.config || {});
+    })();
   }, []);
 
-  function handleCfgChange(key: string, value: string | number) {
-    setCfg((prev) => ({ ...prev, [key]: value }));
-  }
+  const handleCfgChange = (key: string, value: string) => {
+    let parsed: number | string | boolean | null = value;
+    if (value === "true") parsed = true;
+    else if (value === "false") parsed = false;
+    else if (/^-?\d+$/.test(value)) parsed = parseInt(value, 10);
+    else if (/^-?\d+\.\d+$/.test(value)) parsed = parseFloat(value);
+    setConfig((prev) => ({ ...prev, [key]: parsed }));
+  };
 
-  async function handleSave() {
-    await saveConfig(cfg);
-    alert("設定已儲存");
-  }
-
-  async function handleReset(room: "R30" | "R60" | "R90") {
-    await fetch("/api/casino/baccarat/admin/reset", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ room }),
-    });
-    alert(`${room} 已重置`);
-  }
-
-  if (loading) return <div>載入中...</div>;
+  const saveConfig = async () => {
+    setLoading(true);
+    try {
+      await fetch("/api/casino/baccarat/admin/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(config),
+      });
+      alert("✅ 設定已儲存");
+    } catch (err) {
+      console.error(err);
+      alert("❌ 儲存失敗");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">百家樂管理</h1>
+      <h1 className="text-xl font-bold mb-4">百家樂管理面板</h1>
 
-      <div className="mb-4">
-        <h2 className="font-semibold mb-2">基礎設定</h2>
-        <div className="flex flex-col gap-2">
-          <label>
-            下注秒數：
-            <input
-              type="number"
-              value={String(cfg["BACCARAT:betSeconds"] ?? 30)}
-              onChange={(e) =>
-                handleCfgChange("BACCARAT:betSeconds", Number(e.target.value))
-              }
-            />
-          </label>
-          <label>
-            開獎秒數：
-            <input
-              type="number"
-              value={String(cfg["BACCARAT:revealSeconds"] ?? 8)}
-              onChange={(e) =>
-                handleCfgChange("BACCARAT:revealSeconds", Number(e.target.value))
-              }
-            />
-          </label>
-        </div>
-      </div>
-
-      <div className="mb-4">
-        <h2 className="font-semibold mb-2">賠率設定</h2>
-        <div className="grid grid-cols-2 gap-2">
-          <RateInput
-            label="莊"
-            k="BACCARAT:rate:banker"
-            cfg={cfg}
-            onChange={handleCfgChange}
-            placeholder="0.95"
-          />
-          <RateInput
-            label="閒"
-            k="BACCARAT:rate:player"
-            cfg={cfg}
-            onChange={handleCfgChange}
-            placeholder="1"
-          />
-          <RateInput
-            label="和"
-            k="BACCARAT:rate:tie"
-            cfg={cfg}
-            onChange={handleCfgChange}
-            placeholder="8"
-          />
-          <RateInput
-            label="莊對"
-            k="BACCARAT:rate:bankerPair"
-            cfg={cfg}
-            onChange={handleCfgChange}
-            placeholder="11"
-          />
-          <RateInput
-            label="閒對"
-            k="BACCARAT:rate:playerPair"
-            cfg={cfg}
-            onChange={handleCfgChange}
-            placeholder="11"
-          />
-          <RateInput
-            label="任意對子"
-            k="BACCARAT:rate:anyPair"
-            cfg={cfg}
-            onChange={handleCfgChange}
-            placeholder="5"
-          />
-          <RateInput
-            label="完美對子"
-            k="BACCARAT:rate:perfectPair"
-            cfg={cfg}
-            onChange={handleCfgChange}
-            placeholder="25"
-          />
-          <RateInput
-            label="超級六"
-            k="BACCARAT:rate:superSix"
-            cfg={cfg}
-            onChange={handleCfgChange}
-            placeholder="0.5"
+      <div className="space-y-4">
+        <div>
+          <label className="block mb-1">下注秒數</label>
+          <input
+            type="number"
+            value={
+              typeof config["BACCARAT:betSeconds"] === "number"
+                ? config["BACCARAT:betSeconds"]
+                : 30
+            }
+            onChange={(e) =>
+              handleCfgChange("BACCARAT:betSeconds", e.target.value)
+            }
+            className="border rounded px-2 py-1 w-32"
           />
         </div>
-      </div>
 
-      <div className="mb-4">
-        <h2 className="font-semibold mb-2">房間控制</h2>
-        <div className="flex gap-2">
-          {(["R30", "R60", "R90"] as const).map((r) => (
-            <button
-              key={r}
-              className="bg-red-500 text-white px-3 py-1 rounded"
-              onClick={() => handleReset(r)}
+        <div>
+          <label className="block mb-1">開獎秒數</label>
+          <input
+            type="number"
+            value={
+              typeof config["BACCARAT:revealSeconds"] === "number"
+                ? config["BACCARAT:revealSeconds"]
+                : 8
+            }
+            onChange={(e) =>
+              handleCfgChange("BACCARAT:revealSeconds", e.target.value)
+            }
+            className="border rounded px-2 py-1 w-32"
+          />
+        </div>
+
+        {["R30", "R60", "R90"].map((room) => (
+          <div key={room}>
+            <label className="block mb-1">是否啟用 {room} 房</label>
+            <select
+              value={config[`BACCARAT:${room}:enabled`] === true ? "true" : "false"}
+              onChange={(e) =>
+                handleCfgChange(`BACCARAT:${room}:enabled`, e.target.value)
+              }
+              className="border rounded px-2 py-1 w-32"
             >
-              重置 {r}
-            </button>
-          ))}
-        </div>
+              <option value="true">啟用</option>
+              <option value="false">停用</option>
+            </select>
+          </div>
+        ))}
       </div>
 
       <button
-        className="bg-blue-500 text-white px-4 py-2 rounded"
-        onClick={handleSave}
+        onClick={saveConfig}
+        disabled={loading}
+        className="mt-6 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
       >
-        儲存設定
+        {loading ? "儲存中..." : "儲存設定"}
       </button>
     </div>
-  );
-}
-
-function RateInput({
-  label,
-  k,
-  cfg,
-  onChange,
-  placeholder,
-}: {
-  label: string;
-  k: string;
-  cfg: ConfigMap;
-  onChange: (key: string, value: string | number) => void;
-  placeholder: string;
-}) {
-  return (
-    <label>
-      {label}：
-      <input
-        type="number"
-        step="0.01"
-        value={String(cfg[k] ?? "")}
-        placeholder={placeholder}
-        onChange={(e) => onChange(k, Number(e.target.value))}
-      />
-    </label>
   );
 }

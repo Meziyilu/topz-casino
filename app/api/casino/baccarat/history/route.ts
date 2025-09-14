@@ -1,19 +1,33 @@
-import { NextResponse } from "next/server";
-import { getPublicRounds } from "@/services/baccarat.service";
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
-export async function GET(req: Request) {
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+// 取得玩家下注紀錄
+export async function POST(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const room = (searchParams.get("room") || "R30") as "R30" | "R60" | "R90";
-    const limit = parseInt(searchParams.get("limit") || "20", 10);
+    const { userId, take = 10 } = await req.json();
 
-    const rounds = await getPublicRounds(room, limit);
+    const bets = await prisma.bet.findMany({
+      where: { userId },
+      include: { round: true },
+      orderBy: { createdAt: "desc" },
+      take,
+    });
 
-    return NextResponse.json({ rounds });
+    const list = bets.map((b) => ({
+      id: b.id,
+      roundId: b.roundId,
+      side: b.side,
+      amount: b.amount,
+      createdAt: b.createdAt.toISOString(),
+      outcome: b.round?.outcome,
+      result: b.round?.resultJson ? JSON.parse(b.round.resultJson) : null,
+    }));
+
+    return NextResponse.json({ bets: list });
   } catch (e: any) {
-    return NextResponse.json(
-      { error: e?.message ?? "UNKNOWN_ERROR" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: e?.message ?? "UNKNOWN_ERROR" }, { status: 500 });
   }
 }

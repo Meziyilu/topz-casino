@@ -1,47 +1,86 @@
+// app/api/casino/baccarat/admin/config/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-const KEYS = [
-  "BACCARAT:betSeconds",
-  "BACCARAT:revealSeconds",
-  "BACCARAT:payout:PLAYER",
-  "BACCARAT:payout:BANKER",
-  "BACCARAT:payout:TIE",
-  "BACCARAT:payout:PLAYER_PAIR",
-  "BACCARAT:payout:BANKER_PAIR",
-  "BACCARAT:payout:ANY_PAIR",
-  "BACCARAT:payout:PERFECT_PAIR",
-  "BACCARAT:payout:BANKER_SUPER_SIX",
-];
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
+// 取得百家樂設定
 export async function GET() {
   try {
     const rows = await prisma.gameConfig.findMany({
-      where: { gameCode: "BACCARAT", key: { in: KEYS } },
+      where: { gameCode: "BACCARAT" },
     });
+
     const map: Record<string, number | string | boolean | null> = {};
-    for (const r of rows) map[r.key] = r.valueInt ?? r.valueFloat ?? r.valueString ?? r.valueBool ?? null;
+    for (const r of rows) {
+      let v: string | number | boolean | null = null;
+
+      if (r.valueInt !== null && r.valueInt !== undefined) {
+        v = Number(r.valueInt); // ✅ BigInt → number
+      } else if (r.valueFloat !== null && r.valueFloat !== undefined) {
+        v = r.valueFloat;
+      } else if (r.valueString !== null && r.valueString !== undefined) {
+        v = r.valueString;
+      } else if (r.valueBool !== null && r.valueBool !== undefined) {
+        v = r.valueBool;
+      }
+
+      map[r.key] = v;
+    }
+
     return NextResponse.json({ config: map });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "UNKNOWN_ERROR" }, { status: 500 });
+    return NextResponse.json(
+      { error: e?.message ?? "UNKNOWN_ERROR" },
+      { status: 500 }
+    );
   }
 }
 
+// 更新百家樂設定
 export async function POST(req: Request) {
   try {
-    const body = await req.json() as Record<string, number | string | boolean>;
-    const entries = Object.entries(body).filter(([k]) => KEYS.includes(k));
+    const body = await req.json();
+    const entries = Object.entries(body) as [string, any][];
 
-    await Promise.all(entries.map(([key, v]) =>
-      prisma.gameConfig.upsert({
+    for (const [key, value] of entries) {
+      await prisma.gameConfig.upsert({
         where: { gameCode_key: { gameCode: "BACCARAT", key } },
-        create: { gameCode: "BACCARAT", key, valueFloat: typeof v === "number" ? v : undefined, valueString: typeof v === "string" ? v : undefined, valueBool: typeof v === "boolean" ? v : undefined },
-        update: { valueFloat: typeof v === "number" ? v : undefined, valueString: typeof v === "string" ? v : undefined, valueBool: typeof v === "boolean" ? v : undefined },
-      })
-    ));
+        update: {
+          valueInt:
+            typeof value === "number" && Number.isInteger(value)
+              ? BigInt(value) // ✅ 存 BigInt
+              : null,
+          valueFloat:
+            typeof value === "number" && !Number.isInteger(value)
+              ? value
+              : null,
+          valueString: typeof value === "string" ? value : null,
+          valueBool: typeof value === "boolean" ? value : null,
+        },
+        create: {
+          gameCode: "BACCARAT",
+          key,
+          valueInt:
+            typeof value === "number" && Number.isInteger(value)
+              ? BigInt(value)
+              : null,
+          valueFloat:
+            typeof value === "number" && !Number.isInteger(value)
+              ? value
+              : null,
+          valueString: typeof value === "string" ? value : null,
+          valueBool: typeof value === "boolean" ? value : null,
+        },
+      });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "UNKNOWN_ERROR" }, { status: 500 });
+    return NextResponse.json(
+      { error: e?.message ?? "UNKNOWN_ERROR" },
+      { status: 500 }
+    );
   }
 }
