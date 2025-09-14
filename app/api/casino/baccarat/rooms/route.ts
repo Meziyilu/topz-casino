@@ -1,15 +1,24 @@
 import { NextResponse } from "next/server";
-import { currentState } from "@/services/baccarat.service";
+import { getRooms, getRoomInfo } from "@/services/baccarat.service";
+import type { RoomCode } from "@prisma/client";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+// 取得所有房間資訊（含狀態與歷史）
 export async function GET() {
   try {
-    // 三個固定房間
-    const rooms = (["R30", "R60", "R90"] as const);
+    const rooms = await getRooms();
 
-    // 抓每個房間的狀態
-    const states = await Promise.all(rooms.map((r) => currentState(r)));
+    // 把每個房間的 state/history 一併帶回
+    const withInfo = await Promise.all(
+      rooms.map(async (r) => {
+        const info = await getRoomInfo(r.code as RoomCode);
+        return { ...r, ...info };
+      })
+    );
 
-    return NextResponse.json({ rooms: states });
+    return NextResponse.json({ rooms: withInfo });
   } catch (e: any) {
     return NextResponse.json(
       { error: e?.message ?? "UNKNOWN_ERROR" },
