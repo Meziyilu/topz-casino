@@ -1,33 +1,57 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getUserFromRequest } from "@/lib/auth";
+import type { RoomCode } from "@prisma/client";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// 取得玩家下注紀錄
-export async function POST(req: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
-    const { userId, take = 10 } = await req.json();
+    const auth = await getUserFromRequest(req);
+    if (!auth) {
+      return NextResponse.json({ ok: false, error: "UNAUTHORIZED" }, { status: 401 });
+    }
 
-    const bets = await prisma.bet.findMany({
-      where: { userId },
-      include: { round: true },
+    const { searchParams } = new URL(req.url);
+    const room = searchParams.get("room") as RoomCode | null;
+    const take = Math.min(Math.max(parseInt(searchParams.get("take") ?? "10", 10), 1), 50);
+
+    if (!room) {
+      return NextResponse.json({ ok: false, error: "ROOM_REQUIRED" }, { status: 400 });
+    }
+
+    // 直接用 relation 篩選：round.room = room
+    const items = await prisma.bet.findMany({
+      where: { userId: auth.id, round: { room } },
       orderBy: { createdAt: "desc" },
       take,
+      include: {
+        round: {
+          select: { id: true, seq: true, room: true, outcome: true, resultJson: true },
+        },
+      },
     });
 
-    const list = bets.map((b) => ({
+    // 前端範例會讀 bets / payouts；這裡回傳你下的注與對應回合資訊
+    // 如果要同時帶派彩紀錄，可另外查 ledger type=PAYOUT, roundId=...（這裡先保留簡單版）
+    const transformed = items.map((b) => ({
       id: b.id,
-      roundId: b.roundId,
-      side: b.side,
       amount: b.amount,
+      side: b.side,
       createdAt: b.createdAt.toISOString(),
-      outcome: b.round?.outcome,
+      roundId: b.roundId,
+      seq: b.round?.seq ?? null,
+      outcome: b.round?.outcome ?? null,
       result: b.round?.resultJson ? JSON.parse(b.round.resultJson) : null,
     }));
 
-    return NextResponse.json({ bets: list });
+    return NextResponse.json({ ok: true, items: transformed });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "UNKNOWN_ERROR" }, { status: 500 });
+    console.error("history error:", e);
+    return NextResponse.json(
+      { ok: false, error: e?.message ?? "SERVER_ERROR" },
+      { status: 500 }
+    );
   }
 }
