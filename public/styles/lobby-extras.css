@@ -1,0 +1,55 @@
+/* ===== Lobby extras: Bank card + Ann list + smaller avatar ===== */
+
+/* 個人資料卡頭貼縮小（覆蓋原樣式） */
+.profile-card .avatar,
+.lb-profile .avatar {
+  width: 48px !important;
+  height: 48px !important;
+}
+
+/* 銀行卡片 */
+.lb-bank {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.22);
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.25);
+  backdrop-filter: blur(10px);
+  color: #e8eef7;
+}
+.lb-bank__head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px;
+}
+.lb-bank__title {
+  font-weight: 800; font-size: 15px;
+  background: linear-gradient(90deg, #6ea8fe, #8b5cf6);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+}
+.lb-bank__rows { display: grid; gap: 8px; margin-bottom: 10px; }
+.lb-bank__row {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 14px;
+}
+.lb-bank__k { color: #9fb1c7; }
+.lb-bank__v { font-weight: 800; }
+.lb-bank__actions { display: flex; gap: 8px; }
+.lb-btn-mini {
+  padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.22);
+  color: white; background: linear-gradient(90deg, #6ea8fe, #8b5cf6);
+  font-weight: 700; letter-spacing: .2px; cursor: pointer; transition: transform .06s ease;
+  text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
+}
+.lb-btn-mini.ghost { background: transparent; color: #e8eef7; }
+
+/* 公告列表（簡潔） */
+#ann-list.soft { display: grid; gap: 8px; }
+.ann-item {
+  font-size: 14px; line-height: 1.4;
+  border-bottom: 1px dashed rgba(255,255,255,0.12);
+  padding-bottom: 8px;
+}
+.ann-item:last-child { border-bottom: 0; padding-bottom: 0; }
+.ann-title { font-weight: 700; }
+.ann-body { opacity: .9; white-space: pre-wrap; }

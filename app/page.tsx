@@ -1,9 +1,9 @@
-// app/page.tsx  或 app/(public)/page.tsx
 "use client";
 
-// ✅ 一次載入大廳樣式 + 頭框特效樣式
+// ✅ 一次載入大廳樣式 + 頭框特效樣式 + 本次補充樣式
 import "@/public/styles/lobby.css";
 import "@/public/styles/headframes.css";
+import "@/public/styles/lobby-extras.css";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -37,6 +37,14 @@ type LbItem = {
   panelTint?: string | null;
 };
 
+type Announcement = {
+  id: string;
+  title: string;
+  body: string;
+  enabled: boolean;
+  createdAt?: string;
+};
+
 export default function LobbyPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -47,6 +55,9 @@ export default function LobbyPage() {
   // 週排行榜
   const [weeklyLB, setWeeklyLB] = useState<LbItem[]>([]);
 
+  // 公告
+  const [anns, setAnns] = useState<Announcement[]>([]);
+
   useEffect(() => {
     fetch("/api/users/me", { credentials: "include" })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
@@ -54,12 +65,20 @@ export default function LobbyPage() {
       .catch(() => setMe(null));
   }, []);
 
-  // 跑馬燈
+  // 跑馬燈（對應後台跑馬燈）
   useEffect(() => {
     fetch("/api/marquee", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((d) => setMarquee(d.texts ?? []))
       .catch(() => setMarquee([]));
+  }, []);
+
+  // 公告（對應後台公告：只顯示啟用的）
+  useEffect(() => {
+    fetch("/api/announcement?enabled=1&limit=10", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => setAnns(d.items ?? []))
+      .catch(() => setAnns([]));
   }, []);
 
   // 週排行榜
@@ -73,10 +92,7 @@ export default function LobbyPage() {
   async function onLogout() {
     try {
       setLoggingOut(true);
-      await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "include",
-      });
+      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     } catch {
       // ignore
     } finally {
@@ -97,11 +113,13 @@ export default function LobbyPage() {
         </div>
 
         <div className="center">
-          <AnnouncementTicker items={marquee.length ? marquee : [
-            "🎉 新手禮包開放領取！",
-            "🔥 百家樂 R60 房間將於 21:00 開新局",
-            "💎 連續簽到 7 天可抽稀有徽章",
-          ]}/>
+          <AnnouncementTicker
+            items={
+              marquee.length
+                ? marquee
+                : ["🎉 新手禮包開放領取！", "🔥 百家樂 R60 房間將於 21:00 開新局", "💎 連續簽到 7 天可抽稀有徽章"]
+            }
+          />
         </div>
 
         <div className="right" style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -138,16 +156,46 @@ export default function LobbyPage() {
             panelTint={me?.panelTint ?? undefined}
           />
 
-          {/* 公告卡片：簡單把公告列出（你也可以做成彈窗） */}
+          {/* 銀行卡片 */}
+          <div className="lb-bank" aria-label="銀行">
+            <div className="lb-bank__head">
+              <div className="lb-bank__title">銀行</div>
+              <Link href="/bank" className="lb-btn-mini ghost">前往銀行</Link>
+            </div>
+            <div className="lb-bank__rows">
+              <div className="lb-bank__row">
+                <div className="lb-bank__k">錢包餘額</div>
+                <div className="lb-bank__v">{(me?.balance ?? 0).toLocaleString()}</div>
+              </div>
+              <div className="lb-bank__row">
+                <div className="lb-bank__k">銀行餘額</div>
+                <div className="lb-bank__v">{(me?.bankBalance ?? 0).toLocaleString()}</div>
+              </div>
+            </div>
+            <div className="lb-bank__actions">
+              <Link href="/bank?tab=deposit" className="lb-btn-mini">存入銀行</Link>
+              <Link href="/bank?tab=withdraw" className="lb-btn-mini ghost">提領至錢包</Link>
+            </div>
+          </div>
+
+          {/* 公告卡片（對應後台公告） */}
           <div className="lb-card">
-            <div className="lb-card-title">公告 / 目前尚未開放許多功能</div>
+            <div className="lb-card-title">公告</div>
             <ul className="lb-list soft" id="ann-list">
-              {/* 預留：你要的就緒狀態，或之後拉 API */}
-              {/* 若想要即時拉 API，也可以在這裡 fetch /api/announcements */}
+              {anns.length ? (
+                anns.map((a) => (
+                  <li key={a.id} className="ann-item">
+                    <div className="ann-title">{a.title}</div>
+                    <div className="ann-body">{a.body}</div>
+                  </li>
+                ))
+              ) : (
+                <li className="lb-muted">目前沒有公告</li>
+              )}
             </ul>
           </div>
 
-          {/* 週排行榜：換成動態 */}
+          {/* 週排行榜：動態 */}
           <Leaderboard title="排行榜（週）" items={weeklyLB} />
         </aside>
 
