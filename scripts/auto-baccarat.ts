@@ -1,182 +1,211 @@
-// scripts/auto-baccarat.ts
-import { PrismaClient, type RoomCode, type BetSide } from "@prisma/client";
+/**
+ * scripts/auto-baccarat.ts
+ * 自動推進百家樂三個房間的局狀態。
+ *
+ * - 下注 30 秒 + 開獎動畫 8 秒（可從 GameConfig 調整）
+ * - 沒有當局 → 自動開新局（補齊 endsAt/day/seq/shoeJson）
+ * - REVEALING → 發牌，寫 resultJson
+ * - SETTLED   → 結算，寫 outcome / endedAt
+ *
+ * 可作為單次 cron： `node dist/scripts/auto-baccarat.js`
+ * 或常駐輪詢：將 RUN_MODE=loop 或直接改下面 RUN_MODE 預設。
+ */
 
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/prisma";
+import {
+  RoomCode,
+  BetSide,
+  dealRound,
+  initShoe,
+  nextPhases,
+  settleOne, // 若你只用 services.settleRound 可刪除此 import
+  taipeiDay,
+  DealResult,
+} from "@/lib/baccarat";
+import { settleRound as settleRoundService } from "@/services/baccarat.service";
 
-/** 房間時間設定（跟前端/服務一致） */
-const ROOMS: Record<RoomCode, { secondsPerRound: number }> = {
-  R30: { secondsPerRound: 30 },
-  R60: { secondsPerRound: 60 },
-  R90: { secondsPerRound: 90 },
-};
+// ====== 基本設定（可動態從 GameConfig 讀取） ======
+const DEFAULT_BET_SEC = 30;
+const DEFAULT_REVEAL_SEC = 8;
 
-/** 結束後冷卻秒數（留 1 秒緩衝即可） */
-const COOLDOWN_SECONDS = 1;
+// 若要常駐輪詢，調整這裡
+const RUN_MODE: "once" | "loop" = (process.env.BACCARAT_RUN_MODE as any) || "once";
+const LOOP_INTERVAL_MS = 1000; // 常駐模式每秒巡檢
 
-/** -------- 真實百家樂發牌（單副隨機）+ 第三張牌規則 -------- */
-type Card = { r: number; p: number }; // r: 1..13, p: 點數（A=1, 2..9=2..9, 10/J/Q/K=0）
-function drawCard(): Card {
-  const r = 1 + Math.floor(Math.random() * 13);
-  const p = r === 1 ? 1 : r >= 10 ? 0 : r;
-  return { r, p };
-}
-function points(cards: Card[]): number {
-  return cards.reduce((a, c) => a + c.p, 0) % 10;
-}
-function baccaratDeal() {
-  const P: Card[] = [drawCard(), drawCard()];
-  const B: Card[] = [drawCard(), drawCard()];
-  let p = points(P);
-  let b = points(B);
-
-  // Natural 8/9
-  if (p >= 8 || b >= 8) return { P, B, p, b };
-
-  // 玩家第三張
-  let p3: Card | null = null;
-  if (p <= 5) {
-    p3 = drawCard();
-    P.push(p3);
-    p = points(P);
-  }
-
-  // 莊家第三張（依玩家第三張）
-  const bankerDraw = () => {
-    const c = drawCard();
-    B.push(c);
-    b = points(B);
-  };
-
-  if (!p3) {
-    if (b <= 5) bankerDraw();
-  } else {
-    const t = p3.p; // 玩家第三張點
-    if (b <= 2) bankerDraw();
-    else if (b === 3 && t !== 8) bankerDraw();
-    else if (b === 4 && t >= 2 && t <= 7) bankerDraw();
-    else if (b === 5 && t >= 4 && t <= 7) bankerDraw();
-    else if (b === 6 && (t === 6 || t === 7)) bankerDraw();
-  }
-
-  return { P, B, p, b };
-}
-function outcomeFromPoints(p: number, b: number): "PLAYER" | "BANKER" | "TIE" {
-  if (p === b) return "TIE";
-  return p > b ? "PLAYER" : "BANKER";
+// ====== Utils ======
+function addSeconds(d: Date, secs: number) {
+  return new Date(d.getTime() + secs * 1000);
 }
 
-/** 賠率（與前端標示對齊；對子/完美對目前先不派彩） */
-const PAYOUT: Record<BetSide, number> = {
-  PLAYER: 1,
-  BANKER: 1,            // 遇到「莊 6」會改成 0.5（Super Six 規則）
-  TIE: 8,
-  PLAYER_PAIR: 0,       // 先不派彩（要做就要存前兩張牌 rank）
-  BANKER_PAIR: 0,
-  ANY_PAIR: 0,
-  PERFECT_PAIR: 0,
-  BANKER_SUPER_SIX: 12, // 成立條件：莊勝且 6 點
-};
-
-/** 派彩（含 BANKER 6 點半賠、BANKER_SUPER_SIX） */
-async function settleRound(roundId: string, p: number, b: number) {
-  const outcome = outcomeFromPoints(p, b);
-  const superSix = outcome === "BANKER" && b === 6;
-
-  const bets = await prisma.bet.findMany({ where: { roundId } });
-
-  const perUser: Record<string, number> = {};
-  for (const bet of bets) {
-    let odds = PAYOUT[bet.side] ?? 0;
-
-    // Super Six 主注半賠
-    if (bet.side === "BANKER" && superSix) odds = 0.5;
-
-    const betWins =
-      (bet.side === "PLAYER" && outcome === "PLAYER") ||
-      (bet.side === "BANKER" && outcome === "BANKER") ||
-      (bet.side === "TIE" && outcome === "TIE") ||
-      (bet.side === "BANKER_SUPER_SIX" && superSix);
-      // 其他 Pair/Perfect/Any 目前先不派彩
-
-    const prize = betWins ? Math.floor(bet.amount * odds) : 0;
-    if (prize > 0) perUser[bet.userId] = (perUser[bet.userId] ?? 0) + prize;
-  }
-
-  await prisma.$transaction(async (tx) => {
-    await tx.round.update({
-      where: { id: roundId },
-      data: { outcome, phase: "SETTLED" },
-    });
-
-    // 發錢 + ledger
-    for (const [userId, inc] of Object.entries(perUser)) {
-      await tx.user.update({
-        where: { id: userId },
-        data: { balance: { increment: inc } },
-      });
-      await tx.ledger.create({
-        data: { userId, type: "PAYOUT", target: "WALLET", amount: inc },
-      });
-    }
+async function getSecondsConfig() {
+  // 可選：從 GameConfig 讀取秒數（讀不到就 fallback）
+  const rows = await prisma.gameConfig.findMany({
+    where: { gameCode: "BACCARAT", key: { in: ["BACCARAT:betSeconds", "BACCARAT:revealSeconds"] } },
+    select: { key: true, valueFloat: true, valueInt: true },
   });
+  const map = new Map<string, number>();
+  for (const r of rows) {
+    const v = typeof r.valueFloat === "number" ? r.valueFloat :
+              typeof r.valueInt === "number" ? r.valueInt : undefined;
+    if (typeof v === "number" && !Number.isNaN(v)) map.set(r.key, v);
+  }
+  const bet = map.get("BACCARAT:betSeconds") ?? DEFAULT_BET_SEC;
+  const reveal = map.get("BACCARAT:revealSeconds") ?? DEFAULT_REVEAL_SEC;
+  return { BET_SEC: Math.max(1, Math.floor(bet)), REVEAL_SEC: Math.max(1, Math.floor(reveal)) };
 }
 
-/** 確保房間有一局在跑；時間到就結算；結束後自動開下一局 */
-async function ensureRound(room: RoomCode) {
-  const rc = ROOMS[room];
-  const cur = await prisma.round.findFirst({
+async function ensureRoomSeed(room: RoomCode) {
+  const key = `room:${room}:shoeSeed`;
+  const meta = await prisma.gameConfig.findUnique({
+    where: { gameCode_key: { gameCode: "BACCARAT", key } },
+  });
+  if (!meta) {
+    await prisma.gameConfig.create({
+      data: { gameCode: "BACCARAT", key, valueInt: Date.now() },
+    });
+  }
+}
+
+function parseResult(json?: string | null): DealResult | null {
+  if (!json) return null;
+  try { return JSON.parse(json) as DealResult; } catch { return null; }
+}
+function extractOutcome(json?: string | null): "PLAYER" | "BANKER" | "TIE" | null {
+  return (parseResult(json)?.outcome as any) ?? null;
+}
+
+// ====== 關鍵：開新局 ======
+async function openNewRound(room: RoomCode, BET_SEC: number, REVEAL_SEC: number) {
+  const now = new Date();
+  const day = taipeiDay(now);                     // 以台北日切
+  const seq = (await prisma.round.count({ where: { room, day } })) + 1;
+
+  // 用房間鞋 seed 初始化牌靴
+  const seedCfg = await prisma.gameConfig.findUnique({
+    where: { gameCode_key: { gameCode: "BACCARAT", key: `room:${room}:shoeSeed` } },
+    select: { valueInt: true },
+  });
+  const seed = seedCfg?.valueInt ?? Date.now();
+  const shoe = initShoe(seed);
+
+  const round = await prisma.round.create({
+    data: {
+      room,
+      phase: "BETTING",
+      day,
+      seq,
+      startedAt: now,
+      endsAt: addSeconds(now, BET_SEC + REVEAL_SEC),
+      shoeJson: JSON.stringify(shoe),
+      outcome: null,
+    },
+  });
+
+  return round;
+}
+
+// ====== 關鍵：推進單一房間 ======
+async function tickRoom(room: RoomCode) {
+  await ensureRoomSeed(room);
+  const { BET_SEC, REVEAL_SEC } = await getSecondsConfig();
+
+  let r = await prisma.round.findFirst({
     where: { room },
     orderBy: { startedAt: "desc" },
   });
 
-  if (!cur) {
-    await prisma.round.create({
-      data: { room, phase: "BETTING", startedAt: new Date(), outcome: null },
+  const now = new Date();
+
+  // 沒有局或上一局已結束 → 開新局
+  if (!r || r.phase === "SETTLED") {
+    r = await openNewRound(room, BET_SEC, REVEAL_SEC);
+  }
+
+  // 照 startedAt 計算目前相位
+  const cur = nextPhases(now, new Date(r.startedAt));
+
+  // 進入開獎：發牌 + 保存結果
+  if (cur.phase === "REVEALING" && r.phase === "BETTING") {
+    const dealt = (() => {
+      try {
+        const shoe = JSON.parse(r!.shoeJson) as number[];
+        return dealRound(shoe);
+      } catch {
+        return dealRound(initShoe(Date.now()));
+      }
+    })();
+
+    await prisma.round.updateMany({
+      where: { id: r.id, phase: "BETTING" },
+      data: {
+        phase: "REVEALING",
+        endsAt: addSeconds(new Date(r.startedAt), BET_SEC + REVEAL_SEC),
+        resultJson: JSON.stringify(dealt),
+        shoeJson: JSON.stringify(dealt.shoe),
+      },
     });
-    return;
+
+    // 重新抓取最新狀態
+    r = await prisma.round.findUnique({ where: { id: r.id } });
   }
 
-  if (cur.phase === "SETTLED") {
-    const elapsed = (Date.now() - cur.startedAt.getTime()) / 1000;
-    if (elapsed >= rc.secondsPerRound + COOLDOWN_SECONDS) {
-      await prisma.round.create({
-        data: { room, phase: "BETTING", startedAt: new Date(), outcome: null },
-      });
-    }
-    return;
-  }
+  // 進入結算：派彩 + 結束時間
+  if (cur.phase === "SETTLED" && r.phase !== "SETTLED") {
+    // 用 services 的結算（內含 Ledger、餘額）
+    await settleRoundService(r.id);
 
-  if (cur.phase === "BETTING") {
-    const left = rc.secondsPerRound - Math.floor((Date.now() - cur.startedAt.getTime()) / 1000);
-    if (left <= 0) {
-      const deal = baccaratDeal();                // 真實規則發牌 → 得出 p/b
-      await settleRound(cur.id, deal.p, deal.b);  // 結算 + 派彩
-    }
-    return;
+    const outcome = extractOutcome(r.resultJson);
+    await prisma.round.updateMany({
+      where: { id: r.id, NOT: { phase: "SETTLED" } },
+      data: { phase: "SETTLED", outcome: (outcome as any) ?? null, endedAt: new Date() },
+    });
   }
-
-  // 若你之後加 REVEALING 流程，可在這裡補：REVEALING → N 秒 → SETTLED
 }
 
-/** 每秒巡檢全部房間 */
+// ====== 主流程 ======
 async function tickAllRooms() {
-  for (const room of Object.keys(ROOMS) as RoomCode[]) {
+  const rooms: RoomCode[] = ["R30", "R60", "R90"];
+  for (const room of rooms) {
     try {
-      await ensureRound(room);
-    } catch (e) {
-      console.error(`[auto-baccarat] ${room} error:`, e);
+      await tickRoom(room);
+    } catch (err) {
+      // 獨立房間錯誤不影響其他房
+      console.error(`[auto-baccarat] room ${room} error:`, err);
     }
   }
 }
 
-async function main() {
-  console.log("[auto-baccarat] worker started");
-  setInterval(() => {
-    tickAllRooms().catch((e) => console.error("tick loop error:", e));
-  }, 1000);
+// 匯出給其他地方可手動呼叫
+export async function runOnce() {
+  await tickAllRooms();
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+// 直接執行檔案時的行為
+async function main() {
+  if (RUN_MODE === "once") {
+    await runOnce();
+    return;
+  }
+
+  // 常駐輪詢模式
+  // 在 Render/PM2 等環境下可用環境變數 BACCARAT_RUN_MODE=loop 啟用
+  console.log("[auto-baccarat] loop mode started.");
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    await runOnce();
+    await new Promise((r) => setTimeout(r, LOOP_INTERVAL_MS));
+  }
+}
+
+// 一般 Node 執行會有 process，Next.js type-check 時不會呼叫 main（僅型別檢查）
+if (typeof process !== "undefined" && process.env.NODE_ENV !== "test") {
+  // 不要讓型別檢查期執行；真正 node run 時才跑
+  // 你可以在 package.json scripts 設定：
+  // "auto:baccarat": "BACCARAT_RUN_MODE=once node dist/scripts/auto-baccarat.js"
+  // 或 loop 模式：
+  // "auto:baccarat:loop": "BACCARAT_RUN_MODE=loop node dist/scripts/auto-baccarat.js"
+  main().catch((e) => {
+    console.error("[auto-baccarat] fatal:", e);
+    process.exitCode = 1;
+  });
+}
