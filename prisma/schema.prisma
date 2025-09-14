@@ -509,10 +509,20 @@ model Round {
   outcome   RoundOutcome?
   startedAt DateTime      @default(now())
   endedAt   DateTime?
-  dealerId  String?
 
-  dealer User? @relation("RoundDealer", fields: [dealerId], references: [id])
-  bets   Bet[]
+  // ✅ 新增：百家樂自動局序與結果保存
+  endsAt     DateTime
+  day        String
+  seq        Int
+  shoeJson   String
+  resultJson String?
+
+  dealerId  String?
+  dealer    User?        @relation("RoundDealer", fields: [dealerId], references: [id])
+  bets      Bet[]
+
+  @@unique([room, day, seq])
+  @@index([room, startedAt])
 }
 
 model Bet {
@@ -542,7 +552,7 @@ model LottoDraw {
   status    String   @default("OPEN")
   createdAt DateTime @default(now())
 
-  // ★ 新增：以台北日切儲存的日期（存 UTC 對應點）與當日序號
+  // ★ 以台北日切儲存的日期與當日序號
   day      DateTime  @default(now())
   daySeq   Int       @default(1)
 
@@ -561,7 +571,7 @@ model LottoBet {
   amount    Int
   createdAt DateTime @default(now())
 
-  // ★ 新增：總和尾數玩法
+  // ★ 總和尾數玩法
   tailParity TailParity?
   tailSize   TailSize?
 
