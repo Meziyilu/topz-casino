@@ -1,28 +1,18 @@
+// app/layout.tsx
 import Script from "next/script";
 
-export default function PublicLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh-Hant">
-      <head>
-        {/* 這裡可以保留你原本的 meta / favicon / css link */}
-
-        {/* 預先宣告全域變數（客服 SDK 用） */}
-        <Script id="tawk-preinit" strategy="beforeInteractive">
-          {`
-            window.Tawk_API = window.Tawk_API || {};
-            window.Tawk_LoadStart = new Date();
-          `}
-        </Script>
-
-        {/* 載入 Tawk.to 客服腳本 */}
+      <body>
+        {children}
+        {/* afterInteractive：等可互動再載，避免阻塞渲染，也不會有 preload 警告 */}
         <Script
-          id="tawk-script"
-          strategy="afterInteractive"
+          id="tawk-embed"
           src="https://embed.tawk.to/68b349c7d19aeb19234310df/1j3u5gcnb"
-          crossOrigin="anonymous"
+          strategy="afterInteractive"
         />
-      </head>
-      <body>{children}</body>
+      </body>
     </html>
   );
 }
