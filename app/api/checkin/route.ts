@@ -16,11 +16,9 @@ function todayYmdDate(): Date {
   return new Date(utcMs);
 }
 
-// 依「領取後連續天數」回傳獎勵金額（你可自由改表）
+// ✅ 依「領取後連續天數」回傳獎勵金額：1~6 天 1000，第 7 天 10000
 function calcAmount(streakAfter: number): number {
-  const table = [0, 10, 12, 15, 18, 22, 27, 40]; // 1~7 天
-  const day = Math.max(1, Math.min(7, streakAfter));
-  return table[day];
+  return streakAfter === 7 ? 10_000 : 1_000;
 }
 
 type MaybeAuth =
