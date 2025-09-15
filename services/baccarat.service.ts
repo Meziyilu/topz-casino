@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import {
   DealResult,
   nextPhases,
-  initShoe,
+  initShoe,        // ← 目前版本不吃參數
   dealRound,
   settleOne,
   taipeiDay,
@@ -65,7 +65,7 @@ async function getSecondsConfig() {
   return { BET_SEC, REVEAL_SEC };
 }
 
-// 房間 seed：使用 BigInt（以「秒」時間戳），避免 INT4 溢位
+// 房間 seed：目前只保留（可做日後可重現性），本版不再傳入 initShoe
 export async function ensureRoomSeed(room: RoomCode) {
   const key = `room:${room}:shoeSeed`;
   await prisma.gameConfig.upsert({
@@ -80,13 +80,14 @@ async function openNewRound(room: RoomCode, BET_SEC: number, REVEAL_SEC: number)
   const day = taipeiDay(now); // 以台北時區日切
   const seq = (await prisma.round.count({ where: { room, day } })) + 1;
 
-  // 讀房間 seed，讀不到就用現在時間（秒）
-  const seedRow = await prisma.gameConfig.findUnique({
+  // 讀房間 seed（暫不使用於 initShoe，保留欄位以便之後改為可重現）
+  await prisma.gameConfig.findUnique({
     where: { gameCode_key: { gameCode: "BACCARAT", key: `room:${room}:shoeSeed` } },
     select: { valueInt: true },
   });
-  const seed = numberFromBigInt(seedRow?.valueInt) ?? Math.floor(Date.now() / 1000);
-  const shoe = initShoe(seed);
+
+  // 產生新鞋（不吃參數）
+  const shoe = initShoe();
 
   const round = await prisma.round.create({
     data: {
@@ -129,9 +130,13 @@ export async function currentState(room: RoomCode) {
     const dealt = (() => {
       try {
         const shoe = JSON.parse(r!.shoeJson) as number[];
+        // shoe 不足或壞掉時重新建立
+        if (!Array.isArray(shoe) || shoe.length < 6) {
+          return dealRound(initShoe());
+        }
         return dealRound(shoe);
       } catch {
-        return dealRound(initShoe(Math.floor(Date.now() / 1000)));
+        return dealRound(initShoe());
       }
     })();
 
