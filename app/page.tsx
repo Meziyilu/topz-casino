@@ -15,6 +15,7 @@ import GameCard from "@/components/lobby/GameCard";
 import ChatBox from "@/components/lobby/ChatBox";
 import ServiceWidget from "@/components/lobby/ServiceWidget";
 import Leaderboard from "@/components/lobby/Leaderboard";
+import CheckinCard from "@/components/lobby/CheckinCard"; // ⬅ 新增：簽到卡
 
 type Me = {
   id: string;
@@ -155,6 +156,9 @@ export default function LobbyPage() {
             headframe={me?.headframe ?? undefined}
             panelTint={me?.panelTint ?? undefined}
           />
+
+          {/* ✅ 新增：每日簽到卡片 */}
+          <CheckinCard />
 
           {/* 銀行卡片 */}
           <div className="lb-bank" aria-label="銀行">
