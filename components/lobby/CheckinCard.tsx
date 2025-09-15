@@ -37,7 +37,9 @@ export default function CheckinCard() {
     load();
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   return (
     <div className="lb-card">
@@ -53,6 +55,11 @@ export default function CheckinCard() {
             <span className="lb-muted">今日獎勵</span>
             <b>{s.todayAmount} 金幣</b>
           </div>
+
+          {/* 特別提示：第 6 天後，隔天有 10000 金幣 */}
+          {s.streak === 6 && s.canClaim && (
+            <div className="lb-hint">🎉 明天簽到可領取 10000 金幣！</div>
+          )}
 
           <div style={{ display: "flex", gap: 8 }}>
             <button
