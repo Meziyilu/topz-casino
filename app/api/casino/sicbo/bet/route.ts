@@ -11,13 +11,13 @@ import { debitTx } from "@/services/wallet.service";
 
 export async function POST(req: Request) {
   try {
-    // 驗證登入
+    // 1) 驗證登入（從 cookie）
     const auth = await getUserFromRequest(req);
     if (!auth?.id) {
       return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
     }
 
-    // 解析 body
+    // 2) 解析 body
     const body = await req.json().catch(() => ({}));
     const room = body?.room as SicBoRoomCode;
     const kind = body?.kind as SicBoBetKind;
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "BAD_REQUEST" }, { status: 400 });
     }
 
-    // 拿當前回合 & 檢查封盤
+    // 3) 取得當前回合 & 檢查封盤
     const state = await getOrRotateRound(room);
     if (!state?.round?.id) {
       return NextResponse.json({ error: "ROUND_NOT_READY" }, { status: 400 });
@@ -37,19 +37,26 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "LOCKED" }, { status: 400 });
     }
 
-    // 驗證 payload
+    // 4) 驗證下注 payload
     const validPayload = validatePayload(kind, payload);
 
-    // 交易處理
+    // 5) 交易：扣款 -> 建注單 -> 更新玩家統計
     const bet = await prisma.$transaction(async (tx) => {
-      // 扣錢
-      await debitTx(tx, auth.id, "WALLET", amount, LedgerType.BET_PLACED, {
-        gameCode: "SICBO",            // 存在 meta JSON
-        sicboRoom: room,
-        sicboRoundId: state.round.id,
-        sicboBetKind: kind,
-        payload: validPayload,
-      });
+      // 扣錢（下注）
+      await debitTx(
+        tx,
+        auth.id,
+        "WALLET",
+        amount,
+        LedgerType.BET_PLACED,
+        {
+          // 👉 這些 key 若不在 LedgerMeta 型別中，先以 any 斷言，資料仍會寫入 meta(JSON)
+          sicboRoom: room,
+          sicboRoundId: state.round.id,
+          sicboBetKind: kind,
+          payload: validPayload,
+        } as any
+      );
 
       // 建立注單
       const created = await tx.sicBoBet.create({
@@ -77,7 +84,7 @@ export async function POST(req: Request) {
         data: {
           totalBets: { increment: 1 },
           totalStaked: { increment: BigInt(amount) },
-          netProfit: { decrement: BigInt(amount) },
+          netProfit: { decrement: BigInt(amount) }, // 下單時先 -amount，結算時再回沖
         },
       });
 
