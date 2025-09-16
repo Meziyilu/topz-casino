@@ -43,7 +43,6 @@ export default function SicboRoomPage() {
 
   const [room, setRoom] = useState<Room>("SB_R30");
   const [state, setState] = useState<StateResp | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
   const [balance, setBalance] = useState(0);
   const [chip, setChip] = useState<number>(100);
   const [amount, setAmount] = useState<number>(100);
@@ -80,26 +79,17 @@ export default function SicboRoomPage() {
     setRoom(["SB_R30","SB_R60","SB_R90"].includes(r) ? r : "SB_R30");
   }, [params?.room]);
 
-  // 取得目前登入使用者（後端 cookie 解析）
-  useEffect(() => {
-    (async () => {
-      const res = await fetch("/api/users/me", { cache: "no-store" });
-      if (res.ok) {
-        const js = await res.json();
-        if (js?.ok && js.user) setUserId(js.user.id);
-      }
-    })();
-  }, []);
-
   // 拉資料
   async function fetchState() {
     const res = await fetch(`/api/casino/sicbo/state?room=${room}`, { cache: "no-store" });
     if (res.ok) setState(await res.json());
   }
+  // ❗修正：不再帶 userId，並讀取 j.wallet
   async function fetchBalance() {
-    if (!userId) return;
-    const res = await fetch(`/api/wallet/balance?userId=${encodeURIComponent(userId)}`, { cache: "no-store" });
-    if (res.ok) setBalance((await res.json()).balance ?? 0);
+    const res = await fetch(`/api/wallet/balance`, { cache: "no-store" });
+    if (!res.ok) return;
+    const j = await res.json();
+    if (j?.ok) setBalance(Number(j.wallet ?? 0));
   }
   async function fetchHistory() {
     const res = await fetch(`/api/casino/sicbo/history?room=${room}&limit=12`, { cache: "no-store" });
@@ -113,7 +103,7 @@ export default function SicboRoomPage() {
     if (res.ok) setMyBets(await res.json());
   }
 
-  useEffect(() => { fetchState(); fetchBalance(); fetchHistory(); fetchMyBets(); }, [room, userId]);
+  useEffect(() => { fetchState(); fetchBalance(); fetchHistory(); fetchMyBets(); }, [room]);
 
   // ✅ 平滑倒數（不跳秒）
   const [lockLeft, setLockLeft] = useState(0);
@@ -144,7 +134,7 @@ export default function SicboRoomPage() {
     const t3 = setInterval(fetchHistory, 8000);
     const t4 = setInterval(fetchMyBets, 3000);
     return () => { clearInterval(t1); clearInterval(t2); clearInterval(t3); clearInterval(t4); };
-  }, [room, userId]);
+  }, [room]);
 
   useEffect(() => setAmount(chip), [chip]);
 
