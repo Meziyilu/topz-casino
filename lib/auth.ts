@@ -17,7 +17,6 @@ export type AuthUser = {
 function parseCookie(headerValue?: string | null): Record<string, string> {
   const out: Record<string, string> = {};
   if (!headerValue) return out;
-  // 依據 RFC6265 以 ';' 分割，再取第一個 '=' 作為 key/value
   for (const seg of headerValue.split(";")) {
     const kv = seg.trim();
     if (!kv) continue;
@@ -36,7 +35,6 @@ function parseCookie(headerValue?: string | null): Record<string, string> {
 
 /**
  * 取得登入者（支援 NextRequest 或原生 Request）
- * - 百家樂 / 銀行 / 個資的所有 API 都可以直接用這個
  */
 export async function getUserFromRequest(
   req: NextRequest | Request
@@ -45,13 +43,11 @@ export async function getUserFromRequest(
     // 1) 從 NextRequest.cookies 或 headers 抓 cookie
     let token: string | undefined;
 
-    // NextRequest 物件（有 cookies API）
     const anyReq = req as any;
     if (typeof anyReq?.cookies?.get === "function") {
       token = anyReq.cookies.get(COOKIE_NAME)?.value;
     }
 
-    // 如果不是 NextRequest（或沒拿到），用原生 headers 解析
     if (!token) {
       const cookieHeader = req.headers.get("cookie");
       const cookies = parseCookie(cookieHeader);
@@ -73,10 +69,10 @@ export async function getUserFromRequest(
   }
 }
 
-/** ✅ 舊 API 兼容：別名，讓既有程式可以 import { getUserFromNextRequest } 不用改 */
+/** ✅ 舊 API 兼容別名 */
 export const getUserFromNextRequest = getUserFromRequest;
 
-/** 只拿使用者 id（可選），常用於「可未登入」的公開讀取 API */
+/** 只拿使用者 id（可未登入） */
 export async function getOptionalUserId(
   req: NextRequest | Request
 ): Promise<string | null> {
@@ -84,7 +80,7 @@ export async function getOptionalUserId(
   return user?.id ?? null;
 }
 
-/** 強制需要登入：拿不到就丟錯，讓上層 route 抓錯回 401 */
+/** 強制需要登入：拿不到就丟錯 */
 export async function getUserOrThrow(
   req: NextRequest | Request
 ): Promise<AuthUser> {
@@ -93,7 +89,7 @@ export async function getUserOrThrow(
   return u;
 }
 
-/** 簡化：只想快速拿 boolean 判斷是否登入 */
+/** 簡化：只判斷是否登入 */
 export async function isAuthed(
   req: NextRequest | Request
 ): Promise<boolean> {
