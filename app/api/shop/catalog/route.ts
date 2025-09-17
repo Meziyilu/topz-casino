@@ -1,24 +1,50 @@
-export const runtime = "nodejs"; export const dynamic = "force-dynamic";
+// app/api/shop/catalog/route.ts
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { isOnSaleWindow, pickVipRate } from "@/lib/shop";
-import { getUserFromRequest } from "@/lib/auth";
 
 export async function GET() {
-  const auth = await getUserFromRequest(new Request("")).catch(()=>null);
-  const vip = auth?.user?.vipTier ?? 0;
-
-  const items = await prisma.shopItem.findMany({ where: { visible: true }, include: { skus: true }, orderBy: [{ createdAt: "desc" }] });
-  const t = new Date();
-  const out = items.filter(i=>isOnSaleWindow(i.startAt, i.endAt, t)).map(i=>{
-    const vipRate = i.vipDiscountable ? pickVipRate(vip) : 1.0;
-    const prices = i.skus.map(s=>{
-      const unitBase = s.priceOverride ?? i.basePrice;
-      const vipEligible = (s.vipDiscountableOverride ?? i.vipDiscountable) ? vipRate : 1.0;
-      return Math.max(0, Math.round(unitBase * vipEligible));
-    });
-    const minPrice = prices.length? Math.min(...prices): i.basePrice;
-    return { id: i.id, code: i.code, title: i.title, imageUrl: i.imageUrl ?? null, kind: i.kind, currency: i.currency, priceFrom: minPrice, limitedQty: i.limitedQty ?? null };
+  // 直接 Prisma 讀資料
+  const rows = await prisma.shopItem.findMany({
+    where: { visible: true },
+    include: {
+      skus: {
+        select: {
+          id: true,
+          priceOverride: true,
+          currencyOverride: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
   });
-  return NextResponse.json({ items: out });
+
+  const items = rows.map((it) => {
+    // 取最低價與顯示幣別（優先看 SKU 覆蓋；若沒有就用商品 basePrice / currency）
+    const prices = it.skus
+      .map((s) => ({
+        price: s.priceOverride ?? it.basePrice,
+        currency: s.currencyOverride ?? it.currency,
+      }))
+      .filter((p) => p.price != null);
+
+    const priceFrom = prices.length
+      ? Math.min(...prices.map((p) => (p.price as number)))
+      : (it.basePrice as number);
+
+    return {
+      id: it.id,
+      code: it.code,
+      title: it.title,
+      imageUrl: it.imageUrl,
+      kind: it.kind, // e.g. "HEADFRAME"
+      currency: it.currency as "COIN" | "DIAMOND" | "TICKET" | "GACHA_TICKET",
+      priceFrom,
+      limitedQty: it.limitedQty,
+    };
+  });
+
+  return NextResponse.json({ items });
 }
