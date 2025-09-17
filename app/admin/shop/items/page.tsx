@@ -23,7 +23,7 @@ export default function AdminShopItemsPage(){
   const [msg, setMsg] = useState("");
 
   async function load(){
-    const r = await fetch("/api/shop/catalog", { credentials:"include", cache:"no-store" });
+    const r = await fetch("/api/shop/admin/items-usage", { credentials:"include", cache:"no-store" });
     const j = await r.json(); setItems(j.items || []);
   }
   useEffect(()=>{ load(); },[]);
@@ -46,16 +46,50 @@ export default function AdminShopItemsPage(){
       <section className="list">
         <h2>現有商品</h2>
         <table>
-          <thead><tr><th>圖片</th><th>代碼</th><th>名稱</th><th>類型</th><th>幣別</th><th>最低價</th><th>限量</th></tr></thead>
-          <tbody>{items.map(it=>(
-            <tr key={it.id}>
-              <td><MediaThumb src={it.imageUrl} /></td>
-              <td>{it.code}</td><td>{it.title}</td><td>{it.kind}</td>
-              <td>{it.currency}</td><td>{unit(it.priceFrom, it.currency)}</td>
-              <td>{it.limitedQty ?? "-"}</td>
-            </tr>
-          ))}</tbody>
+          <thead><tr><th>圖片</th><th>代碼</th><th>名稱</th><th>類型</th><th>幣別</th><th>底價</th><th>限量</th></tr></thead>
+        <tbody>{items.map(it=>(
+          <tr key={it.id}>
+            <td><MediaThumb src={it.imageUrl} /></td>
+            <td>{it.code}</td><td>{it.title}</td><td>{it.kind}</td>
+            <td>{it.currency}</td><td>{unit(it.basePrice, it.currency)}</td>
+            <td>{it.limitedQty ?? "-"}</td>
+          </tr>
+        ))}</tbody>
         </table>
+      </section>
+
+      <section className="sku-usage">
+        <h2>SKU 使用概況</h2>
+        {items.map(it=>(
+          <div key={it.id} className="sku-card">
+            <h3>{it.title} <small>({it.code})</small></h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>SKU ID</th><th>價格覆蓋</th><th>幣別覆蓋</th><th>Payload</th>
+                  <th>被購買次數</th><th>被套組引用</th><th>引用的套組清單</th>
+                </tr>
+              </thead>
+              <tbody>
+                {it.skus.map((s:any)=>(
+                  <tr key={s.id}>
+                    <td style={{fontFamily:"monospace"}}>{s.id}</td>
+                    <td>{s.priceOverride ?? "—"}</td>
+                    <td>{s.currencyOverride ?? "—"}</td>
+                    <td><code>{JSON.stringify(s.payloadJson)}</code></td>
+                    <td>{s.usage?.purchases ?? 0}</td>
+                    <td>{s.usage?.referencedByBundles ?? 0}</td>
+                    <td>
+                      {s.usage?.bundles?.length ? s.usage.bundles.map((b:any)=>(
+                        <div key={b.bundleItemCode}>{b.bundleItemTitle} <small>({b.bundleItemCode})</small></div>
+                      )) : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
       </section>
 
       <section className="form">
@@ -122,7 +156,10 @@ export default function AdminShopItemsPage(){
               try { const j = JSON.parse(e.target.value || "{}");
                 const skus = [...form.skus]; skus[i] = {...s, payloadJson: j}; setForm({...form, skus}); } catch {}
             }}/>
-            <small>頭框示例：{{"{"}}"headframe":"NEON","durationDays":7{{"}"}}</small>
+            {/* ← 修正這段，使用字串輸出，避免 JSX 語法衝突 */}
+            <small>
+              頭框示例：<code>{"{ \"headframe\":\"NEON\", \"durationDays\": 7 }"}</code>
+            </small>
           </div>
         ))}
         <button onClick={()=>setForm({...form, skus:[...form.skus, { priceOverride:null, vipDiscountableOverride:null, currencyOverride:null, payloadJson:{} }]})}>+ 新增 SKU</button>
