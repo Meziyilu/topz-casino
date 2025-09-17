@@ -1,98 +1,139 @@
-// lib/auth.ts
-import jwt from "jsonwebtoken";
-import type { NextRequest } from "next/server";
+// app/bank/page.tsx
+"use client";
 
-/** 統一的 cookie 名稱 */
-const COOKIE_NAME = "token";
-/** JWT 秘鑰（避免 undefined） */
-const JWT_SECRET = (process.env.JWT_SECRET || "dev_secret") as jwt.Secret;
+import { useEffect, useState } from "react";
+import Link from "next/link";
 
-/** 驗證後回傳的使用者型別 */
-export type AuthUser = {
-  id: string;
-  isAdmin: boolean;
+type LedgerLite = { id: string; type: string; target: string; amount: number; createdAt: string };
+type BankState = {
+  wallet: number;
+  bank: number;
+  dailyOut: number;
+  recentLedgers: LedgerLite[];
 };
 
-/** 解析 Cookie 字串（支援原生 Request 使用） */
-function parseCookie(headerValue?: string | null): Record<string, string> {
-  const out: Record<string, string> = {};
-  if (!headerValue) return out;
-  for (const seg of headerValue.split(";")) {
-    const kv = seg.trim();
-    if (!kv) continue;
-    const i = kv.indexOf("=");
-    if (i <= 0) continue;
-    const k = kv.slice(0, i).trim();
-    const v = kv.slice(i + 1).trim();
+export default function BankPage() {
+  const [data, setData] = useState<BankState | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState<string | null>(null);
+  const [amount, setAmount] = useState<number>(0);
+  const [memo, setMemo] = useState<string>("");
+
+  async function refresh() {
     try {
-      out[k] = decodeURIComponent(v);
+      const r = await fetch("/api/bank/me", { credentials: "include" });
+      if (r.status === 401) return (window.location.href = "/login?next=/bank");
+      const d = await r.json();
+      setData(d);
     } catch {
-      out[k] = v;
+      setToast("讀取失敗");
+    } finally {
+      setLoading(false);
+      setTimeout(() => setToast(null), 1500);
     }
   }
-  return out;
-}
 
-/**
- * 取得登入者（支援 NextRequest 或原生 Request）
- */
-export async function getUserFromRequest(
-  req: NextRequest | Request
-): Promise<AuthUser | null> {
-  try {
-    // 1) 從 NextRequest.cookies 或 headers 抓 cookie
-    let token: string | undefined;
+  useEffect(() => { refresh(); }, []);
 
-    const anyReq = req as any;
-    if (typeof anyReq?.cookies?.get === "function") {
-      token = anyReq.cookies.get(COOKIE_NAME)?.value;
+  async function call(
+    path: "/api/bank/deposit" | "/api/bank/withdraw" | "/api/bank/transfer",
+    body: any
+  ) {
+    try {
+      const r = await fetch(path, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(body),
+      });
+      if (r.status === 401) return (window.location.href = "/login?next=/bank");
+      const d = await r.json();
+      if (!r.ok || !d.ok) throw new Error(d?.error ?? "操作失敗");
+      setToast("成功 ✅");
+      await refresh();
+    } catch (e: any) {
+      setToast(e?.message ?? "操作失敗");
+    } finally {
+      setTimeout(() => setToast(null), 1600);
     }
-
-    if (!token) {
-      const cookieHeader = req.headers.get("cookie");
-      const cookies = parseCookie(cookieHeader);
-      token = cookies[COOKIE_NAME];
-    }
-
-    if (!token) return null;
-
-    // 2) 驗證 JWT
-    const payload = jwt.verify(token, JWT_SECRET) as {
-      uid: string;
-      isAdmin?: boolean;
-    };
-
-    if (!payload?.uid) return null;
-    return { id: payload.uid, isAdmin: !!payload.isAdmin };
-  } catch {
-    return null;
   }
-}
 
-/** ✅ 舊 API 兼容別名 */
-export const getUserFromNextRequest = getUserFromRequest;
+  return (
+    <main className="lb-wrap">
+      <div className="lb-bg" />
+      <div className="lb-particles" aria-hidden />
 
-/** 只拿使用者 id（可未登入） */
-export async function getOptionalUserId(
-  req: NextRequest | Request
-): Promise<string | null> {
-  const user = await getUserFromRequest(req);
-  return user?.id ?? null;
-}
+      <header className="lb-header">
+        <div className="left">
+          <Link href="/" className="lb-logo">TOPZCASINO</Link>
+          <span className="lb-beta">BANK</span>
+        </div>
+        <div className="right" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <Link href="/" className="lb-btn">回大廳</Link>
+        </div>
+      </header>
 
-/** 強制需要登入：拿不到就丟錯 */
-export async function getUserOrThrow(
-  req: NextRequest | Request
-): Promise<AuthUser> {
-  const u = await getUserFromRequest(req);
-  if (!u) throw new Error("UNAUTHORIZED");
-  return u;
-}
+      <div className="lb-grid">
+        <section className="lb-main" style={{ gridColumn: "1 / -1" }}>
+          <div className="lb-card bank">
+            <div className="lb-card-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span>銀行中心</span>
+              <button className="lb-btn" onClick={refresh} disabled={loading}>重新整理</button>
+            </div>
 
-/** 簡化：只判斷是否登入 */
-export async function isAuthed(
-  req: NextRequest | Request
-): Promise<boolean> {
-  const u = await getUserFromRequest(req);
-  return !!u;
+            {loading || !data ? (
+              <p className="lb-muted">載入中…</p>
+            ) : (
+              <>
+                <div className="lb-bank-rows">
+                  <div className="lb-bank-kv"><span>錢包餘額</span><b>{data.wallet.toLocaleString()}</b></div>
+                  <div className="lb-bank-kv"><span>銀行餘額</span><b>{data.bank.toLocaleString()}</b></div>
+                  <div className="lb-bank-kv"><span>今日銀行流出</span><b>{data.dailyOut.toLocaleString()}</b></div>
+                </div>
+
+                <div className="lb-bank-forms">
+                  <div className="lb-bank-row">
+                    <input
+                      className="lb-input"
+                      type="number"
+                      placeholder="金額（整數）"
+                      value={amount || ""}
+                      onChange={(e) => setAmount(parseInt(e.target.value || "0", 10))}
+                      min={0}
+                    />
+                    <input
+                      className="lb-input"
+                      placeholder="備註（可空）"
+                      value={memo}
+                      onChange={(e) => setMemo(e.target.value)}
+                      maxLength={120}
+                    />
+                  </div>
+                  <div className="lb-bank-row">
+                    <button className="lb-btn" onClick={() => call("/api/bank/deposit", { amount, memo })}>存款（錢包 → 銀行）</button>
+                    <button className="lb-btn" onClick={() => call("/api/bank/withdraw", { amount, memo })}>提領（銀行 → 錢包）</button>
+                  </div>
+                </div>
+
+                <div className="lb-card-title" style={{ marginTop: 16 }}>最近流水</div>
+                <ul className="lb-list soft">
+                  {data.recentLedgers?.length ? (
+                    data.recentLedgers.map((x) => (
+                      <li key={x.id}>
+                        {new Date(x.createdAt).toLocaleString()}　[{x.type}/{x.target}]　{(x.amount >= 0 ? "+" : "") + x.amount.toLocaleString()}
+                      </li>
+                    ))
+                  ) : (
+                    <li>尚無紀錄</li>
+                  )}
+                </ul>
+
+                {toast && <div className="lb-toast">{toast}</div>}
+              </>
+            )}
+          </div>
+        </section>
+      </div>
+    </main>
+  );
 }
