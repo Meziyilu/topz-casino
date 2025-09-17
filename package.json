@@ -13,9 +13,10 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
-    "prisma:seed": "node prisma/seed.js",
+    "prisma:seed": "prisma db seed",
     "db:push": "prisma db push",
     "db:reset": "prisma migrate reset --force",
+    "db:seed": "prisma db seed",
     "validate:structure": "ts-node --transpile-only scripts/validate-structure.ts",
     "postinstall": "prisma generate",
     "auto:baccarat": "node --require esbuild-register scripts/auto-baccarat.ts"
@@ -55,10 +56,11 @@
     "prisma": "6.15.0",
     "tailwindcss": "3.4.7",
     "ts-node": "10.9.2",
+    "tsx": "^4.20.5",
     "typescript": "5.9.2"
   },
   "prisma": {
-    "seed": "node prisma/seed.js"
+    "seed": "tsx prisma/seed.ts"
   },
   "engines": {
     "node": "20.x"

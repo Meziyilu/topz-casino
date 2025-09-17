@@ -1,0 +1,114 @@
+/* ====== 商店共用樣式 ====== */
+.shop-wrap {
+  min-height: 100vh;
+  background: radial-gradient(ellipse at top, #1b1c26, #0d0d13);
+  color: #fff;
+  padding: 20px;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+.shop-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.shop-header .logo {
+  font-size: 1.6rem;
+  font-weight: bold;
+  letter-spacing: 1px;
+}
+
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 20px;
+}
+
+.shop-card {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  cursor: pointer;
+}
+
+.shop-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+}
+
+.shop-card img {
+  max-width: 100%;
+  border-radius: 12px;
+  background: #111;
+}
+
+.shop-card-title {
+  font-size: 1.1rem;
+  font-weight: bold;
+}
+
+.shop-card-desc {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+.shop-sku-list {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shop-sku {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background 0.2s;
+}
+
+.shop-sku:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.shop-sku button {
+  background: linear-gradient(135deg, #2dd4bf, #0ea5e9);
+  border: none;
+  color: white;
+  font-weight: bold;
+  border-radius: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.shop-sku button:hover {
+  transform: scale(1.05);
+}
+
+.shop-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.85);
+  color: white;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  animation: fadein 0.25s ease;
+}
+
+@keyframes fadein {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
