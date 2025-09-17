@@ -1,174 +1,141 @@
+// app/admin/page.tsx
 "use client";
-export const dynamic = "force-dynamic";
 
-import { useEffect, useState } from "react";
-
-function unit(n:number, c:"COIN"|"DIAMOND"|"TICKET"|"GACHA_TICKET"){
-  if (c==="COIN") return `$${(n/100).toFixed(2)}`; return n.toString();
-}
-function MediaThumb({src}:{src?:string|null}){
-  if (!src) return <div className="thumb noimg">—</div>;
-  const isVideo = /\.(webm|mp4)$/i.test(src);
-  return <div className="thumb">{isVideo ? <video src={src} autoPlay muted loop playsInline/> : <img src={src} alt="thumb" />}</div>;
-}
-
-export default function AdminShopItemsPage(){
-  const [items, setItems] = useState<any[]>([]);
-  const [form, setForm] = useState<any>({
-    kind:"HEADFRAME", currency:"DIAMOND",
-    code:"", title:"", basePrice:999, imageUrl:"", description:"",
-    vipDiscountable:true, visible:true,
-    skus:[{ priceOverride:999, vipDiscountableOverride:null, currencyOverride:null, payloadJson:{ headframe:"NEON", durationDays:7 } }],
-  });
-  const [msg, setMsg] = useState("");
-
-  async function load(){
-    const r = await fetch("/api/shop/admin/items-usage", { credentials:"include", cache:"no-store" });
-    const j = await r.json(); setItems(j.items || []);
-  }
-  useEffect(()=>{ load(); },[]);
-
-  async function create(){
-    setMsg("");
-    const r = await fetch("/api/shop/admin/item", {
-      method:"POST", credentials:"include", headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify(form),
-    });
-    const j = await r.json();
-    if (!r.ok){ setMsg(j?.error || "建立失敗"); return; }
-    setMsg("建立成功"); setForm({...form, code:"", title:""}); load();
-  }
-
+export default function AdminHome() {
   return (
-    <main className="admin-shop">
-      <h1>商店管理 / 商品</h1>
+    <main className="admin-home">
+      <header className="admin-home-head glass">
+        <h1>管理首頁</h1>
+        <p className="sub">選擇要管理的模組</p>
+      </header>
 
-      <section className="list">
-        <h2>現有商品</h2>
-        <table>
-          <thead><tr><th>圖片</th><th>代碼</th><th>名稱</th><th>類型</th><th>幣別</th><th>底價</th><th>限量</th></tr></thead>
-        <tbody>{items.map(it=>(
-          <tr key={it.id}>
-            <td><MediaThumb src={it.imageUrl} /></td>
-            <td>{it.code}</td><td>{it.title}</td><td>{it.kind}</td>
-            <td>{it.currency}</td><td>{unit(it.basePrice, it.currency)}</td>
-            <td>{it.limitedQty ?? "-"}</td>
-          </tr>
-        ))}</tbody>
-        </table>
-      </section>
-
-      <section className="sku-usage">
-        <h2>SKU 使用概況</h2>
-        {items.map(it=>(
-          <div key={it.id} className="sku-card">
-            <h3>{it.title} <small>({it.code})</small></h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>SKU ID</th><th>價格覆蓋</th><th>幣別覆蓋</th><th>Payload</th>
-                  <th>被購買次數</th><th>被套組引用</th><th>引用的套組清單</th>
-                </tr>
-              </thead>
-              <tbody>
-                {it.skus.map((s:any)=>(
-                  <tr key={s.id}>
-                    <td style={{fontFamily:"monospace"}}>{s.id}</td>
-                    <td>{s.priceOverride ?? "—"}</td>
-                    <td>{s.currencyOverride ?? "—"}</td>
-                    <td><code>{JSON.stringify(s.payloadJson)}</code></td>
-                    <td>{s.usage?.purchases ?? 0}</td>
-                    <td>{s.usage?.referencedByBundles ?? 0}</td>
-                    <td>
-                      {s.usage?.bundles?.length ? s.usage.bundles.map((b:any)=>(
-                        <div key={b.bundleItemCode}>{b.bundleItemTitle} <small>({b.bundleItemCode})</small></div>
-                      )) : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <section className="admin-home-grid">
+        {/* === 商店管理 === */}
+        <a className="tile glass" href="/admin/shop">
+          <div className="icon" aria-hidden>
+            {/* Storefront icon */}
+            <svg viewBox="0 0 24 24" width="24" height="24">
+              <path d="M3 9.5 5 4h14l2 5.5V11a4 4 0 0 1-4 4h-2v5H9v-5H7A4 4 0 0 1 3 11V9.5Z"/>
+              <path d="M7 11V9h10v2"/>
+            </svg>
           </div>
-        ))}
-      </section>
+          <div className="title">商店總覽</div>
+          <div className="desc">銷售概況 / 熱門商品 / 快速入口</div>
+        </a>
 
-      <section className="form">
-        <h2>新增商品</h2>
-        <div className="grid">
-          <label>類型</label>
-          <select value={form.kind} onChange={e=>setForm({...form, kind:e.target.value})}>
-            <option>HEADFRAME</option><option>BADGE</option><option>BUNDLE</option><option>CURRENCY</option><option>OTHER</option>
-          </select>
-
-          <label>結帳幣別</label>
-          <select value={form.currency} onChange={e=>setForm({...form, currency:e.target.value})}>
-            <option>COIN</option><option>DIAMOND</option><option>TICKET</option><option>GACHA_TICKET</option>
-          </select>
-
-          <label>代碼</label>
-          <input value={form.code} onChange={e=>setForm({...form, code:e.target.value})}/>
-
-          <label>名稱</label>
-          <input value={form.title} onChange={e=>setForm({...form, title:e.target.value})}/>
-
-          <label>底價</label>
-          <input type="number" value={form.basePrice} onChange={e=>setForm({...form, basePrice:parseInt(e.target.value||"0")})}/>
-          <small>COIN 用分；其他幣用整數</small>
-
-          <label>圖片 URL</label>
-          <input value={form.imageUrl} onChange={e=>setForm({...form, imageUrl:e.target.value})}/>
-
-          <label>預覽</label>
-          <div className="preview-box"><MediaThumb src={form.imageUrl || undefined} /></div>
-
-          <label>說明</label>
-          <textarea value={form.description} onChange={e=>setForm({...form, description:e.target.value})}/>
-          
-          <label>VIP 可折</label>
-          <input type="checkbox" checked={form.vipDiscountable} onChange={e=>setForm({...form, vipDiscountable:e.target.checked})}/>
-
-          <label>顯示</label>
-          <input type="checkbox" checked={form.visible} onChange={e=>setForm({...form, visible:e.target.checked})}/>
-        </div>
-
-        <h3>SKU（至少 1 筆）</h3>
-        {form.skus.map((s:any, i:number)=>(
-          <div key={i} className="sku">
-            <label>覆蓋價</label>
-            <input type="number" value={s.priceOverride ?? ""} onChange={e=>{
-              const v = e.target.value === "" ? null : parseInt(e.target.value);
-              const skus = [...form.skus]; skus[i] = {...s, priceOverride: v}; setForm({...form, skus});
-            }}/>
-            <label>VIP 覆蓋可折</label>
-            <input type="checkbox" checked={!!s.vipDiscountableOverride} onChange={e=>{
-              const skus = [...form.skus]; skus[i] = {...s, vipDiscountableOverride: e.target.checked}; setForm({...form, skus});
-            }}/>
-            <label>幣別覆蓋</label>
-            <select value={s.currencyOverride ?? ""} onChange={e=>{
-              const v = e.target.value==="" ? null : e.target.value;
-              const skus = [...form.skus]; skus[i] = {...s, currencyOverride: v}; setForm({...form, skus});
-            }}>
-              <option value="">（沿用商品幣別）</option>
-              <option>COIN</option><option>DIAMOND</option><option>TICKET</option><option>GACHA_TICKET</option>
-            </select>
-            <label>Payload(JSON)</label>
-            <input value={JSON.stringify(s.payloadJson)} onChange={e=>{
-              try { const j = JSON.parse(e.target.value || "{}");
-                const skus = [...form.skus]; skus[i] = {...s, payloadJson: j}; setForm({...form, skus}); } catch {}
-            }}/>
-            {/* ← 修正這段，使用字串輸出，避免 JSX 語法衝突 */}
-            <small>
-              頭框示例：<code>{"{ \"headframe\":\"NEON\", \"durationDays\": 7 }"}</code>
-            </small>
+        <a className="tile glass" href="/admin/shop/items">
+          <div className="icon" aria-hidden>
+            {/* Tag/price icon */}
+            <svg viewBox="0 0 24 24" width="24" height="24">
+              <path d="M20.59 13.41 12 22l-8.59-8.59V4h9.41L22 12.59z"/>
+              <circle cx="7.5" cy="8.5" r="1.5"/>
+            </svg>
           </div>
-        ))}
-        <button onClick={()=>setForm({...form, skus:[...form.skus, { priceOverride:null, vipDiscountableOverride:null, currencyOverride:null, payloadJson:{} }]})}>+ 新增 SKU</button>
+          <div className="title">商品 / SKU</div>
+          <div className="desc">新增商品、上架頭框、SKU 管理</div>
+        </a>
 
-        <div className="actions">
-          <button onClick={create}>建立商品</button>
-          {msg && <span className="msg">{msg}</span>}
-        </div>
+        <a className="tile glass" href="/admin/shop/bundles">
+          <div className="icon" aria-hidden>
+            {/* Bundle/box icon */}
+            <svg viewBox="0 0 24 24" width="24" height="24">
+              <path d="m12 2 9 5-9 5-9-5 9-5Z"/>
+              <path d="M21 7v7l-9 5-9-5V7"/>
+            </svg>
+          </div>
+          <div className="title">套組管理</div>
+          <div className="desc">建立套組 / 加入 SKU / 定價</div>
+        </a>
+
+        <a className="tile glass" href="/admin/shop/purchases">
+          <div className="icon" aria-hidden>
+            {/* Receipt/list icon */}
+            <svg viewBox="0 0 24 24" width="24" height="24">
+              <path d="M6 3h12a2 2 0 0 1 2 2v16l-3-2-3 2-3-2-3 2-3-2V5a2 2 0 0 1 2-2Z"/>
+              <path d="M8 8h8M8 12h8M8 16h5"/>
+            </svg>
+          </div>
+          <div className="title">訂單 / 購買紀錄</div>
+          <div className="desc">查詢訂單、SKU 使用數、退款</div>
+        </a>
+
+        {/* === 你原本的模組 === */}
+        {/* 百家樂 */}
+        <a className="tile glass" href="/admin/baccarat">
+          <div className="icon" aria-hidden>
+            <svg viewBox="0 0 24 24" width="24" height="24">
+              <path d="M7 3h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm11 4h-1v10a3 3 0 0 1-3 3H8v1a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
+            </svg>
+          </div>
+          <div className="title">百家樂管理</div>
+          <div className="desc">開始 / 結算 / 自動輪播</div>
+        </a>
+
+        {/* 金幣管理 */}
+        <a className="tile glass" href="/admin/coins">
+          <div className="icon" aria-hidden>
+            <svg viewBox="0 0 24 24" width="24" height="24">
+              <path d="M12 2C6.477 2 2 4.239 2 7s4.477 5 10 5 10-2.239 10-5-4.477-5-10-5Zm0 12c-5.523 0-10-2.239-10-5v4c0 2.761 4.477 5 10 5s10-2.239 10-5V9c0 2.761-4.477 5-10 5Zm0 6c-5.523 0-10-2.239-10-5v4c0 2.761 4.477 5 10 5s10-2.239 10-5v-4c0 2.761-4.477 5-10 5Z"/>
+            </svg>
+          </div>
+          <div className="title">金幣管理</div>
+          <div className="desc">搜尋玩家、加/扣金幣（錢包/銀行）</div>
+        </a>
+
+        {/* 骰寶管理 */}
+        <a className="tile glass" href="/admin/sicbo">
+          <div className="icon" aria-hidden>
+            <svg viewBox="0 0 24 24" width="24" height="24">
+              <path d="M11 2 3 6v8l8 4 8-4V6l-8-4Zm0 2.236L17.764 6 11 9.764 4.236 6 11 4.236ZM5 7.618l6 3.146V19l-6-3V7.618Zm14 8.382-6 3v-6.236l6-3V16Z"/>
+              <circle cx="8.5" cy="8.5" r="1.2"/>
+              <circle cx="13.5" cy="6.5" r="1.2"/>
+              <circle cx="15.5" cy="11.5" r="1.2"/>
+            </svg>
+          </div>
+          <div className="title">骰寶管理</div>
+          <div className="desc">開局 / 封盤 / 開獎動畫 / 自動開局</div>
+        </a>
+
+        {/* 樂透管理 */}
+        <a className="tile glass" href="/admin/lotto">
+          <div className="icon" aria-hidden>
+            <svg viewBox="0 0 24 24" width="24" height="24">
+              <circle cx="7.5" cy="8.5" r="3.5"/>
+              <circle cx="15.5" cy="6.5" r="2.5"/>
+              <circle cx="15.5" cy="14.5" r="4.0"/>
+            </svg>
+          </div>
+          <div className="title">樂透管理</div>
+          <div className="desc">開獎排程 / 開獎號碼 / 期別管理</div>
+        </a>
+
+        {/* 跑馬燈管理 */}
+        <a className="tile glass" href="/admin/content/marquee">
+          <div className="icon" aria-hidden>
+            <svg viewBox="0 0 24 24" width="24" height="24">
+              <path d="M3 10v4a2 2 0 0 0 2 2h2l2 3h2v-3h1l7-4V8l-7-4H7a4 4 0 0 0-4 4Z"/>
+              <path d="M19 8v8"/>
+            </svg>
+          </div>
+          <div className="title">跑馬燈管理</div>
+          <div className="desc">滾動訊息設定 / 優先度排序 / 啟用停用</div>
+        </a>
+
+        {/* 公告欄管理 */}
+        <a className="tile glass" href="/admin/content/announcement">
+          <div className="icon" aria-hidden>
+            <svg viewBox="0 0 24 24" width="24" height="24">
+              <path d="M5 3h14a2 2 0 0 1 2 2v11l-4-3H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/>
+              <path d="M7 21h10"/>
+            </svg>
+          </div>
+          <div className="title">公告欄管理</div>
+          <div className="desc">新增 / 編輯 / 啟用停用</div>
+        </a>
       </section>
+
+      {/* 既有管理首頁樣式 */}
+      <link rel="stylesheet" href="/styles/admin/admin-home.css" />
     </main>
   );
 }
