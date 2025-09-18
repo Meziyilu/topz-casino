@@ -1,0 +1,62 @@
+/* 管理端：商品列表 + 新增表單 */
+.admin-items { padding: 20px; color: #fff; }
+
+.glass {
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 14px;
+}
+
+.head {
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.head h1 { margin: 0; }
+.head .sub { margin: 4px 0 0; opacity: .8; }
+
+.btn {
+  background: linear-gradient(135deg, #22d3ee, #6366f1);
+  border: 0; color: #fff; font-weight: 700;
+  padding: 8px 14px; border-radius: 10px; cursor: pointer;
+}
+.btn.ghost { background: transparent; border:1px solid rgba(255,255,255,.2) }
+.btn.sm { padding: 6px 10px; border-radius: 8px; font-size: 12px; }
+.btn.danger { background: linear-gradient(135deg, #ef4444, #f97316); }
+
+.form { padding: 12px; margin-bottom: 16px; }
+.form .row {
+  display: grid; grid-template-columns: 120px 1fr; gap: 10px; align-items: center;
+  margin: 8px 0;
+}
+.form .row input, .form .row select {
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 8px; padding: 8px; color: #fff;
+}
+.form .actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px; }
+
+.list { padding: 12px; }
+.list table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.list th, .list td { padding: 10px; border-bottom: 1px solid rgba(255,255,255,.1); }
+.list th { text-align: left; opacity: .8; }
+.list .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+
+.switch { position: relative; display:inline-block; width:44px; height:24px; }
+.switch input { display:none; }
+.switch span {
+  position:absolute; inset:0; background: rgba(255,255,255,.2); border-radius: 999px;
+  transition: .2s;
+}
+.switch span::after {
+  content:""; position:absolute; width:18px; height:18px; border-radius:50%; top:3px; left:4px;
+  background:#fff; transition: .2s;
+}
+.switch input:checked + span { background: #10b981; }
+.switch input:checked + span::after { transform: translateX(18px); }
+
+.muted { opacity:.75; }
+.err { color: #fca5a5; }
+.ops { display:flex; gap: 6px; }

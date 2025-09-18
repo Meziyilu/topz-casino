@@ -4,7 +4,6 @@
 import useSWR from "swr";
 import { useState } from "react";
 import Link from "next/link";
-import "@/public/styles/admin/admin-items.css";
 
 type ItemRow = {
   id: string;
@@ -243,7 +242,8 @@ export default function AdminShopItemsPage() {
         )}
       </section>
 
-      <link rel="stylesheet" href="/styles/admin/admin-home.css" />
+      {/* ✅ 正確載入 public 下的 CSS */}
+      <link rel="stylesheet" href="/styles/admin/admin-items.css" />
     </main>
   );
 }
