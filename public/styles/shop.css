@@ -1,114 +1,115 @@
-/* ====== 商店共用樣式 ====== */
+/* ====== 商店樣式：public/styles/shop.css ====== */
+:root {
+  --bg: #0d0f16;
+  --card-bg: rgba(255,255,255,.05);
+  --card-bd: rgba(255,255,255,.12);
+  --muted: #a6b0c0;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: #fff;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+}
+
+/* 容器 */
 .shop-wrap {
   min-height: 100vh;
-  background: radial-gradient(ellipse at top, #1b1c26, #0d0d13);
-  color: #fff;
-  padding: 20px;
-  font-family: 'Segoe UI', sans-serif;
+  padding: 24px 20px 40px;
+  background:
+    radial-gradient(900px 500px at 0% -10%, rgba(86,13,248,.18), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(14,165,233,.14), transparent 60%),
+    var(--bg);
 }
 
-.shop-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
+/* 標題 */
+.shop-title {
+  margin: 0 0 18px;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: .4px;
 }
 
-.shop-header .logo {
-  font-size: 1.6rem;
-  font-weight: bold;
-  letter-spacing: 1px;
-}
-
+/* 卡片網格 */
 .shop-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 18px;
 }
 
+/* 卡片 */
 .shop-card {
-  background: rgba(255, 255, 255, 0.05);
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  background: var(--card-bg);
+  border: 1px solid var(--card-bd);
   border-radius: 16px;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
-  cursor: pointer;
+  overflow: hidden;
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+  will-change: transform;
 }
-
 .shop-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+  transform: translateY(-3px);
+  border-color: rgba(255,255,255,.22);
+  box-shadow: 0 14px 32px rgba(0,0,0,.45);
 }
 
-.shop-card img {
-  max-width: 100%;
-  border-radius: 12px;
-  background: #111;
+/* ===== 縮圖（統一裁切 & 等比填滿） ===== */
+.shop-card img,
+.shop-card video,
+.shop-card .thumb,
+.shop-card .hf {
+  display: block;
+  width: 100%;
+  height: 200px;        /* 你要的縮圖高度 */
+  object-fit: cover;    /* 等比填滿，超出裁切 */
+  background: #0b0f17;  /* 沒圖的底色 */
 }
 
-.shop-card-title {
-  font-size: 1.1rem;
-  font-weight: bold;
+/* 無圖佔位（文字） */
+.shop-card .thumb.noimg {
+  display: flex; align-items: center; justify-content: center;
+  color: var(--muted); font-size: 20px;
 }
 
-.shop-card-desc {
-  font-size: 0.9rem;
-  opacity: 0.8;
-}
+/* 內容區 */
+.shop-card-body { padding: 12px 12px 14px; }
+.shop-card-title { font-weight: 800; margin-bottom: 8px; }
 
-.shop-sku-list {
-  margin-top: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+/* 次資訊列 */
+.shop-card-sub {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px;
 }
-
-.shop-sku {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+.pill {
+  font-size: 12px; line-height: 1;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.16);
+}
+.price { margin-left: auto; font-weight: 900; }
+.stock {
+  font-size: 12px;
+  border: 1px dashed rgba(255,255,255,.25);
+  padding: 2px 8px;
   border-radius: 8px;
-  padding: 8px 10px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  transition: background 0.2s;
+  opacity: .9;
 }
 
-.shop-sku:hover {
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.shop-sku button {
-  background: linear-gradient(135deg, #2dd4bf, #0ea5e9);
-  border: none;
-  color: white;
-  font-weight: bold;
-  border-radius: 6px;
-  padding: 4px 12px;
-  cursor: pointer;
-  transition: transform 0.15s ease;
-}
-
-.shop-sku button:hover {
-  transform: scale(1.05);
-}
-
+/* 小提示訊息（可選） */
 .shop-toast {
-  position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.85);
-  color: white;
-  padding: 10px 16px;
-  border-radius: 8px;
-  font-size: 0.95rem;
-  animation: fadein 0.25s ease;
+  position: fixed; left:50%; bottom:24px; transform: translateX(-50%);
+  background: rgba(0,0,0,.85); color:#fff; padding:10px 16px; border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.35);
+  animation: toast-in .2s ease;
 }
+@keyframes toast-in { from { opacity:0; transform: translate(-50%, 10px); } to { opacity:1; transform: translate(-50%,0); } }
 
-@keyframes fadein {
-  from { opacity: 0; transform: translate(-50%, 10px); }
-  to { opacity: 1; transform: translate(-50%, 0); }
+/* 手機優化 */
+@media (max-width: 640px) {
+  .shop-wrap { padding: 20px 14px 32px; }
+  .shop-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+  .shop-card img, .shop-card video, .shop-card .thumb, .shop-card .hf { height: 160px; }
 }
