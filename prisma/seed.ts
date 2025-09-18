@@ -1,8 +1,10 @@
 // prisma/seed.ts
 import { PrismaClient, ShopItemKind, ShopCurrency, HeadframeCode } from "@prisma/client";
+
 const prisma = new PrismaClient();
 
 async function main() {
+  // 如果 public 真的有這些檔案就用它們；沒有就把 imageUrl 改成 null（前端會顯示 CSS 特效縮圖）
   const FRAMES = {
     NEON: "/assets/shop/frames/neon.gif",
     CRYSTAL: "/assets/shop/frames/crystal.gif",
@@ -13,7 +15,7 @@ async function main() {
     code: string;
     title: string;
     headframe: HeadframeCode;
-    imageUrl: string;          // ← 用實檔路徑
+    imageUrl: string | null;
     description?: string;
   };
 
@@ -24,13 +26,13 @@ async function main() {
   ];
 
   for (const hf of headframes) {
-    // 商品
+    // 商品 upsert
     const item = await prisma.shopItem.upsert({
       where: { code: hf.code },
       update: {
         title: hf.title,
         description: hf.description,
-        imageUrl: hf.imageUrl,
+        imageUrl: hf.imageUrl,   // 若沒放圖，改成 null
         visible: true,
       },
       create: {
@@ -39,8 +41,8 @@ async function main() {
         code: hf.code,
         title: hf.title,
         description: hf.description,
-        imageUrl: hf.imageUrl,
-        basePrice: 999,           // 顯示用底價
+        imageUrl: hf.imageUrl,   // 若沒放圖，改成 null
+        basePrice: 999,          // 顯示用底價（實際結帳看 SKU）
         vipDiscountable: true,
         visible: true,
       },
@@ -53,21 +55,13 @@ async function main() {
     ];
 
     for (const s of skusWanted) {
-      // ✅ 查詢條件加入 durationDays，避免覆蓋
+      // 查是否已存在（用 headframe + durationDays 當自然鍵）
       const exist = await prisma.shopSku.findFirst({
         where: {
           itemId: item.id,
           currencyOverride: ShopCurrency.DIAMOND,
-          payloadJson: {
-            path: ["headframe"],
-            equals: hf.headframe,
-          },
-          AND: {
-            payloadJson: {
-              path: ["durationDays"],
-              equals: s.durationDays,
-            },
-          },
+          payloadJson: { path: ["headframe"], equals: hf.headframe },
+          AND:        { payloadJson: { path: ["durationDays"], equals: s.durationDays } },
         },
       });
 
@@ -81,24 +75,20 @@ async function main() {
         await prisma.shopSku.create({
           data: {
             itemId: item.id,
-            title: `${hf.title}（${s.durationDays}天）`,
-            code: `${hf.code}_${s.durationDays}D`,
             priceOverride: s.priceOverride,
             currencyOverride: ShopCurrency.DIAMOND,
             vipDiscountableOverride: true,
-            payloadJson: payload,
+            payloadJson: payload as any,
           },
         });
       } else {
         await prisma.shopSku.update({
           where: { id: exist.id },
           data: {
-            title: `${hf.title}（${s.durationDays}天）`,
-            code: `${hf.code}_${s.durationDays}D`,
             priceOverride: s.priceOverride,
             currencyOverride: ShopCurrency.DIAMOND,
             vipDiscountableOverride: true,
-            payloadJson: payload,
+            payloadJson: payload as any,
           },
         });
       }
@@ -108,9 +98,11 @@ async function main() {
   console.log("✅ Seed 完成：NEON / CRYSTAL / DRAGON（999/7天、1999/15天）");
 }
 
-main().catch(e => {
-  console.error("❌ Seed 失敗:", e);
-  process.exit(1);
-}).finally(async () => {
-  await prisma.$disconnect();
-});
+main()
+  .catch((e) => {
+    console.error("❌ Seed 失敗:", e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
