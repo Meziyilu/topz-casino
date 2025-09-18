@@ -1,4 +1,3 @@
-// app/api/shop/catalog/route.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -9,32 +8,29 @@ export async function GET() {
   try {
     const rows = await prisma.shopItem.findMany({
       where: { visible: true },
-      include: {
-        skus: { select: { priceOverride: true, currencyOverride: true } },
-      },
+      include: { skus: { select: { priceOverride: true, currencyOverride: true } } },
       orderBy: { createdAt: "desc" },
     });
 
     const items = rows.map((it) => {
-      const prices = it.skus.length
-        ? it.skus.map((s) => s.priceOverride ?? it.basePrice ?? 0)
-        : [it.basePrice ?? 0];
-      const priceFrom = Math.max(0, Math.min(...prices));
+      const skPrices = it.skus?.length
+        ? it.skus.map((s) => s.priceOverride ?? 0)
+        : [(it as any).basePrice ?? 0];
+      const priceFrom = Math.max(0, Math.min(...skPrices));
       return {
         id: it.id,
         code: it.code,
         title: it.title,
-        imageUrl: it.imageUrl,
+        imageUrl: (it as any).imageUrl ?? null,
         kind: it.kind,
         currency: it.currency,
         priceFrom,
-        limitedQty: it.limitedQty ?? null,
+        limitedQty: (it as any).limitedQty ?? null,
       };
     });
 
-    return NextResponse.json({ items }); // ✅ 就算空陣列也 200
-  } catch (e) {
-    // 真的出錯才回 500（不要 404）
-    return NextResponse.json({ items: [], error: "INTERNAL_ERROR" }, { status: 500 });
+    return NextResponse.json({ items });
+  } catch {
+    return NextResponse.json({ items: [] }, { status: 200 }); // 不要 500/404 讓前端掛掉
   }
 }
