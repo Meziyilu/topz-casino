@@ -1,11 +1,11 @@
 /* =========================================================
-   百家樂 – 玻璃質感深色主題（大面板版）
+   百家樂 – 玻璃質感深色主題（響應式強化）
    檔案：/public/styles/baccarat.css
-   與 page.tsx 之 class 對應
-   - dark-theme、room-header、chip、cards-area、betting-panel...
+   與 page.tsx 對應：
+   .dark-theme .room-header .chip .cards-area .betting-panel ...
 ========================================================= */
 
-/* ========== 主題底色與字體 ========== */
+/* ========== 主題底色與字體 / 基礎縮放 ========== */
 :root {
   --bg-0: #070b16;
   --bg-1: #0b1220;
@@ -29,37 +29,52 @@
   --win-glow-1: #facc15;
   --win-glow-2: #fde047;
 
-  --card-w: 84px;
-  --card-h: 126px;
+  /* 以 clamp 做卡片自適應（會被後面媒體查詢微調） */
+  --card-w: clamp(62px, 9vw, 92px);
+  --card-h: calc(var(--card-w) * 1.5);
+
   --radius: 16px;
+
+  /* 內距（會含安全區域） */
+  --page-pad: clamp(12px, 3vw, 28px);
 }
 
 html, body {
-  background: radial-gradient(1200px 800px at 20% -10%, #1a1440 0%, var(--bg-1) 42%),
-              radial-gradient(800px 600px at 110% 30%, #082431 0%, var(--bg-1) 40%),
-              var(--bg-0);
+  background:
+    radial-gradient(1200px 800px at 20% -10%, #1a1440 0%, var(--bg-1) 42%),
+    radial-gradient(800px 600px at 110% 30%, #082431 0%, var(--bg-1) 40%),
+    var(--bg-0);
   color: var(--text-main);
   font-family: "Segoe UI", Roboto, Helvetica, Arial, "Noto Sans TC", "PingFang TC", sans-serif;
+  line-height: 1.45;
 }
 
 .dark-theme {
   min-height: 100vh;
+  padding-left: max(var(--page-pad), env(safe-area-inset-left));
+  padding-right: max(var(--page-pad), env(safe-area-inset-right));
 }
 
-/* ========== Header ========== */
+/* ========== Header（含黏頂、行動裝置安全區） ========== */
 .room-header {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 40;
+
   display: grid;
   grid-template-columns: 1fr auto auto;
   gap: 16px;
   align-items: center;
-  padding: 18px 24px;
+
+  padding: 14px max(var(--page-pad), env(safe-area-inset-right));
+  padding-left: max(var(--page-pad), env(safe-area-inset-left));
+
   backdrop-filter: blur(10px);
   background: linear-gradient(180deg, var(--glass) 0%, rgba(255,255,255,0.03) 100%);
   border-bottom: 1px solid var(--stroke);
 }
-
 .room-header .title { display: flex; flex-direction: column; gap: 6px; }
-.room-header h1 { font-size: 28px; font-weight: 800; letter-spacing: 1px; }
+.room-header h1 { font-size: clamp(20px, 2.2vw, 28px); font-weight: 800; letter-spacing: 1px; }
 .room-header span { font-size: 14px; color: var(--text-sub); }
 
 .wallet {
@@ -71,9 +86,9 @@ html, body {
   border: 1px solid var(--stroke);
 }
 
-.chips { display: flex; gap: 10px; }
+.chips { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
 .chip {
-  padding: 8px 14px;
+  padding: 10px 16px;                 /* 提升觸控命中 */
   border-radius: 999px;
   background: var(--glass);
   border: 1px solid var(--stroke);
@@ -81,6 +96,7 @@ html, body {
   cursor: pointer;
   transition: transform .15s ease, background .15s ease, border-color .15s ease;
   font-weight: 700;
+  touch-action: manipulation;
 }
 .chip:hover { transform: translateY(-1px); background: var(--glass-strong); }
 .chip.active { background: var(--green-2); border-color: transparent; color: #fff; }
@@ -89,9 +105,9 @@ html, body {
 .cards-area {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 24px;
-  padding: 26px;
-  margin: 28px;
+  gap: clamp(14px, 2vw, 24px);
+  padding: clamp(14px, 2.2vw, 26px);
+  margin: clamp(14px, 2.4vw, 28px);
   border-radius: var(--radius);
   backdrop-filter: blur(10px);
   background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
@@ -103,8 +119,7 @@ html, body {
 
 .side { text-align: center; }
 .side h2 { font-size: 18px; margin-bottom: 10px; opacity: .9; letter-spacing: 2px; }
-
-.cards { display: flex; gap: 14px; justify-content: center; }
+.cards { display: flex; gap: clamp(8px, 1.2vw, 16px); justify-content: center; }
 
 .card {
   width: var(--card-w);
@@ -114,7 +129,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
+  font-size: clamp(18px, 2.2vw, 22px);
   font-weight: 900;
   color: #f9fafb;
   box-shadow: 0 6px 22px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.08);
@@ -124,9 +139,7 @@ html, body {
 
 /* 翻牌 + 金光 */
 .flip-cards .card { transform: rotateY(180deg); }
-.reveal-gold .card {
-  animation: revealFlash 1.1s ease-in-out;
-}
+.reveal-gold .card { animation: revealFlash 1.1s ease-in-out; }
 @keyframes revealFlash {
   0%   { box-shadow: 0 0 12px #ffd700, inset 0 0 0 1px rgba(255,255,255,.08); }
   55%  { box-shadow: 0 0 44px #ffdb55, inset 0 0 0 1px rgba(255,255,255,.12); }
@@ -143,8 +156,8 @@ html, body {
   position: fixed;
   z-index: 60;
   pointer-events: none;
-  width: min(540px, 70vw);
-  height: min(540px, 70vw);
+  width: min(540px, 72vw);
+  height: min(540px, 72vw);
   top: 50%;
   left: 50%;
   transform: translate(-50%, -52%);
@@ -153,18 +166,21 @@ html, body {
 
 /* ========== 下注面板（綠色大卡片） ========== */
 .betting-panel {
-  margin: 28px;
-  padding: 22px;
+  margin: clamp(14px, 2.4vw, 28px);
+  padding: clamp(14px, 2vw, 22px);
   border-radius: var(--radius);
   box-shadow: 0 10px 28px rgba(0,0,0,.45);
   border: 1px solid rgba(0,0,0,.25);
   display: grid;
   gap: 14px;
-  /* 手機 2 欄，大螢幕 4 欄 → 形成 2×4 */
-  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  /* 預設：手機 2 欄；中型 3 欄；桌機 4 欄 */
+  grid-template-columns: repeat(2, minmax(150px, 1fr));
 }
-@media (min-width: 920px) {
-  .betting-panel { grid-template-columns: repeat(4, 1fr); }
+@media (min-width: 640px) {
+  .betting-panel { grid-template-columns: repeat(3, minmax(180px, 1fr)); }
+}
+@media (min-width: 1024px) {
+  .betting-panel { grid-template-columns: repeat(4, minmax(180px, 1fr)); }
 }
 
 .green-panel {
@@ -182,8 +198,8 @@ html, body {
   grid-template-rows: auto auto auto;
   align-items: center;
   justify-items: center;
-  padding: 22px 18px;
-  height: 120px;                 /* 更大更好點擊 */
+  padding: 18px;
+  min-height: 104px;               /* 可被小螢幕壓縮 */
   border-radius: 18px;
   border: 1px solid rgba(255,255,255,.08);
   background: linear-gradient(180deg, rgba(6,95,70,.55) 0%, rgba(4,47,46,.85) 100%);
@@ -195,6 +211,7 @@ html, body {
   box-shadow:
     0 12px 28px rgba(0,0,0,.45),
     inset 0 0 0 1px rgba(255,255,255,.06);
+  touch-action: manipulation;
 }
 .bet-btn:hover:not(:disabled) {
   transform: translateY(-2px);
@@ -213,16 +230,8 @@ html, body {
 }
 
 /* 文字配置：主標 / 賠率 / 已下注 */
-.bet-btn > span:first-child {
-  font-size: 22px;
-  line-height: 1;
-}
-.bet-btn .amt {
-  margin-top: 4px;
-  font-size: 14px;
-  font-weight: 700;
-  opacity: .9;
-}
+.bet-btn > span:first-child { font-size: clamp(18px, 1.8vw, 22px); line-height: 1; }
+.bet-btn .amt { margin-top: 4px; font-size: 14px; font-weight: 700; opacity: .9; }
 
 /* 勝家發光（下注卡片） */
 .glow-win {
@@ -244,17 +253,14 @@ html, body {
   flex-wrap: wrap;
   gap: 8px;
   padding: 14px 18px;
-  margin: 0 28px 28px;
+  margin: 0 clamp(14px, 2.4vw, 28px) clamp(14px, 2.4vw, 28px);
   border-radius: 14px;
   backdrop-filter: blur(8px);
   background: linear-gradient(180deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.02) 100%);
   border: 1px solid var(--stroke);
 }
-
 .dot {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
+  width: 18px; height: 18px; border-radius: 50%;
   box-shadow: 0 4px 10px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.15);
 }
 .dot.player { background: var(--player); }
@@ -262,8 +268,8 @@ html, body {
 .dot.tie    { background: var(--tie); }
 
 /* ========== 歷史（卡片） ========== */
-.history { margin: 0 28px 36px; }
-.history h3 { font-size: 18px; margin: 12px 0; color: #f3f4f6; }
+.history { margin: 0 clamp(14px, 2.4vw, 28px) clamp(18px, 3vw, 36px); }
+.history h3 { font-size: clamp(16px, 1.6vw, 18px); margin: 12px 0; color: #f3f4f6; }
 
 .history-list { display: grid; gap: 12px; }
 .history-card {
@@ -283,13 +289,61 @@ html, body {
 .history-card .bets { font-size: 14px; color: var(--text-sub); }
 .history-card .payouts { font-size: 14px; color: var(--green-3); font-weight: 800; margin-top: 4px; }
 
-/* ========== 響應式微調 ========== */
+/* ========== 響應式斷點 ========== */
+
+/* 小螢幕：<= 720px（手機直立） */
 @media (max-width: 720px) {
-  :root { --card-w: 70px; --card-h: 105px; }
-  .cards-area { margin: 18px; padding: 18px; }
-  .betting-panel { margin: 18px; }
-  .bead-road { margin: 0 18px 18px; }
   .room-header { grid-template-columns: 1fr; gap: 10px; }
-  .wallet { justify-self: start; }
-  .chips { justify-self: start; }
+  .chips, .wallet { justify-self: start; }
+  .cards-area {
+    grid-template-columns: 1fr;      /* 牌面改一欄堆疊 */
+    text-align: center;
+  }
+  .win-fx-overlay {
+    width: min(420px, 86vw);
+    height: min(420px, 86vw);
+  }
+  .betting-panel {
+    grid-template-columns: repeat(2, minmax(140px, 1fr));
+  }
+}
+
+/* 中螢幕：721–1024px（平板/橫置手機） */
+@media (min-width: 721px) and (max-width: 1024px) {
+  :root {
+    --card-w: clamp(68px, 8.6vw, 88px);
+    --card-h: calc(var(--card-w) * 1.5);
+  }
+  .cards-area { grid-template-columns: 1fr 1fr; }
+  .betting-panel { grid-template-columns: repeat(3, minmax(160px, 1fr)); }
+}
+
+/* 大螢幕：>= 1025px（桌機） */
+@media (min-width: 1025px) {
+  :root {
+    --card-w: clamp(76px, 7.2vw, 96px);
+    --card-h: calc(var(--card-w) * 1.5);
+  }
+}
+
+/* 超寬：>= 1440px（大桌機/TV） */
+@media (min-width: 1440px) {
+  :root {
+    --card-w: 92px;                 /* 上限 */
+    --card-h: calc(92px * 1.5);
+  }
+  .betting-panel { grid-template-columns: repeat(4, minmax(180px, 1fr)); }
+}
+
+/* 手機橫向（高度較矮時，縮小外距/內距，避免捲動過多） */
+@media (orientation: landscape) and (max-height: 540px) {
+  .cards-area { margin: 12px; padding: 12px; gap: 10px; }
+  .betting-panel { margin: 12px; padding: 12px; gap: 10px; }
+  .history { margin: 0 12px 16px; }
+}
+
+/* ========== 動畫偏好（減少動態） ========== */
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+  .flip-cards .card { transform: none; }
 }
