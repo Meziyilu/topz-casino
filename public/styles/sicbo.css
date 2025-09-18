@@ -1,7 +1,30 @@
+/* =========================================================
+   SicBo – 玻璃質感深色主題（含完整響應式）
+   與你現有 class 完全相容：.sicbo-wrapper / .topbar / .table-grid ...
+========================================================= */
+
+/* ========= 基礎變數（尺寸改用 clamp，自適應不同螢幕） ========= */
+:root {
+  --page-max: 1180px;
+  --page-pad: clamp(12px, 3vw, 24px);
+
+  --font-s: clamp(12px, 1.8vw, 13px);
+  --font-m: clamp(13px, 1.8vw, 14px);
+  --font-l: clamp(16px, 2.2vw, 18px);
+  --font-xl: clamp(20px, 2.6vw, 24px);
+
+  --cell-min-h: 60px; /* sicbo-cell 在小螢幕彈性追隨 */
+}
+
 /* ===== page wrapper / glass ===== */
 .sicbo-wrapper {
-  max-width: 1180px; margin: 0 auto; padding: 16px; color: #fff;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: var(--page-pad);
+  color: #fff;
   position: relative;
+  padding-left: max(var(--page-pad), env(safe-area-inset-left));
+  padding-right: max(var(--page-pad), env(safe-area-inset-right));
 }
 
 /* 深色「流光」背景動畫（整頁） */
@@ -30,9 +53,12 @@
   border-radius: 16px;
 }
 
-.btn { padding: 8px 12px; border-radius: 10px; font-weight: 700;
+.btn {
+  padding: 10px 14px; border-radius: 10px; font-weight: 700;
   border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.08); color:#fff; cursor:pointer;
   transition: transform .06s ease, background-color .12s ease, border-color .12s ease;
+  touch-action: manipulation;
+  font-size: var(--font-m);
 }
 .btn:hover{ background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.2) }
 .btn:active{ transform: translateY(1px) }
@@ -41,17 +67,22 @@
 .btn--amber:hover{ background: rgba(245,158,11,.35) }
 
 /* ===== topbar ===== */
-.topbar{ display:flex; align-items:center; justify-content:space-between; padding:10px 12px; margin-bottom:12px }
-.topbar .left{ display:flex; align-items:center; gap:8px }
+.topbar{
+  display:flex; align-items:center; justify-content:space-between; gap: 10px;
+  padding:10px 12px; margin-bottom:12px; flex-wrap: wrap;
+}
+.topbar .left{ display:flex; align-items:center; gap:8px; flex-wrap: wrap; }
 .topbar .right{ display:flex; align-items:center; gap:10px; flex-wrap:wrap }
-.room-pill{ padding:4px 10px; border-radius:999px; border:1px solid rgba(255,255,255,.18); background:rgba(16,185,129,.25); font-weight:800 }
-.wallet{ display:flex; gap:6px; align-items:center }
-.wallet .label{ opacity:.8; font-size:12px }
+.room-pill{ padding:6px 12px; border-radius:999px; border:1px solid rgba(255,255,255,.18); background:rgba(16,185,129,.25); font-weight:800; font-size: var(--font-m); }
+.wallet{ display:flex; gap:6px; align-items:center; font-size: var(--font-m); }
+.wallet .label{ opacity:.8; font-size: var(--font-s); }
 .wallet .val{ font-weight:800 }
-.amount{ display:flex; gap:6px; align-items:center }
-.amount .label{ opacity:.8; font-size:12px }
+.amount{ display:flex; gap:6px; align-items:center; flex-wrap: wrap; }
+.amount .label{ opacity:.8; font-size: var(--font-s) }
 .amount input{
-  width: 140px; background: rgba(0,0,0,.35); color:#fff; border:1px solid rgba(255,255,255,.2); border-radius:10px; padding:6px 8px;
+  width: clamp(140px, 30vw, 220px);
+  background: rgba(0,0,0,.35); color:#fff; border:1px solid rgba(255,255,255,.2); border-radius:10px; padding:8px 10px;
+  font-size: var(--font-m);
 }
 
 /* 提升可讀性（保持你原風格） */
@@ -69,9 +100,12 @@
 }
 
 /* info head row */
-.table-head{ display:grid; gap:10px; grid-template-columns: repeat(4, minmax(0,1fr)) auto; margin-bottom:12px; align-items:stretch }
+.table-head{
+  display:grid; gap:10px; grid-template-columns: repeat(4, minmax(0,1fr)) auto;
+  margin-bottom:12px; align-items:stretch
+}
 .head-item{ background: rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:12px; padding:10px 12px }
-.head-item .k{ font-size:12px; opacity:.8 } .head-item .v{ font-size:16px; font-weight:800; color:#fff }
+.head-item .k{ font-size: var(--font-s); opacity:.8 } .head-item .v{ font-size: var(--font-l); font-weight:800; color:#fff }
 .head-dice{ display:flex; gap:6px; align-items:center; justify-content:flex-end }
 
 /* ===== 開獎動畫卡片（放在 table-head 最右） ===== */
@@ -82,7 +116,7 @@
   border:1px solid rgba(59,130,246,.35);
   min-height: 76px;
 }
-.reveal-title{ font-size:12px; opacity:.85; margin-bottom:6px }
+.reveal-title{ font-size: var(--font-s); opacity:.85; margin-bottom:6px }
 .reveal-dice{ display:flex; gap:8px; align-items:center; justify-content:center; min-height:44px }
 .reveal-dice.rolling .dice{ animation: dice-roll .6s linear infinite }
 .reveal-dice.popped .dice{ animation: dice-pop .6s cubic-bezier(.2,.9,.2,1) }
@@ -102,31 +136,36 @@
   background: linear-gradient(180deg, rgba(16,185,129,.16), rgba(16,185,129,.08));
   border: 1px solid rgba(16,185,129,.35);
 }
-.tile .badge{ font-size:12px; letter-spacing:.05em; opacity:.8 }
-.tile .cn{ font-size:44px; font-weight:900; line-height: 1; color:#fff; text-shadow:0 2px 4px rgba(0,0,0,.45) }
+.tile .badge{ font-size: var(--font-s); letter-spacing:.05em; opacity:.8 }
+.tile .cn{ font-size: clamp(28px, 6.2vw, 44px); font-weight:900; line-height: 1; color:#fff; text-shadow:0 2px 4px rgba(0,0,0,.45) }
 .tile .note{ font-size:11px; opacity:.85; white-space:pre-line; color:#e0f2ff }
 .big-left{ background: linear-gradient(180deg, rgba(59,130,246,.12), rgba(59,130,246,.06)); border-color: rgba(59,130,246,.35) }
 .big-right{ background: linear-gradient(180deg, rgba(245,158,11,.18), rgba(245,158,11,.08)); border-color: rgba(245,158,11,.4) }
 .tile.disabled{ opacity:.65; cursor:not-allowed }
 
 /* central totals (14 cols like picture) */
-.mid-14{ display:grid; grid-template-columns: repeat(14, minmax(0,1fr)); gap:8px }
+.mid-14{
+  display:grid; grid-template-columns: repeat(14, minmax(0,1fr)); gap:8px
+}
 .sicbo-cell{
-  min-height:72px; border-radius:12px; border:1px solid rgba(255,255,255,.14);
+  min-height: var(--cell-min-h);
+  border-radius:12px; border:1px solid rgba(255,255,255,.14);
   background: rgba(255,255,255,.06); color:#fff; display:flex; align-items:center; justify-content:center;
   padding:.5rem .6rem; transition: transform .08s ease, background-color .12s ease, border-color .12s ease, opacity .2s ease;
+  text-align: center;
+  font-size: var(--font-m);
 }
 .sicbo-cell:hover{ background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.3) }
 .sicbo-cell:active{ transform: translateY(1px) }
 .sicbo-cell.disabled{ opacity:.6; cursor:not-allowed; filter: grayscale(.1) }
 .sicbo-cell.total{ display:flex; flex-direction:column; gap:4px }
-.total-num{ font-size:18px; font-weight:800; color:#f7fbff; text-shadow:0 1px 1px rgba(0,0,0,.35) }
-.total-odd{ font-size:11px; opacity:.85; color:#d6e9ff }
+.total-num{ font-size: var(--font-l); font-weight:800; color:#f7fbff; text-shadow:0 1px 1px rgba(0,0,0,.35) }
+.total-odd{ font-size: var(--font-s); opacity:.85; color:#d6e9ff }
 
 /* odd/even section (two wide) */
 .row-two{ display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px; margin-top:10px }
-.row-two .h1{ font-size:22px; font-weight:900; margin-right:6px }
-.row-two .sub{ font-size:11px; opacity:.85 }
+.row-two .h1{ font-size: var(--font-xl); font-weight:900; margin-right:6px }
+.row-two .sub{ font-size: var(--font-s); opacity:.85 }
 
 /* doubles + any triple + triples */
 .row-multi{ display:grid; grid-template-columns: 5fr 2fr 5fr; gap:10px; margin-top:10px }
@@ -138,9 +177,9 @@
 
 /* combinations (15) */
 .combos{ display:grid; grid-template-columns: repeat(10, minmax(0,1fr)); gap:8px; margin-top:10px }
-.combos .sicbo-cell{ min-height:60px }
-.h2{ font-size:14px; font-weight:700 }
-.sub{ font-size:11px; opacity:.85 }
+.combos .sicbo-cell{ min-height:calc(var(--cell-min-h) - 8px) }
+.h2{ font-size: var(--font-m); font-weight:700 }
+.sub{ font-size: var(--font-s); opacity:.85 }
 
 /* single dice row */
 .singles{ display:grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap:8px; margin-top:10px }
@@ -148,20 +187,20 @@
 /* bottom toolbar */
 .toolbar{
   display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:12px; padding-top:10px;
-  border-top:1px dashed rgba(255,255,255,.18);
+  border-top:1px dashed rgba(255,255,255,.18); flex-wrap: wrap;
 }
 .chips{ display:flex; align-items:center; gap:8px; flex-wrap:wrap }
-.chips-label{ opacity:.8; font-size:12px; margin-right:4px }
+.chips-label{ opacity:.8; font-size: var(--font-s); margin-right:4px }
 .chip{
-  width:48px; height:48px; border-radius:9999px; border:4px solid #fff;
+  width:52px; height:52px; border-radius:9999px; border:4px solid #fff;
   display:flex; align-items:center; justify-content:center; font-weight:800;
   box-shadow: 0 6px 0 rgba(0,0,0,.25), inset 0 0 8px rgba(255,255,255,.35);
-  background:#3b82f6;
+  background:#3b82f6; font-size: var(--font-m);
 }
 .chip-10{ background:#22c55e } .chip-100{ background:#3b82f6 }
 .chip-1000{ background:#a855f7 } .chip-5000{ background:#111827 }
 .chip.selected{ outline:3px solid rgba(255,255,255,.7); box-shadow:0 4px 0 rgba(0,0,0,.25), 0 0 0 6px rgba(255,255,255,.12) }
-.locked-hint{ color:#ffd7d7; font-size:12px; font-weight:700 }
+.locked-hint{ color:#ffd7d7; font-size: var(--font-s); font-weight:700 }
 
 /* ===== 骰子（面點） ===== */
 .dice{ --size:36px; width:var(--size); height:var(--size);
@@ -206,7 +245,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
   gap: 10px;
-  margin-top: 16px;      /* 與下注面板留距 */
+  margin-top: 16px;
   padding: 10px;
   border-radius: 12px;
   background: rgba(255,255,255,.06);
@@ -219,10 +258,98 @@
   padding: 6px;
   text-align: center;
   color: #fff;
-  font-size: 12px;
+  font-size: var(--font-s);
 }
 .roadmap .dice-mini { display:flex; justify-content:center; align-items:center; gap:6px; margin-bottom:4px }
-.roadmap .dice-mini .dice{ --size:24px } /* 不擠 */
+.roadmap .dice-mini .dice{ --size:24px }
 .roadmap .meta .sum { font-weight: 800; margin-right: 6px; }
 .roadmap .meta .tag { opacity: .85; }
 .roadmap-empty { padding: 10px; opacity: .8; }
+
+/* =========================
+   響應式斷點
+   - 小螢幕（<= 720px）
+   - 中螢幕（721–1024px）
+   - 大螢幕（>= 1025px）
+   - 橫向/低高度
+========================= */
+
+/* 小螢幕：手機直立 */
+@media (max-width: 720px) {
+  .topbar { gap: 8px; }
+  .amount input { width: 100%; }
+
+  .table-head {
+    grid-template-columns: repeat(2, minmax(0,1fr));
+  }
+  .head-dice { justify-content: center; }
+
+  /* 主盤改為 1 欄堆疊（左/中/右 依序） */
+  .table-grid { grid-template-columns: 1fr; }
+
+  /* 14 欄 totals → 7 欄 */
+  .mid-14 { grid-template-columns: repeat(7, minmax(0,1fr)); }
+  .sicbo-cell { min-height: calc(var(--cell-min-h) - 6px); }
+
+  /* 偶/雙區塊維持 2 欄 */
+  .row-two { grid-template-columns: repeat(2, minmax(0,1fr)); }
+
+  /* Doubles/Any triple/Triples：左右各 1、中央 1，全部堆疊 */
+  .row-multi { grid-template-columns: 1fr; }
+  .doubles,.triples { grid-template-columns: repeat(3, minmax(0,1fr)); }
+
+  /* 組合 15：10 欄 → 5 欄 */
+  .combos { grid-template-columns: repeat(5, minmax(0,1fr)); }
+
+  /* singles：6 → 3 */
+  .singles { grid-template-columns: repeat(3, minmax(0,1fr)); }
+
+  /* 籌碼更大觸控範圍 */
+  .chip { width: 56px; height: 56px; }
+
+  /* 降外距，避免過度捲動 */
+  .table-outer { padding: 12px; }
+}
+
+/* 中螢幕：平板/手機橫向 */
+@media (min-width: 721px) and (max-width: 1024px) {
+  .table-head { grid-template-columns: repeat(3, minmax(0,1fr)) auto; }
+
+  /* 主盤 2-6-2 */
+  .table-grid { grid-template-columns: 2fr 6fr 2fr; }
+
+  /* totals：14 → 10 欄 */
+  .mid-14 { grid-template-columns: repeat(10, minmax(0,1fr)); }
+
+  /* doubles/triples：6 → 4 欄 */
+  .doubles,.triples { grid-template-columns: repeat(4, minmax(0,1fr)); }
+
+  /* 組合 15：10 → 8 欄 */
+  .combos { grid-template-columns: repeat(8, minmax(0,1fr)); }
+
+  /* singles：6 → 5 欄 */
+  .singles { grid-template-columns: repeat(5, minmax(0,1fr)); }
+}
+
+/* 大螢幕：桌機（維持 2-8-2，但更舒適的 cell 高度） */
+@media (min-width: 1025px) {
+  .sicbo-cell { min-height: calc(var(--cell-min-h) + 4px); }
+}
+
+/* 超寬螢幕：微調為較鬆 */
+@media (min-width: 1440px) {
+  .mid-14 { gap: 10px; }
+  .combos, .doubles, .triples, .singles { gap: 10px; }
+}
+
+/* 橫向 + 低高度（例如手機橫著放，高度 <= 540px） */
+@media (orientation: landscape) and (max-height: 540px) {
+  .sicbo-wrapper { padding: 10px; }
+  .table-outer { padding: 10px; }
+  .sicbo-cell { min-height: calc(var(--cell-min-h) - 8px); }
+}
+
+/* 使用者偏好減少動態：停用大多數動畫 */
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
