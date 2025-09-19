@@ -3,6 +3,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import HeadframeSelector from "../../components/profile/HeadframeSelector"; // ← 相對路徑匯入
+
+type HeadframeCode = "NONE" | "GOLD" | "NEON" | "CRYSTAL" | "DRAGON";
 
 type Me = {
   id: string;
@@ -15,18 +18,19 @@ type Me = {
   vipTier: number;
   balance: number;
   bankBalance: number;
-  headframe?: string | null;  // 前端以字串呈現，後端驗證/正規化
+  headframe?: HeadframeCode | null;  // 與選擇器一致
   panelStyle?: string | null;
   panelTint?: string | null;
 };
 
-// 只能讀取 NEXT_PUBLIC_* 變數（在 client）——你已經有設定這兩個
+// 只能讀取 NEXT_PUBLIC_* 變數（在 client）
 const CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "";
 const UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "";
 
 export default function ProfilePage() {
   const [me, setMe] = useState<Me | null>(null);
   const [form, setForm] = useState<Partial<Me>>({});
+  const [ownedHeadframes, setOwnedHeadframes] = useState<HeadframeCode[]>([]); // 新增：玩家擁有頭框清單
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ type: "ok" | "err"; text: string } | null>(null);
@@ -43,10 +47,14 @@ export default function ProfilePage() {
           about: d.user.about ?? "",
           country: d.user.country ?? "",
           avatarUrl: d.user.avatarUrl ?? "",
-          headframe: d.user.headframe ?? "",
+          headframe: (d.user.headframe as HeadframeCode) ?? "NONE",
           panelStyle: d.user.panelStyle ?? "",
           panelTint: d.user.panelTint ?? "#00d1ff",
         });
+        // 後端若有回傳 ownedHeadframes 就用，否則先用預設（至少包含 NONE）
+        setOwnedHeadframes(
+          (d.ownedHeadframes as HeadframeCode[] | undefined) ?? ["NONE"]
+        );
       })
       .catch(() => setToast({ type: "err", text: "讀取個人資料失敗" }))
       .finally(() => setLoading(false));
@@ -60,7 +68,7 @@ export default function ProfilePage() {
     setForm((s) => ({ ...s, [name]: value }));
   };
 
-  // 上傳頭像（前端直傳 Cloudinary，無需經過自家後端）
+  // 上傳頭像（前端直傳 Cloudinary）
   const onPickAvatar = async (f?: File | null) => {
     if (!f) return;
 
@@ -74,10 +82,7 @@ export default function ProfilePage() {
       const fd = new FormData();
       fd.append("file", f);
       fd.append("upload_preset", UPLOAD_PRESET);
-      // 如需固定資料夾，可開啟下一行：
-      // fd.append("folder", "avatars");
 
-      // 不要手動設定 Content-Type，由瀏覽器自動帶 multipart/form-data
       const r = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
         method: "POST",
         body: fd,
@@ -88,7 +93,6 @@ export default function ProfilePage() {
         throw new Error(json?.error?.message || "UPLOAD_FAILED");
       }
 
-      // 成功後先寫到表單；按「儲存變更」才寫回 DB
       setForm((s) => ({ ...s, avatarUrl: json.secure_url as string }));
       setToast({ type: "ok", text: "頭像已上傳 ✅" });
     } catch (err: any) {
@@ -105,13 +109,13 @@ export default function ProfilePage() {
     setSaving(true);
     setToast(null);
 
+    // ✅ 已移除 "headframe"：避免覆蓋選擇器剛套用的值
     const ALLOWED: (keyof Me)[] = [
       "displayName",
       "nickname",
       "about",
       "country",
       "avatarUrl",
-      "headframe",
       "panelStyle",
       "panelTint",
     ];
@@ -151,7 +155,13 @@ export default function ProfilePage() {
         return;
       }
 
-      if (d?.user) setMe(d.user);
+      if (d?.user) {
+        setMe(d.user);
+        // 可選：同步最新 headframe（如果後端會回傳）
+        if (d.user.headframe) {
+          setForm((s) => ({ ...s, headframe: d.user.headframe as HeadframeCode }));
+        }
+      }
       setToast({ type: "ok", text: "已更新 ✅" });
     } catch {
       setToast({ type: "err", text: "儲存失敗（網路錯誤）" });
@@ -235,7 +245,26 @@ export default function ProfilePage() {
         <div className="pf-hero-sheen" />
       </section>
 
-      {/* 編輯卡（網格留白，避免擁擠） */}
+      {/* ✅ 頭框選擇器（不走表單，直接 PUT /api/profile/me） */}
+      <section className="pf-card pf-tilt" style={{ marginTop: 16 }}>
+        <div className="p-4">
+          <h2 className="pf-name" style={{ fontSize: 18, marginBottom: 8 }}>頭框設定</h2>
+          <p className="pf-help" style={{ marginBottom: 12 }}>
+            點擊下方卡片預覽，按「套用」儲存到你的帳戶。
+          </p>
+          <HeadframeSelector
+            owned={ownedHeadframes}
+            equipped={(form.headframe as HeadframeCode) || "NONE"}
+          />
+          <small className="pf-help" style={{ display: "block", marginTop: 8 }}>
+            套用後若未即時反映在左側頭像，可重新整理或稍後再次開啟本頁。
+          </small>
+        </div>
+        <div className="pf-ring pf-ring-1" />
+        <div className="pf-ring pf-ring-2" />
+      </section>
+
+      {/* 編輯卡（其餘個資表單） */}
       <section className="pf-card pf-tilt">
         <form className="pf-grid" onSubmit={onSave}>
           <div className="pf-field">
@@ -283,11 +312,7 @@ export default function ProfilePage() {
             <label>面板色（HEX 或預設 key）</label>
           </div>
 
-          <div className="pf-field">
-            <input name="headframe" value={form.headframe ?? ""} onChange={onChange} placeholder=" " />
-            <label>頭框代碼（可選）</label>
-            <small className="pf-help">示例：gold / cyan / neon / royal …（先用字串；之後可串 enum）</small>
-          </div>
+          {/* ❌ 已移除 headframe 的文字輸入欄位，避免覆蓋選擇器結果 */}
 
           <div className="pf-field">
             <input name="panelStyle" value={form.panelStyle ?? ""} onChange={onChange} placeholder=" " />
