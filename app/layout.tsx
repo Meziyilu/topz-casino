@@ -1,7 +1,25 @@
-// app/layout.tsx
+"use client";
+
 import Script from "next/script";
+import { useEffect } from "react";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    const clickAudio = new Audio("/sounds/click.mp3");
+    clickAudio.volume = 0.5;
+
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest("button") || target.hasAttribute("data-sound")) {
+        const sfx = clickAudio.cloneNode() as HTMLAudioElement;
+        sfx.play().catch(() => {});
+      }
+    };
+
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, []);
+
   return (
     <html lang="zh-Hant">
       <head>
