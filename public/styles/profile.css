@@ -16,7 +16,7 @@
   /* 可被頁面覆寫的色調（頭框/面板） */
   --pf-tint: #00d1ff;
 
-  /* RWD 增補：全域尺寸（✔️ 縮小 avatar 上限，避免過大） */
+  /* RWD 全域尺寸 */
   --pf-page-pad: clamp(14px, 3vw, 28px);
   --pf-ava: clamp(88px, 12vw, 120px);
   --pf-h1: clamp(20px, 2.6vw, 28px);
@@ -122,7 +122,7 @@
 }
 @keyframes pf-sheen{ 0% { left:-120% } 60% { left:130% } 100% { left:130% } }
 
-/* ============ Avatar + 頭框（✔️ 尺寸/光暈縮小） ============ */
+/* ============ Avatar + 頭框（關鍵修復） ============ */
 .pf-wrap .pf-avatar{
   position:relative; width: var(--pf-ava); aspect-ratio:1; border-radius:50%;
   display:grid; place-items:center; isolation:isolate;
@@ -134,10 +134,15 @@
   background: linear-gradient(180deg, rgba(255,255,255,.06), transparent);
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
 }
-.pf-ava-core img{ width:100%; height:100%; object-fit:cover; display:block }
+/* ✅ 圖片固定在容器內：絕對定位 + cover，避免原始尺寸撐爆 */
+.pf-ava-core img{
+  position:absolute; inset:0;
+  width:100%; height:100%;
+  object-fit:cover; display:block;
+}
 .pf-ava-fallback{ width:100%; height:100%; display:grid; place-items:center; font-size:clamp(28px, 6vw, 44px); color:#b9c7d6 }
 
-/* 外圈特效縮小一圈，避免視覺過大 */
+/* 外圈特效縮小一圈 */
 .pf-ava-frame{
   position:absolute; inset:calc(var(--pf-ava) * -0.04); border-radius:50%;
   background:
@@ -165,7 +170,7 @@
 }
 .pf-file-btn input{ display:none }
 
-/* 指定幾個頭框樣式（保留） */
+/* 頭框樣式 */
 .hf-gold .pf-ava-frame{ background: conic-gradient(#ffda6a, #ffd166, #ffaf45, #ffd166, #ffda6a); }
 .hf-cyan .pf-ava-frame{ background: conic-gradient(#67e8f9, #22d3ee, #06b6d4, #22d3ee, #67e8f9); }
 .hf-neon .pf-ava-frame{ background: conic-gradient(#22d3ee,#a78bfa,#34d399,#22d3ee); }
@@ -222,31 +227,15 @@
 .pf-ring-1{ box-shadow: inset 0 0 0 1px rgba(255,255,255,.08) }
 .pf-ring-2{ box-shadow: 0 0 48px color-mix(in srgb, var(--pf-tint) 20%, transparent) }
 
-/* ============ 好友牆 / 頭框預覽 尺寸保護 ============ */
-/* 牆寬度限制，避免鋪滿整版 */
+/* ============ 好友牆 / 頭框預覽保護 ============ */
 .pf-wall{ max-width: 760px; margin: 0 auto; }
-
-/* 小頭像（列表/牆）縮小 */
 .pf-ava-s{ width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
-
-/* 牆內的圖片（貼文若有圖片）最大高度限制，防止超高長圖撐爆 */
 .pf-post img:not(.pf-ava-s){
-  width: 100%;
-  height: auto;
-  max-height: 420px;
-  object-fit: cover;
-  display: block;
-  border-radius: 10px;
+  width: 100%; height: auto; max-height: 420px; object-fit: cover; display: block; border-radius: 10px;
 }
-
-/* 文字不要溢出 */
 .pf-post-body{ white-space: pre-wrap; word-break: break-word; font-size: 14px; }
-
-/* HeadframeSelector 的預覽卡通用縮放（沒有就忽略） */
-.headframe-selector .hf-card,
-.hf-card{ width: 84px; height: 84px; border-radius: 12px; }
-.headframe-selector .hf-ava,
-.hf-ava{ width: 72px; height: 72px; border-radius: 50%; overflow: hidden; }
+.headframe-selector .hf-card, .hf-card{ width: 84px; height: 84px; border-radius: 12px; }
+.headframe-selector .hf-ava, .hf-ava{ width: 72px; height: 72px; border-radius: 50%; overflow: hidden; }
 
 /* ============ Toast ============ */
 .pf-toast{
@@ -266,14 +255,12 @@
   .pf-hero{ grid-template-columns: 1fr; justify-items: center; text-align: center; }
   .pf-balances{ grid-template-columns: 1fr 1fr }
 }
-
 @media (max-width: 760px) {
   :root { --pf-ava: clamp(84px, 26vw, 110px); }
   .pf-grid{ grid-template-columns: 1fr; }
   .pf-actions{ justify-content: center; }
   .pf-wall{ max-width: 92vw; }
 }
-
 @media (max-width: 520px) {
   :root { --pf-ava: clamp(76px, 32vw, 104px); }
   .pf-nav{ padding:8px 10px; margin-left:8px; }
@@ -287,7 +274,6 @@
   .pf-hero-sheen::after { display:none; }
 }
 
-/* ============ 檔尾 avatar.css 兼容（避免衝突） ============ */
-/* 以更高選擇器權重覆蓋你檔尾的 avatar 固定尺寸，仍保留其光效/動畫 */
+/* ============ 兼容：避免與檔尾 avatar.css 衝突 ============ */
+/* 用更高權重覆蓋可能的固定尺寸或陰影；保留其光效/動畫 */
 .pf-wrap .pf-avatar { width: var(--pf-ava); height: auto; }
-.pf-wrap .pf-ava-frame { /* 防止外圈太誇張，已在上方縮小 inset */ }
