@@ -4,25 +4,36 @@
 import Script from "next/script";
 import { useEffect, useRef, useState } from "react";
 
-const CLICK_SRC = "/sounds/click.mp3"; // 可換成 .wav
-const HOVER_SRC = "/sounds/hover.mp3"; // 可換成 .wav
+const CLICK_SRC = "/sounds/click.mp3"; // 可換 .wav/.ogg
+const HOVER_SRC = "/sounds/hover.mp3";
 const STORAGE_KEY = "sfx-muted";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  // 全域靜音狀態（localStorage 記憶）
-  const [muted, setMuted] = useState<boolean>(false);
-
-  // 基底音源（用來 clone，避免連點卡住）
-  const clickBaseRef = useRef<HTMLAudioElement | null>(null);
-  const hoverBaseRef = useRef<HTMLAudioElement | null>(null);
-  // 卷軸音量（若要做設定頁可拉到 state）
-  const clickVolRef = useRef(0.5);
-  const hoverVolRef = useRef(0.3);
-  // 用 ref 保存當前靜音（事件 handler 讀取，避免閉包不同步）
+  const [muted, setMuted] = useState(false);
   const mutedRef = useRef(muted);
 
+  // 預設音量（可自行調整）
+  const clickVolRef = useRef(0.55);
+  const hoverVolRef = useRef(0.32);
+
+  // 基底音源（clone 播放避免連點卡住）
+  const clickBaseRef = useRef<HTMLAudioElement | null>(null);
+  const hoverBaseRef = useRef<HTMLAudioElement | null>(null);
+
+  const unlockedRef = useRef(false);
+
+  // 便利函式：判斷是否為要發聲的目標
+  const isSoundTarget = (node: Element | null) => {
+    if (!node) return false;
+    const el = node as HTMLElement;
+    return (
+      !!el.closest("button, [data-sound]") || // 一般按鈕/帶 data-sound
+      !!el.closest(".lb-games a")             // 大廳卡片
+    );
+  };
+
+  // 載入靜音狀態
   useEffect(() => {
-    // 初始靜音狀態（從 localStorage）
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved !== null) {
@@ -33,6 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     } catch {}
   }, []);
 
+  // 同步靜音狀態
   useEffect(() => {
     mutedRef.current = muted;
     try {
@@ -41,67 +53,121 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   }, [muted]);
 
   useEffect(() => {
-    // 準備基底音效
+    // 建立基底音源 + 預載
     clickBaseRef.current = new Audio(CLICK_SRC);
-    if (clickBaseRef.current) clickBaseRef.current.volume = clickVolRef.current;
-
     hoverBaseRef.current = new Audio(HOVER_SRC);
-    if (hoverBaseRef.current) hoverBaseRef.current.volume = hoverVolRef.current;
+    if (clickBaseRef.current) {
+      clickBaseRef.current.preload = "auto";
+      clickBaseRef.current.volume = clickVolRef.current;
+    }
+    if (hoverBaseRef.current) {
+      hoverBaseRef.current.preload = "auto";
+      hoverBaseRef.current.volume = hoverVolRef.current;
+    }
 
-    // 事件：按下（用 pointerdown 比 click 更即時，也能覆蓋滑鼠/觸控/筆）
+    // 第一次真實互動 → 解鎖音訊（iOS/Chrome 自動播放限制）
+    const unlockOnce = () => {
+      if (unlockedRef.current) return;
+      unlockedRef.current = true;
+
+      const warmUp = async (el: HTMLAudioElement | null) => {
+        if (!el) return;
+        try {
+          el.currentTime = 0;
+          await el.play();
+          el.pause();
+          el.currentTime = 0;
+        } catch {}
+      };
+      warmUp(clickBaseRef.current);
+      warmUp(hoverBaseRef.current);
+
+      document.removeEventListener("pointerdown", unlockOnce);
+    };
+    document.addEventListener("pointerdown", unlockOnce, { passive: true });
+
+    // 點擊（用 pointerdown 更即時，涵蓋滑鼠/觸控/手寫筆）
     const onPointerDown = (e: PointerEvent) => {
       if (mutedRef.current) return;
-      const el = (e.target as HTMLElement)?.closest("button, [data-sound]");
-      if (!el) return;
-      // 忽略 disabled button
-      if (el instanceof HTMLButtonElement && el.disabled) return;
+      const target = e.target as HTMLElement;
+      if (!isSoundTarget(target)) return;
 
-      const src = clickBaseRef.current;
-      if (!src) return;
+      // 忽略 disabled 的 button
+      const btn = target.closest("button") as HTMLButtonElement | null;
+      if (btn?.disabled) return;
 
-      const sfx = src.cloneNode() as HTMLAudioElement;
+      const base = clickBaseRef.current;
+      if (!base) return;
+
+      const sfx = base.cloneNode() as HTMLAudioElement;
       sfx.volume = clickVolRef.current;
       sfx.currentTime = 0;
       void sfx.play().catch(() => {});
     };
 
-    // 事件：滑入（用 pointerenter 取代 mouseover，避免子元素冒泡狂觸發）
-    const onPointerEnter = (e: PointerEvent) => {
-      if (mutedRef.current) return;
-      const el = (e.target as HTMLElement);
-      if (!el) return;
-      // 只有剛進入目標元素時播；限定 button 或 data-sound
-      const isTarget = el.matches("button, [data-sound]");
-      if (!isTarget) return;
-      if (el instanceof HTMLButtonElement && el.disabled) return;
+    // hover 只在有滑鼠的裝置
+    const hasMouse = matchMedia("(hover: hover)").matches && matchMedia("(pointer: fine)").matches;
 
-      const src = hoverBaseRef.current;
-      if (!src) return;
+    // 用捕獲階段的 pointerenter，避免因子元素冒泡造成多次觸發
+    const onPointerEnter = (e: Event) => {
+      if (!hasMouse || mutedRef.current) return;
+      const target = e.target as HTMLElement;
+      if (!isSoundTarget(target)) return;
 
-      const sfx = src.cloneNode() as HTMLAudioElement;
+      // 忽略 disabled 的 button
+      const btn = target.closest("button") as HTMLButtonElement | null;
+      if (btn?.disabled) return;
+
+      const base = hoverBaseRef.current;
+      if (!base) return;
+
+      const sfx = base.cloneNode() as HTMLAudioElement;
       sfx.volume = hoverVolRef.current;
       sfx.currentTime = 0;
       void sfx.play().catch(() => {});
     };
 
+    // 鍵盤 Enter/Space 也給 click 聲
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (mutedRef.current) return;
+      if (e.key !== "Enter" && e.key !== " ") return;
+      const target = e.target as HTMLElement;
+      if (!isSoundTarget(target)) return;
+
+      const base = clickBaseRef.current;
+      if (!base) return;
+
+      const sfx = base.cloneNode() as HTMLAudioElement;
+      sfx.volume = clickVolRef.current;
+      sfx.currentTime = 0;
+      void sfx.play().catch(() => {});
+    };
+
     document.addEventListener("pointerdown", onPointerDown, { passive: true });
-    document.addEventListener("pointerenter", onPointerEnter, true); // 捕獲階段讓 enter 穩定
+    document.addEventListener("pointerenter", onPointerEnter, true);
+    document.addEventListener("keydown", onKeyDown, { passive: true });
 
     return () => {
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("pointerenter", onPointerEnter, true);
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", unlockOnce);
     };
   }, []);
 
   return (
     <html lang="zh-Hant">
       <head>
-        {/* 載入商店 / 頭框 / 銀行的樣式 */}
+        {/* 預載音效，減少第一次延遲 */}
+        <link rel="preload" as="audio" href={CLICK_SRC} />
+        <link rel="preload" as="audio" href={HOVER_SRC} />
+
+        {/* 既有樣式 */}
         <link rel="stylesheet" href="/styles/shop.css" />
         <link rel="stylesheet" href="/styles/headframes.css" />
         <link rel="stylesheet" href="/styles/bank.css" />
 
-        {/* 小小樣式：音效開關按鈕 */}
+        {/* 音效開關樣式 */}
         <style>{`
           .sfx-toggle {
             position: fixed;
@@ -130,7 +196,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         `}</style>
       </head>
       <body>
-        {/* 全域音效開關（顯示狀態、可切換） */}
+        {/* 全域音效開關（會記住狀態） */}
         <button
           type="button"
           className={`sfx-toggle ${muted ? "sfx-off" : "sfx-on"}`}
@@ -143,7 +209,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         {children}
 
-        {/* afterInteractive：等可互動再載，避免阻塞渲染 */}
+        {/* 既有客服 Script */}
         <Script
           id="tawk-embed"
           src="https://embed.tawk.to/68b349c7d19aeb19234310df/1j3u5gcnb"
