@@ -255,6 +255,7 @@ export default function ProfilePage() {
           <HeadframeSelector
             owned={ownedHeadframes}
             equipped={(form.headframe as HeadframeCode) || "NONE"}
+            avatarUrl={form.avatarUrl || undefined}
           />
           <small className="pf-help" style={{ display: "block", marginTop: 8 }}>
             套用後若未即時反映在左側頭像，可重新整理或稍後再次開啟本頁。

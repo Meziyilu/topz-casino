@@ -1,7 +1,6 @@
 "use client";
 
 import { cn } from "../../lib/utils";
-import Image from "next/image";
 import { HTMLAttributes } from "react";
 
 export type HeadframeCode = "NONE" | "GOLD" | "NEON" | "CRYSTAL" | "DRAGON";
@@ -11,6 +10,7 @@ type Props = {
   selected?: boolean;
   locked?: boolean;
   onClick?: () => void;
+  avatarUrl?: string; // ← 新增：顯示玩家頭像用
 } & Omit<HTMLAttributes<HTMLDivElement>, "onClick">;
 
 const FRAME_STYLE: Record<HeadframeCode, string> = {
@@ -29,7 +29,29 @@ const NAME: Record<HeadframeCode, string> = {
   DRAGON: "龍紋",
 };
 
-export function HeadframeCard({ code, selected, locked, onClick, className, ...rest }: Props) {
+// 內嵌 SVG 當佔位圖（不依賴任何檔案）
+const PLACEHOLDER_SVG =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160">
+      <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#1e293b"/><stop offset="1" stop-color="#0f172a"/>
+      </linearGradient></defs>
+      <rect width="100%" height="100%" fill="url(#g)"/>
+      <circle cx="80" cy="64" r="28" fill="#334155"/>
+      <rect x="40" y="102" width="80" height="30" rx="15" fill="#334155"/>
+    </svg>`
+  );
+
+export function HeadframeCard({
+  code,
+  selected,
+  locked,
+  onClick,
+  className,
+  avatarUrl,
+  ...rest
+}: Props) {
   return (
     <div
       role="button"
@@ -44,17 +66,16 @@ export function HeadframeCard({ code, selected, locked, onClick, className, ...r
     >
       <div
         className={cn(
-          "mx-auto aspect-square w-20 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 ring-offset-2",
+          "mx-auto aspect-square w-20 overflow-hidden rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 ring-offset-2",
           FRAME_STYLE[code],
           selected && "ring-offset-cyan-300"
         )}
       >
-        <Image
-          src="/avatar-placeholder.png"
+        <img
+          src={avatarUrl || PLACEHOLDER_SVG}
           alt="avatar"
-          width={160}
-          height={160}
-          className="h-full w-full rounded-2xl object-cover"
+          className="h-full w-full object-cover"
+          draggable={false}
         />
       </div>
 

@@ -4,13 +4,14 @@ import { useMemo, useState, useTransition } from "react";
 import { HeadframeCard, HeadframeCode } from "./HeadframeCard";
 
 type Props = {
-  owned: HeadframeCode[];     // 玩家擁有
-  equipped: HeadframeCode;    // 目前裝備
+  owned: HeadframeCode[];
+  equipped: HeadframeCode;
+  avatarUrl?: string; // ← 新增：從外面傳進來
 };
 
 const ALL_CODES: HeadframeCode[] = ["NONE", "GOLD", "NEON", "CRYSTAL", "DRAGON"];
 
-export default function HeadframeSelector({ owned, equipped }: Props) {
+export default function HeadframeSelector({ owned, equipped, avatarUrl }: Props) {
   const [current, setCurrent] = useState<HeadframeCode>(equipped);
   const [preview, setPreview] = useState<HeadframeCode>(equipped);
   const [isPending, startTransition] = useTransition();
@@ -49,7 +50,6 @@ export default function HeadframeSelector({ owned, equipped }: Props) {
 
   return (
     <section className="space-y-4">
-      {/* 預覽列 */}
       <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-4">
         <div className="space-y-1">
           <h3 className="text-base font-semibold text-slate-100">頭框預覽</h3>
@@ -74,7 +74,6 @@ export default function HeadframeSelector({ owned, equipped }: Props) {
         </div>
       </div>
 
-      {/* 卡片清單 */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
         {displayList.map((code) => {
           const locked = !owned.includes(code) && code !== "NONE";
@@ -85,6 +84,7 @@ export default function HeadframeSelector({ owned, equipped }: Props) {
               locked={locked}
               selected={preview === code}
               onClick={() => setPreview(code)}
+              avatarUrl={avatarUrl} // ← 傳進卡片
             />
           );
         })}
