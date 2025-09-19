@@ -4,10 +4,10 @@ import { useCallback, useMemo, useState } from "react";
 import HeadframeCard, { HeadframeCode } from "./HeadframeCard";
 
 type Props = {
-  owned: HeadframeCode[];              // 玩家擁有的頭框
-  equipped: HeadframeCode;             // 目前已裝備
-  avatarUrl?: string;                  // 玩家頭像（可選）
-  onApplied?: (code: HeadframeCode) => void; // 套用成功後的回呼（可選）
+  owned: HeadframeCode[];
+  equipped: HeadframeCode;
+  avatarUrl?: string;
+  onApplied?: (code: HeadframeCode) => void;
 };
 
 const ALL_CODES: HeadframeCode[] = ["NONE", "GOLD", "NEON", "CRYSTAL", "DRAGON"];
@@ -32,18 +32,14 @@ export default function HeadframeSelector({ owned, equipped, avatarUrl, onApplie
     setHint("");
 
     try {
-      // 直接更新個人資料的 headframe
       const res = await fetch("/api/profile/me", {
         method: "PUT",
         headers: { "content-type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ headframe: selected }),
       });
-
       const d = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(d?.error || "套用失敗");
-      }
+      if (!res.ok) throw new Error(d?.error || "套用失敗");
 
       setHint("已套用 ✅");
       onApplied?.(selected);
@@ -56,8 +52,8 @@ export default function HeadframeSelector({ owned, equipped, avatarUrl, onApplie
   }, [canApply, selected, onApplied]);
 
   return (
-    <div className="flex flex-col gap-3">
-      {/* 置中的固定網格：永遠固定卡片尺寸，每列 5 張（窄螢幕自動換行） */}
+    <div className="headframe-selector flex flex-col gap-3">
+      {/* 置中的固定網格：每列 5 張（窄螢幕自動換行） */}
       <div className="mx-auto grid max-w-[680px] grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
         {ALL_CODES.map((code) => {
           const locked = isLocked(code);
@@ -84,9 +80,7 @@ export default function HeadframeSelector({ owned, equipped, avatarUrl, onApplie
         </div>
 
         <div className="flex items-center gap-2">
-          {hint && (
-            <span className="text-sm text-slate-300">{hint}</span>
-          )}
+          {hint && <span className="text-sm text-slate-300">{hint}</span>}
           <button
             disabled={!canApply}
             onClick={apply}

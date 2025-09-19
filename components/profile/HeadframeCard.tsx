@@ -29,7 +29,6 @@ const NAME: Record<HeadframeCode, string> = {
   DRAGON: "龍紋",
 };
 
-// 內嵌 SVG 當預設頭像（避免外部依賴）
 const PLACEHOLDER_SVG =
   "data:image/svg+xml;utf8," +
   encodeURIComponent(
@@ -43,12 +42,6 @@ const PLACEHOLDER_SVG =
     </svg>`
   );
 
-/**
- * 單張頭框卡片（尺寸永遠固定）
- * - 外框：w-[118px] 固定
- * - 頭像容器：aspect-square + w-[88px] 固定
- * - 圖片 object-cover，永不超框
- */
 export function HeadframeCard({
   code,
   selected,
@@ -63,18 +56,19 @@ export function HeadframeCard({
       role="button"
       onClick={locked ? undefined : onClick}
       className={cn(
+        "hf-card", // 🔒 讓 profile.css 的尺寸鎖能抓到
         "relative flex w-[118px] flex-col items-center rounded-2xl border border-white/10 bg-white/5 p-3",
         "transition-transform hover:scale-[1.02] active:scale-[0.99]",
-        "select-none", // 避免拖拉選取
+        "select-none",
         locked && "opacity-55 cursor-not-allowed",
         selected && "border-cyan-300/50 bg-white/[0.07]",
         className
       )}
       {...rest}
     >
-      {/* 固定 1:1 頭像區，圖片永遠不會超出 */}
       <div
         className={cn(
+          "hf-ava", // 🔒 讓 profile.css 的尺寸鎖能抓到
           "relative aspect-square w-[88px] overflow-hidden rounded-2xl",
           "bg-gradient-to-br from-slate-800 to-slate-900 ring-offset-2",
           FRAME_STYLE[code],
@@ -93,7 +87,6 @@ export function HeadframeCard({
             已裝備
           </div>
         )}
-
         {locked && (
           <div className="absolute inset-0 grid place-items-center rounded-2xl bg-slate-900/40 text-[11px] text-slate-200">
             未擁有
@@ -101,7 +94,6 @@ export function HeadframeCard({
         )}
       </div>
 
-      {/* 名稱列：固定高度，避免因文字不齊而跳動 */}
       <div className="mt-2 h-[34px] w-full text-center">
         <div className="truncate text-[13px] font-medium text-slate-100">{NAME[code]}</div>
         {!locked && !selected && <div className="text-[11px] text-slate-400">點擊預覽</div>}
