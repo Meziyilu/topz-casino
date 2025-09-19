@@ -1,6 +1,6 @@
 "use client";
 
-import { cn } from "@/lib/utils";
+import { cn } from "../../lib/utils";
 import Image from "next/image";
 import { HTMLAttributes } from "react";
 
@@ -13,7 +13,6 @@ type Props = {
   onClick?: () => void;
 } & Omit<HTMLAttributes<HTMLDivElement>, "onClick">;
 
-// 依不同頭框定義邊框/發光風格（可再微調）
 const FRAME_STYLE: Record<HeadframeCode, string> = {
   NONE: "ring-0",
   GOLD: "ring-2 ring-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.35)]",
@@ -43,7 +42,6 @@ export function HeadframeCard({ code, selected, locked, onClick, className, ...r
       )}
       {...rest}
     >
-      {/* 頭像容器（示意）：你可以換成玩家頭像 */}
       <div
         className={cn(
           "mx-auto aspect-square w-20 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 ring-offset-2",
@@ -51,9 +49,8 @@ export function HeadframeCard({ code, selected, locked, onClick, className, ...r
           selected && "ring-offset-cyan-300"
         )}
       >
-        {/* 可放玩家頭像 */}
         <Image
-          src="/avatar-placeholder.png" // 提供一張占位圖 /public/avatar-placeholder.png
+          src="/avatar-placeholder.png"
           alt="avatar"
           width={160}
           height={160}
@@ -72,7 +69,6 @@ export function HeadframeCard({ code, selected, locked, onClick, className, ...r
         )}
       </div>
 
-      {/* 選取高亮 */}
       {selected && (
         <div className="pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-cyan-300/60" />
       )}
