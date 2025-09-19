@@ -1,7 +1,7 @@
 "use client";
 
-import { cn } from "../../lib/utils";
 import { HTMLAttributes } from "react";
+import { cn } from "@/lib/utils";
 
 export type HeadframeCode = "NONE" | "GOLD" | "NEON" | "CRYSTAL" | "DRAGON";
 
@@ -10,7 +10,7 @@ type Props = {
   selected?: boolean;
   locked?: boolean;
   onClick?: () => void;
-  avatarUrl?: string; // 玩家頭像（可選）
+  avatarUrl?: string;
 } & Omit<HTMLAttributes<HTMLDivElement>, "onClick">;
 
 const FRAME_STYLE: Record<HeadframeCode, string> = {
@@ -29,7 +29,7 @@ const NAME: Record<HeadframeCode, string> = {
   DRAGON: "龍紋",
 };
 
-// 內嵌 SVG 佔位圖（無需放檔案）
+// 內嵌 SVG 當預設頭像（避免外部依賴）
 const PLACEHOLDER_SVG =
   "data:image/svg+xml;utf8," +
   encodeURIComponent(
@@ -43,6 +43,12 @@ const PLACEHOLDER_SVG =
     </svg>`
   );
 
+/**
+ * 單張頭框卡片（尺寸永遠固定）
+ * - 外框：w-[118px] 固定
+ * - 頭像容器：aspect-square + w-[88px] 固定
+ * - 圖片 object-cover，永不超框
+ */
 export function HeadframeCard({
   code,
   selected,
@@ -57,19 +63,19 @@ export function HeadframeCard({
       role="button"
       onClick={locked ? undefined : onClick}
       className={cn(
-        // 固定卡片寬高，避免版面跳動；在不同螢幕仍可塞五張（grid 控制列數）
-        "relative flex w-[112px] flex-col items-center rounded-2xl border border-white/10 bg-white/5 p-3",
+        "relative flex w-[118px] flex-col items-center rounded-2xl border border-white/10 bg-white/5 p-3",
         "transition-transform hover:scale-[1.02] active:scale-[0.99]",
+        "select-none", // 避免拖拉選取
         locked && "opacity-55 cursor-not-allowed",
         selected && "border-cyan-300/50 bg-white/[0.07]",
         className
       )}
       {...rest}
     >
-      {/* 頭像預覽容器：固定正方形，不會被大圖撐爆 */}
+      {/* 固定 1:1 頭像區，圖片永遠不會超出 */}
       <div
         className={cn(
-          "relative aspect-square w-[84px] overflow-hidden rounded-2xl",
+          "relative aspect-square w-[88px] overflow-hidden rounded-2xl",
           "bg-gradient-to-br from-slate-800 to-slate-900 ring-offset-2",
           FRAME_STYLE[code],
           selected && "ring-offset-cyan-300"
@@ -78,18 +84,16 @@ export function HeadframeCard({
         <img
           src={avatarUrl || PLACEHOLDER_SVG}
           alt="avatar"
-          className="h-full w-full object-cover object-center select-none"
+          className="h-full w-full object-cover object-center pointer-events-none"
           draggable={false}
         />
 
-        {/* 已裝備角標 */}
         {selected && (
           <div className="absolute right-1 top-1 rounded-md bg-cyan-500/90 px-1.5 py-[2px] text-[10px] font-semibold text-white">
             已裝備
           </div>
         )}
 
-        {/* 鎖定遮罩 */}
         {locked && (
           <div className="absolute inset-0 grid place-items-center rounded-2xl bg-slate-900/40 text-[11px] text-slate-200">
             未擁有
@@ -97,19 +101,18 @@ export function HeadframeCard({
         )}
       </div>
 
-      {/* 名稱＋狀態：固定高度，避免文字行數差造成高度不一致 */}
+      {/* 名稱列：固定高度，避免因文字不齊而跳動 */}
       <div className="mt-2 h-[34px] w-full text-center">
         <div className="truncate text-[13px] font-medium text-slate-100">{NAME[code]}</div>
-        {!locked && !selected && (
-          <div className="text-[11px] text-slate-400">點擊預覽</div>
-        )}
+        {!locked && !selected && <div className="text-[11px] text-slate-400">點擊預覽</div>}
         {locked && <div className="text-[11px] text-slate-400">尚未擁有</div>}
       </div>
 
-      {/* 外框高亮 */}
       {selected && (
         <div className="pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-cyan-300/40" />
       )}
     </div>
   );
 }
+
+export default HeadframeCard;

@@ -1,103 +1,103 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
-import { HeadframeCard, HeadframeCode } from "./HeadframeCard";
+import { useCallback, useMemo, useState } from "react";
+import HeadframeCard, { HeadframeCode } from "./HeadframeCard";
 
 type Props = {
-  owned: HeadframeCode[];
-  equipped: HeadframeCode;
-  avatarUrl?: string; // ← 新增：從外面傳進來
+  owned: HeadframeCode[];              // 玩家擁有的頭框
+  equipped: HeadframeCode;             // 目前已裝備
+  avatarUrl?: string;                  // 玩家頭像（可選）
+  onApplied?: (code: HeadframeCode) => void; // 套用成功後的回呼（可選）
 };
 
 const ALL_CODES: HeadframeCode[] = ["NONE", "GOLD", "NEON", "CRYSTAL", "DRAGON"];
 
-export default function HeadframeSelector({ owned, equipped, avatarUrl }: Props) {
-  const [current, setCurrent] = useState<HeadframeCode>(equipped);
-  const [preview, setPreview] = useState<HeadframeCode>(equipped);
-  const [isPending, startTransition] = useTransition();
-  const [msg, setMsg] = useState<string>("");
+export default function HeadframeSelector({ owned, equipped, avatarUrl, onApplied }: Props) {
+  const [selected, setSelected] = useState<HeadframeCode>(equipped);
+  const [saving, setSaving] = useState(false);
+  const [hint, setHint] = useState<string>("");
 
-  const displayList = useMemo(() => {
-    const ownSet = new Set(owned);
-    return ALL_CODES.slice().sort((a, b) => Number(ownSet.has(b)) - Number(ownSet.has(a)));
-  }, [owned]);
+  const isLocked = useCallback(
+    (code: HeadframeCode) => !owned.includes(code),
+    [owned]
+  );
 
-  const apply = (code: HeadframeCode) => {
-    if (!owned.includes(code) && code !== "NONE") {
-      setMsg("你尚未擁有此頭框");
-      return;
-    }
-    startTransition(async () => {
-      setMsg("");
-      try {
-        const res = await fetch("/api/profile/me", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ headframe: code }),
-        });
-        if (!res.ok) {
-          const err = await safeMsg(res);
-          throw new Error(err || "裝備失敗");
-        }
-        setCurrent(code);
-        setPreview(code);
-        setMsg("已裝備新頭框");
-      } catch (e: any) {
-        setMsg(e?.message ?? "發生錯誤");
+  const canApply = useMemo(() => {
+    return selected !== equipped && !isLocked(selected) && !saving;
+  }, [selected, equipped, saving, isLocked]);
+
+  const apply = useCallback(async () => {
+    if (!canApply) return;
+    setSaving(true);
+    setHint("");
+
+    try {
+      // 直接更新個人資料的 headframe
+      const res = await fetch("/api/profile/me", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ headframe: selected }),
+      });
+
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(d?.error || "套用失敗");
       }
-    });
-  };
+
+      setHint("已套用 ✅");
+      onApplied?.(selected);
+    } catch (e: any) {
+      setHint(e?.message || "套用失敗");
+    } finally {
+      setSaving(false);
+      setTimeout(() => setHint(""), 1500);
+    }
+  }, [canApply, selected, onApplied]);
 
   return (
-    <section className="space-y-4">
-      <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-4">
-        <div className="space-y-1">
-          <h3 className="text-base font-semibold text-slate-100">頭框預覽</h3>
-          <p className="text-sm text-slate-400">點擊下方卡片可預覽，按「套用」儲存。</p>
-          {msg ? <p className="text-sm text-amber-300">{msg}</p> : null}
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            className="rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm text-slate-100 hover:bg-white/15 disabled:opacity-50"
-            onClick={() => setPreview(current)}
-            disabled={isPending || preview === current}
-          >
-            還原目前裝備
-          </button>
-          <button
-            className="rounded-lg bg-cyan-500/90 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-500 disabled:opacity-50"
-            onClick={() => apply(preview)}
-            disabled={isPending || preview === current}
-          >
-            {isPending ? "套用中…" : "套用"}
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
-        {displayList.map((code) => {
-          const locked = !owned.includes(code) && code !== "NONE";
+    <div className="flex flex-col gap-3">
+      {/* 置中的固定網格：永遠固定卡片尺寸，每列 5 張（窄螢幕自動換行） */}
+      <div className="mx-auto grid max-w-[680px] grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        {ALL_CODES.map((code) => {
+          const locked = isLocked(code);
           return (
             <HeadframeCard
               key={code}
               code={code}
+              selected={selected === code}
               locked={locked}
-              selected={preview === code}
-              onClick={() => setPreview(code)}
-              avatarUrl={avatarUrl} // ← 傳進卡片
+              avatarUrl={avatarUrl}
+              onClick={() => setSelected(code)}
             />
           );
         })}
       </div>
-    </section>
-  );
-}
 
-async function safeMsg(res: Response) {
-  try {
-    const data = await res.json();
-    return data?.message || data?.error;
-  } catch {
-    return undefined;
-  }
+      {/* 操作列（固定寬度置中） */}
+      <div className="mx-auto flex w-full max-w-[680px] items-center justify-between gap-2">
+        <div className="text-sm text-slate-400">
+          目前：<span className="font-semibold text-slate-200">{equipped}</span>
+          <span className="mx-2">→</span>
+          預覽：<span className="font-semibold text-cyan-300">{selected}</span>
+          {isLocked(selected) && <span className="ml-2 text-amber-300">（尚未擁有）</span>}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {hint && (
+            <span className="text-sm text-slate-300">{hint}</span>
+          )}
+          <button
+            disabled={!canApply}
+            onClick={apply}
+            className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-sm font-bold text-slate-100 shadow-sm transition
+                       enabled:hover:translate-y-[-1px] enabled:hover:bg-white/14 enabled:hover:shadow
+                       disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {saving ? "套用中…" : "套用"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
