@@ -277,3 +277,31 @@
 /* ============ 兼容：避免與檔尾 avatar.css 衝突 ============ */
 /* 用更高權重覆蓋可能的固定尺寸或陰影；保留其光效/動畫 */
 .pf-wrap .pf-avatar { width: var(--pf-ava); height: auto; }
+
+/* 頭框選擇器縮圖統一尺寸（避免原圖把卡片撐爆） */
+.headframe-selector .hf-card,
+.hf-card {
+  width: 84px;
+  height: 84px;
+  border-radius: 12px;
+  overflow: hidden;            /* 確保不溢出 */
+}
+
+.headframe-selector .hf-ava,
+.hf-ava {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+
+/* ✅ 關鍵：把圖片壓進容器 */
+.headframe-selector .hf-ava img,
+.hf-ava img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
