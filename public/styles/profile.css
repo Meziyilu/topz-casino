@@ -305,3 +305,47 @@
   object-fit: cover;
   display: block;
 }
+
+/* ==== HeadframeSelector 強制尺寸鎖定（貼在 profile.css 最底部） ==== */
+.pf-wrap .headframe-selector .pf-avatar,
+.pf-wrap .headframe-selector .pf-ava-core,
+.pf-wrap .headframe-selector .pf-ava-core img {
+  /* 確保任何來自其他檔案的 img 規則都被壓掉 */
+  max-width: none !important;
+  max-height: none !important;
+}
+
+/* 單張卡片外框固定（若 Tailwind class 被覆寫，這裡再鎖一次） */
+.pf-wrap .headframe-selector .w-\[118px\],
+.pf-wrap .headframe-selector .w-\[112px\],
+.pf-wrap .headframe-selector .w-\[104px\] {
+  width: 104px !important; /* 統一縮到 104px */
+}
+
+/* 頭像預覽容器固定 1:1 並縮小 */
+.pf-wrap .headframe-selector .aspect-square {
+  width: 76px !important;
+  height: 76px !important;
+  border-radius: 14px !important;
+  overflow: hidden !important;
+}
+
+/* 圖片本體永遠填滿容器（不會溢出/不會變形） */
+.pf-wrap .headframe-selector .aspect-square img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  object-position: center !important;
+  display: block !important;
+}
+
+/* 名稱列高度固定，避免卡片跳動 */
+.pf-wrap .headframe-selector .mt-2.h-\[34px\] {
+  height: 32px !important;
+}
+
+/* Grid 容器寬度上限、置中 */
+.pf-wrap .headframe-selector .max-w-\[680px\],
+.pf-wrap .headframe-selector .max-w-\[640px\] {
+  max-width: 640px !important;
+}
