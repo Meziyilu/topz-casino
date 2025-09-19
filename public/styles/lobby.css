@@ -15,6 +15,21 @@
   --border:rgba(255,255,255,.16);
   --shadow:rgba(0,0,0,.35);
   --blur:14px;
+
+  /* 新增：排版尺寸 */
+  --page-pad: clamp(16px, 4vw, 40px);
+  --col-gap: clamp(14px, 2vw, 20px);
+  --radius: 16px;
+
+  /* 字級比例 */
+  --fz-s: clamp(12px, 1.6vw, 13px);
+  --fz-m: clamp(13px, 1.8vw, 14px);
+  --fz-l: clamp(15px, 2.1vw, 16px);
+  --fz-xl: clamp(18px, 2.6vw, 22px);
+  --fz-xxl: clamp(24px, 4.4vw, 28px);
+
+  /* 卡片高度（橫向時會下修） */
+  --card-min-h: 260px;
 }
 
 :root[data-theme="light"]{
@@ -77,26 +92,22 @@
 /* ===== Header ===== */
 .lb-header{
   display:grid;
-  grid-template-columns:220px 1fr auto;
+  grid-template-columns:minmax(160px,220px) 1fr auto;
   gap:16px;
   align-items:center;
-  padding:18px clamp(16px,4vw,40px);
+  padding:18px max(var(--page-pad), env(safe-area-inset-left)) 18px max(var(--page-pad), env(safe-area-inset-right));
 }
 .lb-logo{
   font-weight:800;
   letter-spacing:.08em;
-  font-size:clamp(18px,2.2vw,24px);
+  font-size:var(--fz-xl);
   color:var(--text);
   text-shadow:
     0 0 24px color-mix(in srgb, var(--accent) 50%, transparent),
     0 0 8px  color-mix(in srgb, var(--primary) 40%, transparent);
 }
-.lb-beta{
-  margin-left:8px;
-  color:var(--muted);
-  font-size:12px;
-}
-.lb-head-tools{ display:flex; align-items:center; gap:10px; }
+.lb-beta{ margin-left:8px; color:var(--muted); font-size:12px; }
+.lb-head-tools{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 .lb-user-mini{
   border:1px solid var(--border);
   background:linear-gradient(180deg, var(--glass), transparent);
@@ -104,15 +115,16 @@
   color:var(--text); text-decoration:none;
   backdrop-filter:blur(var(--blur));
   transition:.2s ease;
+  font-size:var(--fz-m);
 }
 .lb-user-mini:hover{ transform:translateY(-1px); box-shadow:0 6px 16px var(--shadow) }
 
 /* ===== 3-Column Layout ===== */
 .lb-grid{
   display:grid;
-  grid-template-columns:minmax(260px,320px) 1fr minmax(20px,260px);
-  gap:clamp(14px,2vw,20px);
-  padding:0 clamp(16px,4vw,40px) 40px;
+  grid-template-columns:minmax(260px,320px) 1fr minmax(220px,260px);
+  gap:var(--col-gap);
+  padding:0 max(var(--page-pad), env(safe-area-inset-left)) 40px max(var(--page-pad), env(safe-area-inset-right));
 }
 
 /* ===== Glass Card ===== */
@@ -134,12 +146,8 @@
   transform-style:preserve-3d;
 }
 .lb-card.center{ display:grid; place-items:center; }
-.lb-card.tall{ min-height:260px; }
-.lb-card-title{
-  color:var(--muted);
-  font-size:14px;
-  margin-bottom:8px;
-}
+.lb-card.tall{ min-height:var(--card-min-h); }
+.lb-card-title{ color:var(--muted); font-size:var(--fz-m); margin-bottom:8px; }
 
 /* ===== Buttons & Lists ===== */
 .lb-actions{ display:flex; flex-wrap:wrap; gap:8px; }
@@ -150,6 +158,7 @@
   background:linear-gradient(180deg, var(--glass), transparent);
   backdrop-filter:blur(var(--blur));
   transition:.2s ease;
+  font-size:var(--fz-m);
 }
 .lb-btn:hover{ transform:translateY(-1px); box-shadow:0 6px 16px var(--shadow) }
 
@@ -161,6 +170,7 @@
 /* ===== Main Column (games + chat) ===== */
 .lb-main{ display:grid; gap:14px; }
 
+/* 遊戲卡片區：隨寬度調整欄數 */
 .lb-games{
   display:grid;
   grid-template-columns:repeat(2, minmax(200px,1fr));
@@ -177,6 +187,7 @@
   box-shadow:0 10px 24px var(--shadow), inset 0 0 0 1px rgba(255,255,255,.04);
   transform:translateZ(0);
   transition:transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+  min-height: 120px;
 }
 .lb-games a:hover{
   transform:translateY(-2px) scale(1.01);
@@ -186,7 +197,7 @@
     0 0 32px color-mix(in srgb, var(--primary) 30%, transparent);
 }
 
-/* ===== Chat (預留通用樣式，給 ChatBox 用不到也沒關係) ===== */
+/* ===== Chat（可選） ===== */
 .lb-chat{ display:grid; grid-template-rows:1fr auto; height:280px }
 .lb-chat-list{ overflow:auto; padding-right:6px }
 .lb-chat-row{ display:grid; grid-template-columns:48px 1fr; gap:8px; padding:6px 0; }
@@ -197,18 +208,21 @@
   width:100%; border-radius:10px;
   border:1px solid var(--border);
   background:linear-gradient(180deg, rgba(255,255,255,.04), transparent);
-  padding:10px 12px; color:var(--text);
+  padding:10px 12px; color:var(--text); font-size:var(--fz-m);
 }
 .lb-chat-input button{
   padding:10px 14px; border-radius:10px; color:var(--text);
   border:1px solid var(--border);
   background:linear-gradient(180deg, var(--glass), transparent);
+  font-size:var(--fz-m);
 }
 .lb-chat-input button:hover{ transform:translateY(-1px) }
 
 /* ===== Service Widget (右下角) ===== */
 .lb-service{
-  position:fixed; right:clamp(10px,2vw,18px); bottom:clamp(10px,3vh,18px);
+  position:fixed;
+  right:clamp(10px,2vw,18px);
+  bottom:calc(clamp(10px,3vh,18px) + env(safe-area-inset-bottom));
   display:grid; gap:8px; z-index:50;
 }
 .lb-service-btn{
@@ -217,17 +231,56 @@
   padding:10px 12px; backdrop-filter:blur(var(--blur));
   background:linear-gradient(180deg, var(--glass), transparent);
   box-shadow:0 8px 18px var(--shadow);
+  font-size:var(--fz-m);
 }
 .lb-service-btn.lv-live{ border-color:color-mix(in srgb, var(--primary) 50%, var(--border)) }
 
 /* ===== RWD ===== */
+
+/* 桌機 → 平板（≤1080）：三欄變單欄、遊戲 2 欄 */
 @media (max-width:1080px){
   .lb-grid{ grid-template-columns:1fr; }
   .right-col{ order:2 }
   .lb-main{ order:1 }
   .lb-games{ grid-template-columns:1fr 1fr; }
 }
+
+/* 手機（≤680）：Header 疊排、遊戲 1 欄、縮短聊天高度 */
 @media (max-width:680px){
-  .lb-header{ grid-template-columns:1fr; gap:10px }
+  .lb-header{ grid-template-columns:1fr; gap:10px; padding:14px max(var(--page-pad), env(safe-area-inset-left)) 8px max(var(--page-pad), env(safe-area-inset-right)); }
+  .lb-grid{ padding:0 max(var(--page-pad), env(safe-area-inset-left)) 24px max(var(--page-pad), env(safe-area-inset-right)); }
   .lb-games{ grid-template-columns:1fr; }
+  .lb-chat{ height:220px; }
+  .lb-card{ padding:12px; border-radius:var(--radius); }
+  .lb-user-mini{ padding:8px 10px; }
+}
+
+/* 超寬螢幕（≥1440）：主欄更鬆，遊戲 3 欄 */
+@media (min-width:1440px){
+  .lb-grid{ gap: max(var(--col-gap), 24px); }
+  .lb-games{ grid-template-columns: repeat(3, minmax(220px,1fr)); gap: 18px; }
+  .lb-card.tall{ min-height: calc(var(--card-min-h) + 40px); }
+}
+
+/* 極寬（≥1800）：遊戲 4 欄（若卡片內容許可） */
+@media (min-width:1800px){
+  .lb-games{ grid-template-columns: repeat(4, minmax(220px,1fr)); }
+}
+
+/* 橫向 + 低高度（手機橫放，高度 ≤ 540px）：降低卡片/聊天高度 */
+@media (orientation: landscape) and (max-height:540px){
+  :root{ --card-min-h: 200px; }
+  .lb-chat{ height:180px; }
+}
+
+/* 觸控裝置：弱化 hover 提示避免誤導 */
+@media (hover:none){
+  .lb-btn:hover,
+  .lb-user-mini:hover,
+  .lb-games a:hover{ transform:none; box-shadow:0 6px 16px var(--shadow); }
+}
+
+/* 使用者偏好減少動態：關閉背景飄動 */
+@media (prefers-reduced-motion: reduce){
+  *{ animation:none !important; transition:none !important; }
 }
