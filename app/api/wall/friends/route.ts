@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
+// 若你的 prisma 是 default export，請改成：import prisma from "@/lib/prisma";
 import { prisma } from "@/lib/prisma";
 import { getUserFromRequest } from "@/lib/auth";
 
@@ -14,17 +15,18 @@ export async function GET(req: Request) {
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "20", 10) || 20, 50);
   const cursor = searchParams.get("cursor") || undefined;
 
-  // 取好友 id
-  const links = await prisma.friend.findMany({
-    where: { userId: me.id },
-    select: { friendId: true },
+  // 取「與我相關」的無向好友關係
+  const links = await prisma.friendship.findMany({
+    where: { OR: [{ userAId: me.id }, { userBId: me.id }] },
+    select: { userAId: true, userBId: true },
   });
-  const friendIds = links.map(l => l.friendId);
 
+  // 萃取朋友 id（另一端）
+  const friendIds = links.map(l => (l.userAId === me.id ? l.userBId : l.userAId));
   const authorIds = [me.id, ...friendIds];
 
   const posts = await prisma.wallPost.findMany({
-    where: { authorId: { in: authorIds } },
+    where: { userId: { in: authorIds }, hidden: false },
     orderBy: { createdAt: "desc" },
     take: limit + 1,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -32,7 +34,7 @@ export async function GET(req: Request) {
       id: true,
       body: true,
       createdAt: true,
-      author: { select: { id: true, displayName: true, avatarUrl: true, vipTier: true } },
+      user: { select: { id: true, displayName: true, avatarUrl: true, vipTier: true } },
     },
   });
 
@@ -42,5 +44,18 @@ export async function GET(req: Request) {
     nextCursor = nextItem.id;
   }
 
-  return NextResponse.json({ items: posts, nextCursor });
+  // 對齊前端 FriendWall.tsx 欄位（author）
+  const items = posts.map(p => ({
+    id: p.id,
+    body: p.body,
+    createdAt: p.createdAt,
+    author: {
+      id: p.user.id,
+      displayName: p.user.displayName,
+      avatarUrl: p.user.avatarUrl,
+      vipTier: p.user.vipTier,
+    },
+  }));
+
+  return NextResponse.json({ items, nextCursor });
 }
