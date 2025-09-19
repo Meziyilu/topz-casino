@@ -53,3 +53,196 @@
 .ann-item:last-child { border-bottom: 0; padding-bottom: 0; }
 .ann-title { font-weight: 700; }
 .ann-body { opacity: .9; white-space: pre-wrap; }
+
+/* =========================
+   LOBBY Responsive Layout
+   ========================= */
+
+/* 基礎欄寬與間距（可依喜好微調） */
+:root {
+  --lb-gap: 16px;
+  --lb-left-w: 300px;   /* 左欄寬 */
+  --lb-right-w: 320px;  /* 右欄寬 */
+}
+
+/* 三欄桌機：Left | Main | Right */
+.lb-grid {
+  display: grid;
+  grid-template-columns: var(--lb-left-w) 1fr var(--lb-right-w);
+  grid-template-areas: "left main right";
+  gap: var(--lb-gap);
+  align-items: start;
+}
+
+/* 指定區塊對應網格區域 */
+.lb-col:not(.right-col) { grid-area: left; }
+.lb-main { grid-area: main; min-width: 0; }
+.right-col { grid-area: right; }
+
+/* Header：三段式排列，中央跑馬燈要能壓縮 */
+.lb-header {
+  display: grid;
+  grid-template-columns: 1fr minmax(0, 720px) 1fr;
+  align-items: center;
+  gap: 12px;
+}
+.lb-header .left { justify-self: start; display: flex; align-items: center; gap: 10px; }
+.lb-header .center { justify-self: center; min-width: 0; }
+.lb-header .right { justify-self: end; min-width: 0; }
+
+/* 跑馬燈容器避免撐爆 */
+.lb-header .center > * { min-width: 0; }
+
+/* 遊戲卡片：桌機四欄 */
+.lb-games {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--lb-gap);
+}
+
+/* 公告列表：文字過長截斷 */
+#ann-list .ann-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#ann-list .ann-body  { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ChatBox 在不同高度的最小高 */
+.lb-main .chatbox {
+  min-height: 340px;
+}
+
+/* -------------------------
+   ≥ 1280px 大桌機：微放大左/右欄
+   ------------------------- */
+@media (min-width: 1280px) {
+  :root {
+    --lb-left-w: 320px;
+    --lb-right-w: 360px;
+  }
+}
+
+/* -------------------------
+   ≤ 1200px：改成兩欄（右欄下移）
+   ------------------------- */
+@media (max-width: 1200px) {
+  .lb-grid {
+    grid-template-columns: var(--lb-left-w) 1fr;
+    grid-template-areas:
+      "left main"
+      "right right";
+  }
+  .right-col {
+    /* 讓右欄變成兩欄寬，顯示在下方 */
+    width: 100%;
+  }
+
+  /* 遊戲卡片縮為三欄 */
+  .lb-games {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* -------------------------
+   ≤ 992px：Header 堆疊 + 兩欄主體（Left → Main，Right 置底）
+   ------------------------- */
+@media (max-width: 992px) {
+  .lb-header {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "left right"
+      "center center";
+    row-gap: 8px;
+  }
+  .lb-header .left  { grid-area: left; }
+  .lb-header .center{ grid-area: center; }
+  .lb-header .right { grid-area: right; justify-self: end; }
+
+  /* 右上角按鈕群縮小間距 */
+  .lb-header .right { gap: 6px !important; }
+
+  .lb-grid {
+    grid-template-columns: 1fr; /* 單欄，但我們調整順序讓 Main 先、Left 次、Right 最後 */
+    grid-template-areas:
+      "main"
+      "left"
+      "right";
+  }
+
+  /* 遊戲卡片縮為兩欄 */
+  .lb-games {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* 公告卡、銀行卡間距稍微縮小 */
+  .lb-card,
+  .lb-bank { margin-bottom: 12px; }
+}
+
+/* -------------------------
+   ≤ 768px：手機版單欄，精簡 Header
+   ------------------------- */
+@media (max-width: 768px) {
+  :root { --lb-gap: 12px; }
+
+  .lb-wrap { padding-inline: 12px; }
+
+  .lb-header {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "left right"
+      "center center";
+  }
+
+  /* 精簡 header 右側：隱藏名稱、縮按鈕 */
+  .lb-header .right .lb-user-mini .name { display: none; }
+  .lb-header .right .lb-btn { padding: 6px 10px !important; font-size: 12px; }
+
+  /* 遊戲卡片單欄排列（更大更好點） */
+  .lb-games {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  /* ProfileCard、Leaderboard 等卡片內邊距縮小 */
+  .lb-card,
+  .lb-bank,
+  .lb-col .pf-card,
+  .lb-col .lb-card.tall {
+    padding: 12px;
+  }
+
+  /* 公告文字尺寸稍降，避免占版 */
+  #ann-list .ann-title { font-size: 14px; }
+  #ann-list .ann-body  { font-size: 13px; }
+
+  /* ChatBox 低一點高度以免超長 */
+  .lb-main .chatbox { min-height: 280px; }
+}
+
+/* -------------------------
+   超小螢幕 ≤ 360px：保命級縮排
+   ------------------------- */
+@media (max-width: 360px) {
+  .lb-header .lb-logo { font-size: 16px; }
+  .lb-header .lb-beta { display: none; }
+  .lb-header .right .lb-btn { padding: 5px 8px !important; font-size: 11px; }
+}
+
+/* -------------------------
+   通用小優化
+   ------------------------- */
+
+/* 讓卡片、清單在窄螢幕不溢出 */
+.lb-card, .lb-bank, .lb-col, .lb-main { min-width: 0; }
+
+/* 連結/按鈕在行內時避免擠爆 */
+a.lb-btn-mini, .lb-btn-mini, .lb-btn {
+  white-space: nowrap;
+}
+
+/* 跑馬燈條在窄螢幕縮短高度 */
+.announcement-ticker { min-height: 28px; }
+
+/* 服務小工具在手機固定於右下，但與聊天並存 */
+.service-widget {
+  right: 14px;
+  bottom: 14px;
+}
