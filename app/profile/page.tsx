@@ -3,7 +3,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import HeadframeSelector from "../../components/profile/HeadframeSelector"; // ← 相對路徑匯入
+import HeadframeSelector from "../../components/profile/HeadframeSelector"; // ← 你的既有相對路徑
+import FriendsPanel from "@/components/profile/FriendsPanel";  // ← 新增
+import FriendWall from "@/components/profile/FriendWall";      // ← 新增
 
 type HeadframeCode = "NONE" | "GOLD" | "NEON" | "CRYSTAL" | "DRAGON";
 
@@ -332,6 +334,12 @@ export default function ProfilePage() {
         <div className="pf-ring pf-ring-1" />
         <div className="pf-ring pf-ring-2" />
       </section>
+
+      {/* ✅ 好友清單 / 新增刪除 */}
+      <FriendsPanel />
+
+      {/* ✅ 好友牆 */}
+      <FriendWall />
 
       {/* Toast */}
       {toast && <div className={`pf-toast ${toast.type === "ok" ? "ok" : "err"}`}>{toast.text}</div>}
