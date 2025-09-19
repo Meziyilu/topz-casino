@@ -15,6 +15,12 @@
 
   /* 可被頁面覆寫的色調（頭框/面板） */
   --pf-tint: #00d1ff;
+
+  /* RWD 增補：全域尺寸 */
+  --pf-page-pad: clamp(14px, 3vw, 28px);
+  --pf-ava: clamp(84px, 12vw, 140px);
+  --pf-h1: clamp(20px, 2.6vw, 28px);
+  --pf-label: clamp(12px, 1.6vw, 14px);
 }
 
 /* ============ 背景與粒子 ============ */
@@ -28,7 +34,7 @@
     radial-gradient(900px 700px at 100% 0%, rgba(139,92,246,.16), transparent 60%),
     radial-gradient(600px 500px at 60% 100%, rgba(52,211,153,.12), transparent 60%),
     var(--pf-bg);
-  padding: clamp(16px, 3vw, 28px);
+  padding: var(--pf-page-pad);
 }
 .pf-particles::before,
 .pf-particles::after{
@@ -43,26 +49,26 @@
   pointer-events:none;
 }
 .pf-particles::after{ filter: blur(2px); opacity:.65; animation-duration: 52s; }
-@keyframes pf-drift {
-  from { transform: translate3d(0,0,0) }
-  to   { transform: translate3d(-10%, -6%, 0) }
-}
+@keyframes pf-drift { from { transform: translate3d(0,0,0) } to { transform: translate3d(-10%, -6%, 0) } }
 
 /* ============ Header ============ */
 .pf-header{
   display:grid; grid-template-columns: 1fr auto; align-items:center;
   margin: 0 0 clamp(18px, 2.4vw, 26px);
+  gap: 10px;
 }
 .pf-logo{
   text-decoration:none; color:var(--pf-text); font-weight:800; letter-spacing:.08em;
   text-shadow: 0 0 18px color-mix(in srgb, var(--pf-accent) 45%, transparent);
+  font-size: clamp(16px, 2.2vw, 20px);
 }
-.pf-sub{ margin-left:10px; color:var(--pf-muted); font-weight:600; }
+.pf-sub{ margin-left:10px; color:var(--pf-muted); font-weight:600; font-size: var(--pf-label); }
 .pf-nav{
-  text-decoration:none; color:var(--pf-text); opacity:.85; margin-left:14px;
+  text-decoration:none; color:var(--pf-text); opacity:.9; margin-left:10px;
   border:1px solid var(--pf-border); padding:8px 12px; border-radius:10px;
   background: linear-gradient(180deg, var(--pf-glass), transparent);
   backdrop-filter: blur(var(--pf-blur));
+  font-size: clamp(12px, 1.6vw, 14px);
 }
 .pf-nav:hover{ transform: translateY(-1px); box-shadow: 0 8px 18px var(--pf-shadow) }
 
@@ -83,16 +89,19 @@
 /* ============ HERO 卡 ============ */
 .pf-hero{
   display:grid;
-  grid-template-columns: minmax(220px, 300px) 1fr;
-  gap: clamp(18px, 2.2vw, 28px);
-  padding: clamp(18px, 2.2vw, 28px);
-  margin-bottom: clamp(18px, 2.4vw, 28px);
+  grid-template-columns: minmax(200px, 300px) 1fr;
+  gap: clamp(16px, 2.2vw, 28px);
+  padding: clamp(16px, 2.2vw, 28px);
+  margin-bottom: clamp(16px, 2.4vw, 28px);
 }
 .pf-hero-left{ display:grid; place-items:center; }
 .pf-hero-right{ display:grid; align-content:center; gap: 10px; }
-.pf-name{ margin:0; font-size: clamp(22px, 2.6vw, 28px); letter-spacing:.02em; }
+.pf-name{ margin:0; font-size: var(--pf-h1); letter-spacing:.02em; }
 .pf-vip{ color:var(--pf-primary); font-weight:700; }
-.pf-balances{ display:grid; grid-template-columns: repeat(2, minmax(140px, 1fr)); gap:12px; margin-top:4px; }
+.pf-balances{
+  display:grid; grid-template-columns: repeat(2, minmax(120px, 1fr));
+  gap:12px; margin-top:4px;
+}
 .pf-bal{
   border:1px solid var(--pf-border); border-radius:12px; padding:12px;
   background: linear-gradient(180deg, rgba(255,255,255,.04), transparent);
@@ -100,7 +109,7 @@
 .pf-bal span{ color:var(--pf-muted); font-size:12px }
 .pf-bal b{ display:block; margin-top:6px; letter-spacing:.04em }
 
-/* 掃光效果（通用，可抽成工具 class） */
+/* 掃光效果 */
 .pf-hero-sheen{
   position:absolute; inset:0; overflow:hidden; pointer-events:none; border-radius:inherit;
 }
@@ -111,15 +120,12 @@
   transform: skewX(-15deg);
   animation: pf-sheen 4.8s ease-in-out infinite;
 }
-@keyframes pf-sheen{
-  0% { left:-120% } 60% { left:130% } 100% { left:130% }
-}
+@keyframes pf-sheen{ 0% { left:-120% } 60% { left:130% } 100% { left:130% } }
 
 /* ============ Avatar + 頭框 ============ */
-.pf-avatar{
-  position:relative; width: 140px; aspect-ratio:1; border-radius:50%;
-  display:grid; place-items:center;
-  isolation:isolate;
+.pf-wrap .pf-avatar{
+  position:relative; width: var(--pf-ava); aspect-ratio:1; border-radius:50%;
+  display:grid; place-items:center; isolation:isolate;
 }
 .pf-ava-core{
   position:relative; width:100%; height:100%;
@@ -129,10 +135,10 @@
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
 }
 .pf-ava-core img{ width:100%; height:100%; object-fit:cover; display:block }
-.pf-ava-fallback{ width:100%; height:100%; display:grid; place-items:center; font-size:44px; color:#b9c7d6 }
+.pf-ava-fallback{ width:100%; height:100%; display:grid; place-items:center; font-size:clamp(28px, 6vw, 44px); color:#b9c7d6 }
 
 .pf-ava-frame{
-  position:absolute; inset:-8px; border-radius:50%;
+  position:absolute; inset:calc(var(--pf-ava) * -0.06); border-radius:50%;
   background:
     conic-gradient(from 0deg,
       color-mix(in srgb, var(--pf-tint) 75%, transparent),
@@ -143,7 +149,7 @@
   filter: blur(12px); opacity:.85; pointer-events:none;
 }
 .pf-ava-glow{
-  position:absolute; inset:-16px; border-radius:50%;
+  position:absolute; inset:calc(var(--pf-ava) * -0.12); border-radius:50%;
   box-shadow: 0 0 48px color-mix(in srgb, var(--pf-tint) 45%, transparent);
   pointer-events:none;
 }
@@ -158,7 +164,7 @@
 }
 .pf-file-btn input{ display:none }
 
-/* 範例頭框樣式（字串對應 class） */
+/* 指定幾個頭框樣式（保留） */
 .hf-gold .pf-ava-frame{ background: conic-gradient(#ffda6a, #ffd166, #ffaf45, #ffd166, #ffda6a); }
 .hf-cyan .pf-ava-frame{ background: conic-gradient(#67e8f9, #22d3ee, #06b6d4, #22d3ee, #67e8f9); }
 .hf-neon .pf-ava-frame{ background: conic-gradient(#22d3ee,#a78bfa,#34d399,#22d3ee); }
@@ -166,13 +172,13 @@
 
 /* ============ 編輯卡 ============ */
 .pf-card{
-  padding: clamp(18px, 2vw, 24px);
-  margin-bottom: clamp(18px, 2.4vw, 26px);
+  padding: clamp(16px, 2vw, 24px);
+  margin-bottom: clamp(16px, 2.4vw, 26px);
 }
 .pf-grid{
   display:grid;
   grid-template-columns: repeat(2, minmax(220px, 1fr));
-  gap: clamp(14px, 1.8vw, 20px);
+  gap: clamp(12px, 1.8vw, 20px);
 }
 .pf-field{ position:relative; }
 .pf-field.wide{ grid-column: 1 / -1; }
@@ -183,12 +189,13 @@
   border:1px solid var(--pf-border);
   background: linear-gradient(180deg, rgba(255,255,255,.05), transparent);
   padding: 14px 12px; outline:none;
+  font-size: clamp(14px, 1.8vw, 16px);
 }
 .pf-field textarea{ resize:vertical }
 
 .pf-field label{
   position:absolute; left:12px; top:10px; color:var(--pf-muted); pointer-events:none;
-  background: transparent; transition: .18s ease; padding:0 4px;
+  background: transparent; transition: .18s ease; padding:0 4px; font-size: var(--pf-label);
 }
 .pf-field input:focus + label,
 .pf-field input:not(:placeholder-shown) + label,
@@ -196,15 +203,15 @@
 .pf-field textarea:not(:placeholder-shown) + label{
   transform: translateY(-14px) scale(.9);
   color: var(--pf-primary);
-  background: transparent;
 }
 .pf-help{ display:block; margin-top:6px; color:var(--pf-muted); font-size:12px }
 
-.pf-actions{ display:flex; gap:12px; margin-top:6px; grid-column: 1 / -1; }
+.pf-actions{ display:flex; gap:12px; margin-top:6px; grid-column: 1 / -1; flex-wrap: wrap; }
 .pf-btn{
   border:1px solid var(--pf-border); color:var(--pf-text);
   background: linear-gradient(180deg, var(--pf-glass), transparent);
   padding: 10px 14px; border-radius:12px; cursor:pointer;
+  font-size: clamp(13px, 1.6vw, 14px);
 }
 .pf-btn:hover{ transform: translateY(-1px); box-shadow: 0 10px 20px var(--pf-shadow) }
 .pf-btn.ghost{ background: transparent }
@@ -221,67 +228,38 @@
   backdrop-filter: blur(10px);
   border: 1px solid var(--pf-border);
   background: linear-gradient(180deg, var(--pf-glass), transparent);
+  max-width: min(90vw, 360px);
 }
 .pf-toast.ok{ color: var(--pf-success) }
 .pf-toast.err{ color: var(--pf-danger) }
 
 /* ============ RWD ============ */
 @media (max-width: 980px) {
-  .pf-hero{ grid-template-columns: 1fr; justify-items: center; }
-  .pf-hero-right{ text-align:center }
+  .pf-header{ grid-template-columns: 1fr; }
+  .pf-hero{ grid-template-columns: 1fr; justify-items: center; text-align: center; }
   .pf-balances{ grid-template-columns: 1fr 1fr }
 }
-@media (max-width: 700px) {
+
+@media (max-width: 760px) {
+  :root { --pf-ava: clamp(84px, 26vw, 120px); }
   .pf-grid{ grid-template-columns: 1fr; }
+  .pf-actions{ justify-content: center; }
 }
 
-/* public/styles/avatar.css */
-
-/* Avatar 容器 */
-.pf-avatar {
-  position: relative;
-  width: 90px;
-  height: 90px;
-  border-radius: 50%;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.05);
-  box-shadow: 0 0 20px rgba(0, 200, 255, 0.3);
+@media (max-width: 520px) {
+  :root { --pf-ava: clamp(76px, 32vw, 110px); }
+  .pf-nav{ padding:8px 10px; margin-left:8px; }
+  .pf-balances{ grid-template-columns: 1fr; }
+  .pf-toast{ left: 50%; right: auto; transform: translateX(-50%); bottom: 12px; }
 }
 
-/* 頭像圖片 */
-.pf-ava-core img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+/* ============ 動畫偏好 ============ */
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+  .pf-hero-sheen::after { display:none; }
 }
 
-/* 頭像框 */
-.pf-ava-frame {
-  position: absolute;
-  inset: 0;
-  border: 3px solid var(--pf-tint, #00d1ff);
-  border-radius: 50%;
-  pointer-events: none;
-  animation: pf-frame-glow 3s infinite linear;
-}
-
-/* 光暈 */
-.pf-ava-glow {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  box-shadow: 0 0 25px var(--pf-tint, #00d1ff);
-  opacity: 0.6;
-}
-
-/* 頭框特效掃光 */
-@keyframes pf-frame-glow {
-  0% { box-shadow: 0 0 10px var(--pf-tint, #00d1ff); }
-  50% { box-shadow: 0 0 25px var(--pf-tint, #00d1ff); }
-  100% { box-shadow: 0 0 10px var(--pf-tint, #00d1ff); }
-}
-
-/* 不同頭框樣式（舉例） */
-.hf-gold .pf-ava-frame { border-color: gold; box-shadow: 0 0 25px gold; }
-.hf-neon .pf-ava-frame { border-color: cyan; box-shadow: 0 0 25px cyan; }
-.hf-royal .pf-ava-frame { border-color: purple; box-shadow: 0 0 25px purple; }
+/* ============ 檔尾 avatar.css 兼容（避免衝突） ============ */
+/* 以更高選擇器權重覆蓋你檔尾的 avatar 固定尺寸，仍保留其光效/動畫 */
+.pf-wrap .pf-avatar { width: var(--pf-ava); height: auto; }
+.pf-wrap .pf-ava-frame { inset: auto; }
