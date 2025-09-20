@@ -1,6 +1,6 @@
 {
   "name": "topzcasino",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -9,14 +9,16 @@
     "render:build": "npx prisma generate && npx prisma migrate deploy && npx prisma db seed && next build",
     "render:start": "next start",
     "lint": "next lint",
+    "lint:fix": "next lint --fix",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate:1.1.3": "prisma migrate dev -n v1_1_3_full_schema",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
-    "prisma:seed": "prisma db seed",
     "db:push": "prisma db push",
     "db:reset": "prisma migrate reset --force",
     "db:seed": "prisma db seed",
+    "seed:ts": "prisma db seed",
     "seed:headframes": "tsx scripts/seed-headframes.ts",
     "validate:structure": "ts-node --transpile-only scripts/validate-structure.ts",
     "postinstall": "prisma generate",
@@ -58,11 +60,8 @@
     "prisma": "6.15.0",
     "tailwindcss": "3.4.7",
     "ts-node": "10.9.2",
-    "tsx": "^4.20.5",
+    "tsx": "4.20.5",
     "typescript": "5.9.2"
-  },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
   },
   "engines": {
     "node": "20.x"
