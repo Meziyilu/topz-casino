@@ -1,0 +1,99 @@
+/* Roulette Lobby — public/styles/roulette-lobby.css */
+
+.rlb-wrap { max-width: 1200px; margin: 0 auto; padding: 16px; color: var(--pf-text, #dfe6ff); }
+.rlb-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.rlb-head h1 { font-size: 28px; }
+.rlb-head .muted { opacity: .8; }
+
+.rlb-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+.rlb-card {
+  position: relative;
+  display: block;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.18);
+  color: inherit;
+  text-decoration: none;
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+}
+.rlb-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255,255,255,.28);
+  box-shadow: 0 10px 24px rgba(0,0,0,.25);
+}
+
+.badge {
+  position: absolute; top: 10px; right: 10px;
+  font-size: 11px; font-weight: 800; letter-spacing: .4px;
+  padding: 4px 8px; border-radius: 999px;
+  background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.25);
+}
+.badge.betting  { background: #16a085; color: #061311; }
+.badge.revealing{ background: #f39c12; color: #1a1200; }
+.badge.settled  { background: #95a5a6; color: #091015; }
+
+.wheel {
+  position: relative;
+  margin: 6px auto 10px;
+  width: 160px; height: 160px; border-radius: 50%;
+  border: 8px solid rgba(255,255,255,.12);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255,255,255,.15) 0 30%, rgba(255,255,255,.05) 30% 55%, rgba(255,255,255,.02) 55% 100%),
+    conic-gradient(#c0392b 0 10deg, #2c3e50 10deg 20deg, #c0392b 20deg 30deg, #2c3e50 30deg 40deg, #c0392b 40deg 50deg, #2c3e50 50deg 60deg, #27ae60 60deg 65deg, #2c3e50 65deg 75deg, #c0392b 75deg 85deg, #2c3e50 85deg 95deg, #c0392b 95deg 105deg, #2c3e50 105deg 115deg, #c0392b 115deg 125deg, #2c3e50 125deg 135deg, #c0392b 135deg 145deg, #2c3e50 145deg 155deg, #c0392b 155deg 165deg, #2c3e50 165deg 175deg, #c0392b 175deg 185deg, #2c3e50 185deg 195deg, #c0392b 195deg 205deg, #2c3e50 205deg 215deg, #c0392b 215deg 225deg, #2c3e50 225deg 235deg, #c0392b 235deg 245deg, #2c3e50 245deg 255deg, #c0392b 255deg 265deg, #2c3e50 265deg 275deg, #c0392b 275deg 285deg, #2c3e50 285deg 295deg, #c0392b 295deg 305deg, #2c3e50 305deg 315deg, #c0392b 315deg 325deg, #2c3e50 325deg 335deg, #c0392b 335deg 345deg, #2c3e50 345deg 360deg);
+  box-shadow: inset 0 0 30px rgba(0,0,0,.45), 0 0 24px rgba(0,0,0,.35);
+}
+.spinring {
+  position: absolute; inset: 8px; border-radius: 50%;
+  border: 2px dashed rgba(255,255,255,.25);
+}
+.spinring.spin { animation: spin 1.1s linear infinite; }
+@keyframes spin { from{ transform: rotate(0)} to{ transform: rotate(360deg)} }
+
+.pin {
+  position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+  width: 0; height: 0;
+  border-left: 9px solid transparent; border-right: 9px solid transparent; border-bottom: 12px solid rgba(255,255,255,.92);
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,.4));
+}
+.result {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font-weight: 800; font-size: 36px; color: rgba(255,255,255,.92);
+  text-shadow: 0 0 12px rgba(0,0,0,.5);
+}
+
+.title { font-size: 18px; margin: 6px 0 2px; }
+.desc { opacity: .9; font-size: 13px; }
+.stats {
+  margin-top: 10px; display: flex; justify-content: space-between;
+  font-size: 13px; opacity: .9;
+}
+.stats b { font-variant-numeric: tabular-nums; }
+
+/* ====== 既有樣式（略） …… ====== */
+
+/* === 概覽格 === */
+.overview {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.ov {
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+.ov-k { font-size: 11px; opacity: .85; }
+.ov-v { font-size: 16px; font-weight: 800; letter-spacing: .2px; margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+/* 手機優化 */
+@media (max-width: 560px) {
+  .overview { grid-template-columns: repeat(2, 1fr); }
+}
