@@ -30,9 +30,9 @@ function pickEnum<T extends Record<string, any>>(
 }
 
 /** 判斷某個 model delegate 是否存在於 Prisma Client（避免 undefined.create 之類錯誤） */
-function hasModel(name: keyof PrismaClient) {
+function hasModel(name: string): boolean {
   const anyPrisma = prisma as any;
-  return !!anyPrisma[name];
+  return Boolean(anyPrisma?.[name]);
 }
 
 /** 亂數推介碼 */
@@ -295,34 +295,36 @@ async function main() {
 
   if (hasModel("blackjackTable")) {
     // 若你的 schema 有複合 unique [room, name]，此 upsert where 要調整成實際 unique
-    await prisma.blackjackTable.upsert({
-      where: ({} as any), // 無法得知你的 unique 條件時，用 findFirst + create 替代：
-      update: {},
-      create: {
-        // 下面兩行若你的 schema 用 enum，改成 pickEnum 對應
-        room: "BJ_TBL_R30" as any,
-        name: "TableA",
-        minBet: 10,
-        maxBet: 1000,
-        seatCount: 7,
-        active: true,
-      },
-    }).catch(async () => {
-      // 若上面 upsert 失敗（因為 unique 條件不符），改成先查再 create
-      const exist = await (prisma as any).blackjackTable.findFirst({ where: { name: "TableA" } });
-      if (!exist) {
-        await (prisma as any).blackjackTable.create({
-          data: {
-            room: "BJ_TBL_R30",
-            name: "TableA",
-            minBet: 10,
-            maxBet: 1000,
-            seatCount: 7,
-            active: true,
-          },
-        });
-      }
-    });
+    await prisma.blackjackTable
+      .upsert({
+        where: ({} as any), // 無法得知你的 unique 條件時，用 findFirst + create 替代：
+        update: {},
+        create: {
+          // 下面兩行若你的 schema 用 enum，改成 pickEnum 對應
+          room: "BJ_TBL_R30" as any,
+          name: "TableA",
+          minBet: 10,
+          maxBet: 1000,
+          seatCount: 7,
+          active: true,
+        },
+      })
+      .catch(async () => {
+        // 若上面 upsert 失敗（因為 unique 條件不符），改成先查再 create
+        const exist = await (prisma as any).blackjackTable.findFirst({ where: { name: "TableA" } });
+        if (!exist) {
+          await (prisma as any).blackjackTable.create({
+            data: {
+              room: "BJ_TBL_R30",
+              name: "TableA",
+              minBet: 10,
+              maxBet: 1000,
+              seatCount: 7,
+              active: true,
+            },
+          });
+        }
+      });
   } else {
     console.warn("⚠️ 跳過 BlackjackTable：model 不存在。");
   }
