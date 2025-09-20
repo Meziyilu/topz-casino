@@ -146,4 +146,92 @@ export async function getState(room: RouletteRoomCode, userId?: string) {
 }
 
 /** 歷史 */
-export async function history(room: RouletteRoomC
+export async function history(room: RouletteRoomCode, limit = 50) {
+  return prisma.rouletteRound.findMany({
+    where: { room },
+    orderBy: { startedAt: "desc" },
+    take: limit,
+    select: { id: true, result: true, startedAt: true, endedAt: true },
+  });
+}
+
+/** 管理：強制結算（可指定結果） */
+export async function settleRound(roundId: string, forcedResult?: number) {
+  const round = await prisma.rouletteRound.findUnique({ where: { id: roundId } });
+  if (!round) throw new Error("ROUND_NOT_FOUND");
+
+  const room = round.room;
+  const result = typeof forcedResult === "number" ? forcedResult : round.result ?? nextResult().result;
+  if (result < 0 || result > 36) throw new Error("BAD_RESULT");
+
+  const bets = await prisma.rouletteBet.findMany({ where: { roundId } });
+
+  await prisma.$transaction(async (tx) => {
+    await tx.rouletteRound.update({
+      where: { id: roundId },
+      data: { result, phase: "SETTLED", endedAt: new Date() },
+    });
+
+    for (const b of bets) {
+      const mult = payoutMultiplier(b.kind as any, result);
+      if (mult > 0) {
+        const win = Math.floor(b.amount * (mult + 1));
+        await tx.user.update({ where: { id: b.userId }, data: { balance: { increment: win } } });
+        await tx.ledger.create({
+          data: {
+            type: "PAYOUT",
+            amount: win,
+            userId: b.userId,
+            room,
+            roundId,
+            gameCode: GameCode.GLOBAL,
+          },
+        });
+      }
+    }
+
+    await tx.rouletteRound.create({ data: { room, phase: "BETTING" } });
+  });
+
+  return { result, count: bets.length };
+}
+
+/** 大廳/房內 HUD：本局概覽（我方、總額、筆數、唯一下注人數） */
+export async function getOverview(room: RouletteRoomCode, userId?: string) {
+  const { round } = await getOrCreateCurrentRound(room);
+  await ensureProgress(room, round.id);
+
+  const latest = await prisma.rouletteRound.findFirst({
+    where: { room },
+    orderBy: { startedAt: "desc" },
+  });
+  if (!latest) throw new Error("ROUND_MISSING");
+
+  const [myAgg, totalAgg, uniques] = await Promise.all([
+    userId
+      ? prisma.rouletteBet.aggregate({
+          _sum: { amount: true },
+          where: { roundId: latest.id, userId },
+        })
+      : Promise.resolve(null),
+    prisma.rouletteBet.aggregate({
+      _sum: { amount: true },
+      _count: { _all: true },
+      where: { roundId: latest.id },
+    }),
+    prisma.rouletteBet.findMany({
+      where: { roundId: latest.id },
+      select: { userId: true },
+      distinct: ["userId"],
+    }),
+  ]);
+
+  return {
+    room,
+    roundId: latest.id,
+    myTotal: myAgg?._sum.amount ?? 0,
+    totalAmount: totalAgg._sum.amount ?? 0,
+    totalBets: totalAgg._count._all ?? 0,
+    uniqueUsers: uniques.length,
+  };
+}
