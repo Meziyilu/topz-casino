@@ -1,15 +1,9 @@
 /* prisma/seed.ts */
 import {
   PrismaClient,
-  // 可能存在的列舉（若你的 schema 名稱不同，會用 fallback）
   HeadframeCode as _HeadframeCode,
   PanelPreset as _PanelPreset,
   GameCode as _GameCode,
-  // 這些有可能在你的 schema 中命名不同；下方有 fallback 保護
-  // BJTableRoomCode as _BJTableRoomCode,
-  // SlotRoomCode as _SlotRoomCode,
-  // RouletteRoomCode as _RouletteRoomCode,
-  // DirectMessageKind as _DirectMessageKind,
   ShopItemKind as _ShopItemKind,
   ShopCurrency as _ShopCurrency,
 } from "@prisma/client";
@@ -56,7 +50,7 @@ async function upsertHeadframeItemWithSkus(opts: {
   const ShopItemKind = _ShopItemKind ?? ({} as any);
   const ShopCurrency = _ShopCurrency ?? ({} as any);
 
-  const item = await prisma.shopItem.upsert({
+  const item = await (prisma as any).shopItem.upsert({
     where: { code: opts.code },
     update: {
       title: opts.title,
@@ -65,7 +59,6 @@ async function upsertHeadframeItemWithSkus(opts: {
       visible: true,
     },
     create: {
-      // 若 enum 不存在，fallback 用字串（Prisma 允許 enum 欄位以字串指定）
       kind: pickEnum(ShopItemKind, "HEADFRAME", "HEADFRAME"),
       currency: pickEnum(ShopCurrency, "DIAMOND", "DIAMOND"),
       code: opts.code,
@@ -78,7 +71,6 @@ async function upsertHeadframeItemWithSkus(opts: {
     },
   });
 
-  // 兩個 SKU：7天 / 15天
   const skuSpecs = [
     { priceOverride: 999, durationDays: 7 },
     { priceOverride: 1999, durationDays: 15 },
@@ -86,7 +78,7 @@ async function upsertHeadframeItemWithSkus(opts: {
 
   for (const spec of skuSpecs) {
     const payload = { kind: "HEADFRAME", headframe: opts.headframeKey, durationDays: spec.durationDays };
-    const exist = await prisma.shopSku.findFirst({
+    const exist = await (prisma as any).shopSku.findFirst({
       where: {
         itemId: item.id,
         currencyOverride: pickEnum(ShopCurrency, "DIAMOND", "DIAMOND"),
@@ -95,7 +87,7 @@ async function upsertHeadframeItemWithSkus(opts: {
     });
 
     if (exist) {
-      await prisma.shopSku.update({
+      await (prisma as any).shopSku.update({
         where: { id: exist.id },
         data: {
           priceOverride: spec.priceOverride,
@@ -105,7 +97,7 @@ async function upsertHeadframeItemWithSkus(opts: {
         },
       });
     } else {
-      await prisma.shopSku.create({
+      await (prisma as any).shopSku.create({
         data: {
           itemId: item.id,
           priceOverride: spec.priceOverride,
@@ -125,10 +117,6 @@ async function main() {
   const HeadframeCode = _HeadframeCode ?? ({} as any);
   const PanelPreset = _PanelPreset ?? ({} as any);
   const GameCode = _GameCode ?? ({} as any);
-  // const BJTableRoomCode = _BJTableRoomCode ?? ({} as any);
-  // const SlotRoomCode = _SlotRoomCode ?? ({} as any);
-  // const RouletteRoomCode = _RouletteRoomCode ?? ({} as any);
-  // const DirectMessageKind = _DirectMessageKind ?? ({} as any);
 
   // ====== 1) 管理員 + Demo 玩家 ======
   const adminPwd = await argon2.hash("Admin@123456");
@@ -170,28 +158,19 @@ async function main() {
 
   // ====== 2) 徽章 + 背包示範 ======
   if (hasModel("badge")) {
-    const newbieBadge = await prisma.badge.upsert({
+    const newbieBadge = await (prisma as any).badge.upsert({
       where: { code: "NEWBIE" },
       update: {},
       create: { code: "NEWBIE", name: "Newbie", desc: "Welcome to Topzcasino!" },
     });
 
     if (hasModel("userBadge")) {
-      await prisma.userBadge.upsert({
+      await (prisma as any).userBadge.upsert({
         where: { userId_badgeId: { userId: demo.id, badgeId: newbieBadge.id } },
         update: {},
         create: { userId: demo.id, badgeId: newbieBadge.id, pinned: true },
       });
     }
-
-    // 若你的 schema 有 UserInventory，可解除註解
-    // if (hasModel("userInventory")) {
-    //   await prisma.userInventory.upsert({
-    //     where: { userId_type_refId: { userId: demo.id, type: "BADGE", refId: newbieBadge.id } },
-    //     update: { equipped: true },
-    //     create: { userId: demo.id, type: "BADGE", refId: newbieBadge.id, equipped: true },
-    //   });
-    // }
   } else {
     console.warn("⚠️ 跳過 Badge/UserBadge：model 不存在。");
   }
@@ -221,7 +200,7 @@ async function main() {
 
   // 送禮（可選）
   if (hasModel("gift")) {
-    await prisma.gift.create({
+    await (prisma as any).gift.create({
       data: { senderId: admin.id, receiverId: demo.id, message: "Welcome bonus!" },
     });
   } else {
@@ -230,7 +209,7 @@ async function main() {
 
   // ====== 4) 大廳彈窗 ======
   if (hasModel("lobbyPopup")) {
-    await prisma.lobbyPopup.upsert({
+    await (prisma as any).lobbyPopup.upsert({
       where: { code: "WELCOME_POP" },
       update: {},
       create: {
@@ -248,7 +227,7 @@ async function main() {
 
   // ====== 5) 累積獎金池 + 規則（Blackjack 指定桌） ======
   if (hasModel("jackpotPool") && hasModel("jackpotRule")) {
-    const mainPool = await prisma.jackpotPool.upsert({
+    const mainPool = await (prisma as any).jackpotPool.upsert({
       where: { code: "GLOBAL_MAIN" },
       update: {},
       create: {
@@ -261,7 +240,7 @@ async function main() {
       },
     });
 
-    await prisma.jackpotRule.upsert({
+    await (prisma as any).jackpotRule.upsert({
       where: {
         poolId_gameCode_roomKey: {
           poolId: mainPool.id,
@@ -284,7 +263,7 @@ async function main() {
 
   // ====== 6) 語音房 + Blackjack 桌 + Presence 入座 ======
   if (hasModel("voiceRoom")) {
-    await prisma.voiceRoom.upsert({
+    await (prisma as any).voiceRoom.upsert({
       where: { gameCode_roomKey: { gameCode: pickEnum(GameCode, "BLACKJACK", "BLACKJACK"), roomKey: "BJ_TBL_R30:TableA" } },
       update: {},
       create: { gameCode: pickEnum(GameCode, "BLACKJACK", "BLACKJACK"), roomKey: "BJ_TBL_R30:TableA", active: true },
@@ -294,13 +273,11 @@ async function main() {
   }
 
   if (hasModel("blackjackTable")) {
-    // 若你的 schema 有複合 unique [room, name]，此 upsert where 要調整成實際 unique
-    await prisma.blackjackTable
+    await (prisma as any).blackjackTable
       .upsert({
-        where: ({} as any), // 無法得知你的 unique 條件時，用 findFirst + create 替代：
+        where: ({} as any),
         update: {},
         create: {
-          // 下面兩行若你的 schema 用 enum，改成 pickEnum 對應
           room: "BJ_TBL_R30" as any,
           name: "TableA",
           minBet: 10,
@@ -310,7 +287,6 @@ async function main() {
         },
       })
       .catch(async () => {
-        // 若上面 upsert 失敗（因為 unique 條件不符），改成先查再 create
         const exist = await (prisma as any).blackjackTable.findFirst({ where: { name: "TableA" } });
         if (!exist) {
           await (prisma as any).blackjackTable.create({
@@ -330,7 +306,7 @@ async function main() {
   }
 
   if (hasModel("roomPresence")) {
-    await prisma.roomPresence.createMany({
+    await (prisma as any).roomPresence.createMany({
       data: [{ userId: demo.id, gameCode: pickEnum(GameCode, "BLACKJACK", "BLACKJACK"), roomKey: "BJ_TBL_R30:TableA", seatNo: 1 }],
       skipDuplicates: true,
     });
@@ -340,7 +316,7 @@ async function main() {
 
   // ====== 7) Slots 機台 + Roulette 範例回合 ======
   if (hasModel("slotMachine")) {
-    await prisma.slotMachine.upsert({
+    await (prisma as any).slotMachine.upsert({
       where: { name: "Fruit Bonanza" },
       update: {},
       create: {
@@ -359,11 +335,10 @@ async function main() {
   }
 
   if (hasModel("rouletteRound")) {
-    await prisma.rouletteRound.create({
+    await (prisma as any).rouletteRound.create({
       data: {
         room: "RL_R30" as any,
         phase: "BETTING" as any,
-        // 某些 schema 欄位名可能叫 result / outcome / number；這裡保留 null
         result: null as any,
       },
     });
