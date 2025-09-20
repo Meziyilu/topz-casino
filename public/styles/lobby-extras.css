@@ -246,3 +246,24 @@ a.lb-btn-mini, .lb-btn-mini, .lb-btn {
   right: 14px;
   bottom: 14px;
 }
+
+/* ==== Bank Lottie (only here) ==== */
+.lb-bank__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.lb-bank__titlewrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lb-bank__anim {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.45));
+}

@@ -16,6 +16,7 @@ import ChatBox from "@/components/lobby/ChatBox";
 import ServiceWidget from "@/components/lobby/ServiceWidget";
 import Leaderboard from "@/components/lobby/Leaderboard";
 import CheckinCard from "@/components/lobby/CheckinCard"; // ⬅ 新增：簽到卡
+import BankLottie from "@/components/bank/BankLottie";   // ⬅ 新增：銀行動畫
 
 type Me = {
   id: string;
@@ -163,7 +164,10 @@ export default function LobbyPage() {
           {/* 銀行卡片 */}
           <div className="lb-bank" aria-label="銀行">
             <div className="lb-bank__head">
-              <div className="lb-bank__title">銀行</div>
+              <div className="lb-bank__titlewrap">{/* ⬅ 新增一層包裝，插動畫 */}
+                <BankLottie /> 
+                <div className="lb-bank__title">銀行</div>
+              </div>
               <Link href="/bank" className="lb-btn-mini ghost">前往銀行</Link>
             </div>
             <div className="lb-bank__rows">
