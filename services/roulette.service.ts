@@ -20,7 +20,6 @@ async function getOrCreateCurrentRound(room: RouletteRoomCode) {
     orderBy: { startedAt: "desc" },
   });
 
-  // 沒有回合 → 建一個
   if (!round) {
     const now = new Date();
     round = await prisma.rouletteRound.create({
@@ -33,7 +32,6 @@ async function getOrCreateCurrentRound(room: RouletteRoomCode) {
     return round;
   }
 
-  // 動態依「開始時間 + timers」推算實際階段；若不同步，更新一下 phase
   const timers = await loadRoomTimers(room);
   const phase = computePhase(new Date(round.startedAt), timers);
   if (phase !== round.phase) {
@@ -58,7 +56,6 @@ export async function getState(room: RouletteRoomCode) {
   const phase = computePhase(new Date(round.startedAt), timers);
   const msLeft = msUntilNextPhase(new Date(round.startedAt), timers);
 
-  // 若資料庫 phase 落後，順手同步
   if (phase !== round.phase) {
     await prisma.rouletteRound.update({
       where: { id: round.id },
@@ -66,7 +63,6 @@ export async function getState(room: RouletteRoomCode) {
     });
   }
 
-  // 回傳簡潔狀態（前端/Route 好用）
   return {
     room,
     round: {
@@ -81,7 +77,7 @@ export async function getState(room: RouletteRoomCode) {
   };
 }
 
-/** 後台/總覽資訊：各房間目前階段、近幾期、下注數量等（可按需擴充） */
+/** 後台/總覽資訊 */
 export async function getOverview() {
   const rooms = Object.values(RouletteRoomCode) as RouletteRoomCode[];
   const out: Array<{
@@ -130,16 +126,12 @@ export async function placeBet(params: {
   room: RouletteRoomCode;
   kind: RouletteBetKind;
   amount: number;
-  payload?: unknown; // 任意 JSON 結構（位置、覆蓋面等）
+  payload?: unknown;
 }) {
   const { userId, room, kind, amount, payload } = params;
 
-  if (!isValidKind(kind)) {
-    throw new Error("Invalid bet kind");
-  }
-  if (!Number.isFinite(amount) || amount <= 0) {
-    throw new Error("Invalid amount");
-  }
+  if (!isValidKind(kind)) throw new Error("Invalid bet kind");
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error("Invalid amount");
 
   const timers = await loadRoomTimers(room);
   const round = await getOrCreateCurrentRound(room);
@@ -155,7 +147,6 @@ export async function placeBet(params: {
       roundId: round.id,
       kind,
       amount: Math.floor(amount),
-      // Prisma JSON 欄位
       payload: payload as any,
     },
   });
@@ -164,36 +155,47 @@ export async function placeBet(params: {
 }
 
 /**
- * 結算：管理用途
- * - 若目前是 REVEALING → 產生結果（若無）
- * - 將回合標為 SETTLED（此版本為「最小可運作版」，不內建派彩；可在後續擴充將派彩寫入 Ledger）
+ * 結算（新版簽名）：依 roundId 結算，允許可選的 forcedResult。
+ * - 若該回合尚無結果，會採用 forcedResult（若提供且 0..36），否則隨機 0..36。
+ * - 最後把 round 標記為 SETTLED。
  */
-export async function settleRound(room: RouletteRoomCode) {
-  const timers = await loadRoomTimers(room);
-  let round = await getOrCreateCurrentRound(room);
+export async function settleRound(roundId: string, forcedResult?: number) {
+  let round = await prisma.rouletteRound.findUnique({ where: { id: roundId } });
+  if (!round) throw new Error("ROUND_NOT_FOUND");
+
+  const timers = await loadRoomTimers(round.room);
   const phase = computePhase(new Date(round.startedAt), timers);
 
-  // 若在 REVEALING 還沒有結果，可以在這裡決定結果
-  if (phase === SicBoPhase.REVEALING && (round.result == null || round.phase !== SicBoPhase.REVEALING)) {
-    // 這裡不引入 RNG 檔案，保守一點用簡單方式示範：0~36
-    const pseudo = Math.floor(Math.random() * 37);
-    round = await prisma.rouletteRound.update({
-      where: { id: round.id },
-      data: { result: pseudo, phase: SicBoPhase.REVEALING },
-    });
+  let finalResult = round.result ?? null;
+
+  if (finalResult == null) {
+    if (typeof forcedResult === "number") {
+      if (!Number.isInteger(forcedResult) || forcedResult < 0 || forcedResult > 36) {
+        throw new Error("INVALID_RESULT");
+      }
+      finalResult = forcedResult;
+    } else if (phase === SicBoPhase.REVEALING || phase === SicBoPhase.BETTING) {
+      finalResult = Math.floor(Math.random() * 37); // 0..36
+    } else {
+      // 已在 SETTLED 但沒結果的奇異狀況，仍給一個值（或你也可以直接丟錯）
+      finalResult = Math.floor(Math.random() * 37);
+    }
   }
 
-  // 標記為 SETTLED（不做派彩邏輯；之後若要派彩可在此彙總 bet → 產生 ledger/payout）
   round = await prisma.rouletteRound.update({
     where: { id: round.id },
-    data: { phase: SicBoPhase.SETTLED, endedAt: new Date() },
+    data: {
+      result: finalResult,
+      phase: SicBoPhase.SETTLED,
+      endedAt: new Date(),
+    },
   });
 
   const betCount = await prisma.rouletteBet.count({ where: { roundId: round.id } });
 
   return {
     ok: true,
-    room,
+    room: round.room,
     roundId: round.id,
     result: round.result,
     settledAt: round.endedAt,
@@ -201,7 +203,7 @@ export async function settleRound(room: RouletteRoomCode) {
   };
 }
 
-/**（選用）建立下一回合，方便排程或後台手動切換 */
+/**（選用）建立下一回合 */
 export async function startNextRound(room: RouletteRoomCode) {
   const now = new Date();
   const next = await prisma.rouletteRound.create({
