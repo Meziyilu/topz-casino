@@ -28,6 +28,7 @@
     "@aws-sdk/client-s3": "^3.883.0",
     "@aws-sdk/credential-providers": "^3.883.0",
     "@aws-sdk/s3-request-presigner": "^3.883.0",
+    "@lottiefiles/react-lottie-player": "^3.6.0",
     "@prisma/client": "6.15.0",
     "argon2": "^0.41.1",
     "bcryptjs": "2.4.3",
