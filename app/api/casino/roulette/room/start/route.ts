@@ -1,16 +1,13 @@
-// app/api/casino/roulette/room/start/route.ts
-import { NextResponse } from "next/server";
-import { z } from "zod";
-import { ensureRoomLoop } from "@/services/roulette.service";
-import { RouletteRoomCode } from "@prisma/client";
+import { NextRequest, NextResponse } from "next/server";
+import { startRoomLoop } from "@/services/roulette.service";
 
-const Query = z.object({ room: z.nativeEnum(RouletteRoomCode) });
-
-export async function POST(req: Request) {
-  const body = await req.json().catch(() => ({}));
-  const parsed = Query.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: "BAD_BODY" }, { status: 400 });
-
-  await ensureRoomLoop(parsed.data.room);
-  return NextResponse.json({ ok: true });
+export async function POST(req: NextRequest) {
+  try {
+    const { room } = await req.json();
+    if (!room) return NextResponse.json({ error: "NO_ROOM" }, { status: 400 });
+    await startRoomLoop(room); // 不用 worker：由進房觸發 loop/續跑
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? "START_FAIL" }, { status: 400 });
+  }
 }

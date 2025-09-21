@@ -1,0 +1,11 @@
+.wrap { padding: 20px; }
+.grid { display:grid; grid-template-columns: repeat(3, 1fr); gap:16px; }
+.card {
+  padding: 14px; border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+  border: 1px solid rgba(255,255,255,.08);
+  backdrop-filter: blur(10px);
+}
+.row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.btn { padding:8px 12px; border-radius:8px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12); cursor:pointer; }
+.mono { font-family: ui-monospace, Menlo, monospace; }

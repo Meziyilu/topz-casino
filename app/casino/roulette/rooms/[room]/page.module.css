@@ -28,7 +28,7 @@
 
 .main { display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
 .panel { padding:16px; }
-.wheelWrap { position: relative; display:flex; flex-direction:column; align-items:center; }
+.wheelWrap { position: relative; display:flex; flex-direction:column; align-items:center; min-height: 420px; }
 .result { margin-top:12px; font-weight:700; text-align:center; letter-spacing:.5px; color:#fff; opacity:.9; }
 
 .betPanel h3 { margin:0 0 10px; }

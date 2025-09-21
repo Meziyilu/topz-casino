@@ -1,19 +1,13 @@
-// app/api/casino/roulette/admin/settle/route.ts
-import { NextResponse } from "next/server";
-import { z } from "zod";
+import { NextRequest, NextResponse } from "next/server";
 import { settleRound } from "@/services/roulette.service";
 
-const Body = z.object({ roundId: z.string().min(1) });
-
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const json = await req.json();
-    const parsed = Body.safeParse(json);
-    if (!parsed.success) return NextResponse.json({ error: "BAD_BODY" }, { status: 400 });
-
-    const out = await settleRound(parsed.data.roundId);
+    const { roundId, result } = await req.json();
+    if (!roundId) return NextResponse.json({ error: "NO_ROUND" }, { status: 400 });
+    const out = await settleRound(roundId, typeof result === "number" ? result : undefined);
     return NextResponse.json({ ok: true, ...out });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message ?? "SETTLE_FAIL" }, { status: 400 });
+    return NextResponse.json({ error: e?.message ?? "SETTLE_FAIL" }, { status: 400 });
   }
 }
