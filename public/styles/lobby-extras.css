@@ -267,3 +267,57 @@ a.lb-btn-mini, .lb-btn-mini, .lb-btn {
   pointer-events: none;
   filter: drop-shadow(0 2px 6px rgba(0,0,0,0.45));
 }
+
+/* === Roulette lobby card (Lottie bigger) === */
+.lb-gamecard.lb-roulette {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  align-items: center;
+  justify-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.lb-gamecard.lb-roulette .lb-gamecard__media {
+  display: grid;
+  place-items: center;
+  margin-top: 6px;
+}
+
+.lb-gamecard.lb-roulette .lottie-wrap {
+  position: relative;
+  filter: drop-shadow(0 2px 10px rgba(0,0,0,.35));
+}
+
+.lb-gamecard.lb-roulette .lottie-wrap.glow {
+  filter: drop-shadow(0 0 14px rgba(255, 210, 86, .55));
+}
+
+.lb-gamecard.lb-roulette .lottie-pin {
+  position: absolute;
+  top: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0; height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-bottom: 16px solid #ffd44d;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,.6));
+  pointer-events: none;
+}
+
+.lb-gamecard.lb-roulette .lb-gamecard__title {
+  font-weight: 700;
+  letter-spacing: .5px;
+}
+
+.lb-gamecard.lb-roulette .lb-gamecard__stats {
+  display: flex;
+  gap: 10px;
+  opacity: .9;
+}
+
+.lb-gamecard.lb-roulette .lb-gamecard__stats .stat b {
+  font-variation-settings: "wght" 700;
+}
