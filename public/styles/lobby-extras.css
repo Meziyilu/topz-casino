@@ -333,7 +333,7 @@ a.lb-btn-mini, .lb-btn-mini, .lb-btn {
   position: absolute;
   right: 8px;              /* 與右側留白 */
   top: 50%;
-  transform: translateY(-50%) translateX(15%);
+  transform: translateY(-40%) translateX(15%);
   pointer-events: none;
   display: grid;
   place-items: center;
