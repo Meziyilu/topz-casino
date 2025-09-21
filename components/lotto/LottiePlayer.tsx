@@ -1,8 +1,31 @@
 "use client";
-import dynamic from "next/dynamic";
+import { Player } from "@lottiefiles/react-lottie-player";
 
-// 只在瀏覽器載入 Player，避免 SSR 時找不到 window
-export const Player = dynamic(
-  () => import("@lottiefiles/react-lottie-player").then(m => m.Player),
-  { ssr: false }
-);
+type Props = {
+  src: string;
+  size?: number;
+  speed?: number;
+  loop?: boolean;
+  autoplay?: boolean;
+  className?: string;
+};
+
+export default function LottiePlayer({
+  src,
+  size = 190,
+  speed = 1,
+  loop = true,
+  autoplay = true,
+  className,
+}: Props) {
+  return (
+    <Player
+      autoplay={autoplay}
+      loop={loop}
+      src={src}
+      speed={speed}
+      className={className}
+      style={{ width: size, height: size }}
+    />
+  );
+}
