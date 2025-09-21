@@ -1,17 +1,26 @@
-import Link from "next/link";
+"use client";
 
-export default function GameCard({
-  title, online, countdown, href, disabled,
-}: { title: string; online?: number; countdown?: number; href: string; disabled?: boolean; }) {
+import Link from "next/link";
+import { ReactNode } from "react";
+
+type Props = {
+  title: string;
+  online?: number;
+  countdown?: number;
+  href: string;
+  disabled?: boolean;
+  children?: ReactNode;   // ✅ 新增
+};
+
+export default function GameCard({ title, online, countdown, href, disabled, children }: Props) {
   return (
     <Link href={href} className={`game-card ${disabled ? "disabled" : ""}`}>
-      <div className="title">{title}</div>
-      <div className="meta">
-        {typeof online === "number" && <span>在線 {online}人</span>}
-        {typeof countdown === "number" && <span style={{ marginLeft: 10 }}>倒數 {countdown}s</span>}
-      </div>
-      {!disabled && <div className="badge">立即進入</div>}
-      {disabled && <div className="badge">COMING SOON</div>}
+      <div className="gc-title">{title}</div>
+      {typeof online === "number" && <div className="gc-online">在線 {online}</div>}
+      {typeof countdown === "number" && <div className="gc-countdown">倒數 {countdown}s</div>}
+      
+      {/* ✅ 讓外部可以插入 Lottie 或其他元素 */}
+      {children && <div className="gc-extra">{children}</div>}
     </Link>
   );
 }
