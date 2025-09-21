@@ -1,0 +1,123 @@
+/* ===== Roulette Panel – 玻璃 + 霓虹（深色） ===== */
+:root{
+  --rp-bg: rgba(22,22,28,.55);
+  --rp-stroke: rgba(255,255,255,.08);
+  --rp-soft: rgba(255,255,255,.04);
+  --rp-glow: 0 8px 28px rgba(0,0,0,.45);
+  --rp-neon: 0 0 18px rgba(120,200,255,.35);
+  --rp-txt: rgba(255,255,255,.92);
+  --rp-muted: rgba(255,255,255,.65);
+  --rp-acc: #59d4ff;
+  --rp-red: #ff6374;
+  --rp-green: #36e2b4;
+}
+
+.rp {
+  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+  border: 1px solid var(--rp-stroke);
+  border-radius: 18px;
+  padding: 18px;
+  color: var(--rp-txt);
+  backdrop-filter: blur(10px) saturate(120%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08), var(--rp-glow);
+}
+
+.rp .rp-head {
+  display:flex; align-items:center; gap:12px; margin-bottom:14px;
+}
+.rp .rp-title {
+  font-weight:700; letter-spacing:.02em;
+}
+.rp .rp-sub {
+  margin-left:auto; font-size:.9rem; color:var(--rp-muted);
+}
+
+/* 晶片選擇（快速下注） */
+.rp-chips { display:flex; flex-wrap:wrap; gap:10px; margin:8px 0 16px; }
+.rp-chip {
+  position:relative;
+  min-width:72px; padding:10px 12px;
+  border-radius:12px;
+  border:1px solid var(--rp-stroke);
+  background: radial-gradient(120% 120% at 20% 20%, rgba(255,255,255,.18), rgba(255,255,255,.06));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.25), var(--rp-neon);
+  cursor:pointer; user-select:none;
+  text-align:center; font-weight:700;
+}
+.rp-chip[data-active="1"]{
+  outline: 2px solid var(--rp-acc);
+  box-shadow: 0 0 0 3px rgba(89,212,255,.18), var(--rp-neon);
+}
+.rp-chip small { display:block; font-weight:600; opacity:.85 }
+
+/* 區段群組 */
+.rp-section { margin:16px 0 12px; }
+.rp-section .sec-title {
+  font-size:.95rem; color:var(--rp-muted); margin:0 0 10px 4px; letter-spacing:.02em;
+}
+
+/* 通用大按鈕（紅黑/單雙/大小） */
+.rp-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.rp-btn {
+  padding:12px 14px; border-radius:12px;
+  border:1px solid var(--rp-stroke);
+  background: linear-gradient(180deg, var(--rp-soft), rgba(255,255,255,.03));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.12);
+  text-align:center; font-weight:700; cursor:pointer; user-select:none;
+  transition:transform .05s ease, background .2s ease, box-shadow .2s ease;
+}
+.rp-btn:hover { background: rgba(255,255,255,.08); }
+.rp-btn:active { transform: translateY(1px); }
+.rp-btn[data-kind="RED"]{ color:#fff; background:linear-gradient(180deg, #ff6a7a, #e44d64); }
+.rp-btn[data-kind="BLACK"]{ background:linear-gradient(180deg,#272a2f,#1c1f24); }
+.rp-btn[data-kind="ODD"],
+.rp-btn[data-kind="EVEN"],
+.rp-btn[data-kind="LOW_HIGH"]{}
+
+/* 打/列 */
+.rp-grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+
+/* 直注數字盤 */
+.rp-numbers {
+  display:grid; grid-template-columns: repeat(10, 1fr);
+  gap:10px; margin-top:8px;
+}
+.rp-num {
+  aspect-ratio: 1/1; border-radius:12px;
+  display:flex; align-items:center; justify-content:center;
+  border:1px solid var(--rp-stroke);
+  background: linear-gradient(180deg, var(--rp-soft), rgba(255,255,255,.02));
+  font-weight:700; cursor:pointer; user-select:none;
+  transition:transform .05s ease, background .2s ease, box-shadow .2s ease;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.12);
+}
+.rp-num:hover{ background: rgba(255,255,255,.08); }
+.rp-num:active{ transform: translateY(1px); }
+.rp-num[data-zero="1"]{
+  background:linear-gradient(180deg, #29d28d, #0f925e);
+  border-color: rgba(0,0,0,.25);
+}
+.rp-num[data-red="1"]{
+  background:linear-gradient(180deg, #ff6a7a, #e44d64);
+  border-color: rgba(0,0,0,.25);
+}
+.rp-num[data-black="1"]{
+  background:linear-gradient(180deg,#2b2f36,#1a1d23);
+}
+
+/* 提示條 */
+.rp-tip {
+  margin-top:14px; padding:10px 12px; border-radius:10px;
+  background: rgba(255,255,255,.06);
+  border:1px solid var(--rp-stroke);
+  color:var(--rp-muted); font-size:.92rem;
+}
+
+/* 響應式 */
+@media (max-width: 880px){
+  .rp-numbers{ grid-template-columns: repeat(6, 1fr); }
+}
+@media (max-width: 520px){
+  .rp-grid2{ grid-template-columns: 1fr; }
+  .rp-grid3{ grid-template-columns: 1fr; }
+}
