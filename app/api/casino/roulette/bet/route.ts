@@ -1,34 +1,35 @@
 // app/api/casino/roulette/bet/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
-import { placeBet } from '@/services/roulette.service';
-import { RouletteRoomCode, RouletteBetKind } from '@prisma/client'; // 這行要有！
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { placeBet } from "@/services/roulette.service";
+import { RouletteRoomCode, RouletteBetKind } from "@prisma/client";
+// import { getUserFromRequest } from "@/lib/auth"; // 你自己的登入/取得 user
 
 const Body = z.object({
   room: z.nativeEnum(RouletteRoomCode),
-  kind: z.nativeEnum(RouletteBetKind),      // 讓 kind 成為 enum 而不是 string
+  kind: z.nativeEnum(RouletteBetKind),
   amount: z.number().int().positive(),
+  payload: z.any().optional(),
 });
 
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
     const json = await req.json();
     const parsed = Body.safeParse(json);
-    if (!parsed.success) {
-      return NextResponse.json({ error: 'BAD_BODY', issues: parsed.error.format() }, { status: 400 });
-    }
+    if (!parsed.success) return NextResponse.json({ error: "BAD_BODY" }, { status: 400 });
 
-    const me = { id: 'demo-user-id' }; // 你的驗證邏輯替換這裡
+    // const me = await getUserFromRequest(req);
+    const me = { id: json.userId ?? "DEMO_USER" }; // 臨時：你替換成真正的驗證
 
     const out = await placeBet({
       userId: me.id,
       room: parsed.data.room,
-      kind: parsed.data.kind,  // 現在型別就是 RouletteBetKind，不會再紅線
+      kind: parsed.data.kind,
       amount: parsed.data.amount,
+      payload: parsed.data.payload,
     });
-
     return NextResponse.json({ ok: true, ...out });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message ?? 'BET_FAIL' }, { status: 400 });
+    return NextResponse.json({ error: e.message ?? "BET_FAIL" }, { status: 400 });
   }
 }

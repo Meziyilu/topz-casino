@@ -1,9 +1,6 @@
-// lib/roulette/rng.ts
-// 與你現有 RNG 一致的「可注入種子」設計；若沒設置則用當下時間
-export function nextResult(seed?: number): { result: number; usedSeed: number } {
-  const usedSeed = typeof seed === 'number' ? seed : Math.floor(Date.now() / 1000);
-  // 極簡線性同餘生成 -> 0..36
-  const a = 1664525, c = 1013904223, m = 2 ** 32;
-  const x = (a * usedSeed + c) % m;
-  return { result: x % 37, usedSeed };
+// 可替換為可驗證隨機（例如 server 端 seed + 客端 salt）
+export function nextResult(): { result: number } {
+  // 0~36 均勻
+  const n = Math.floor(Math.random() * 37);
+  return { result: n };
 }

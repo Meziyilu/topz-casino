@@ -1,53 +1,68 @@
-// lib/roulette/payout.ts
-import { colorOf } from './colors';
+import type { RouletteBetKind } from "@prisma/client";
+import { isRed, isBlack, isOdd, isEven, isLow, isHigh, dozenIndex, columnIndex } from "./map";
 
-export type BetKind =
-  | 'RED' | 'BLACK' | 'ODD' | 'EVEN' | 'LOW' | 'HIGH'
-  | 'DOZEN_1' | 'DOZEN_2' | 'DOZEN_3'
-  | 'COLUMN_1' | 'COLUMN_2' | 'COLUMN_3'
-  | `NUMBER_${number}`; // 0..36
+// 派彩倍數（含原注退回）：這裡回傳「淨贏利 = 下注 * 倍數」
+export const MULTIPLIER: Record<RouletteBetKind, number> = {
+  STRAIGHT: 35,
+  SPLIT: 17,
+  STREET: 11,
+  CORNER: 8,
+  LINE: 5,
+  DOZEN: 2,
+  COLUMN: 2,
+  RED_BLACK: 1,
+  ODD_EVEN: 1,
+  LOW_HIGH: 1,
+};
 
-export function isValidKind(kind: string): kind is BetKind {
-  const BASIC = new Set([
-    'RED','BLACK','ODD','EVEN','LOW','HIGH',
-    'DOZEN_1','DOZEN_2','DOZEN_3',
-    'COLUMN_1','COLUMN_2','COLUMN_3',
-  ]);
-  if (BASIC.has(kind)) return true;
-  if (kind.startsWith('NUMBER_')) {
-    const n = Number(kind.slice(7));
-    return Number.isInteger(n) && n >= 0 && n <= 36;
+// 檢查是否中獎（payload 形狀：見下注 API）
+export function isWinning(kind: RouletteBetKind, payload: any, result: number): boolean {
+  if (result === 0) {
+    // 只有 STRAIGHT(0) 會中，其餘都不中
+    if (kind === "STRAIGHT" && Array.isArray(payload?.numbers))
+      return payload.numbers.length===1 && payload.numbers[0] === 0;
+    return false;
   }
-  return false;
-}
 
-const COLUMN_1 = new Set([1,4,7,10,13,16,19,22,25,28,31,34]);
-const COLUMN_2 = new Set([2,5,8,11,14,17,20,23,26,29,32,35]);
-const COLUMN_3 = new Set([3,6,9,12,15,18,21,24,27,30,33,36]);
+  switch (kind) {
+    case "STRAIGHT":
+      return Array.isArray(payload?.numbers) && payload.numbers.length===1 && payload.numbers[0] === result;
 
-export function payoutMultiplier(kind: BetKind, result: number): number {
-  // Even-money 1:1
-  if (kind === 'RED')  return colorOf(result) === 'RED'  ? 1 : 0;
-  if (kind === 'BLACK')return colorOf(result) === 'BLACK'? 1 : 0;
-  if (kind === 'ODD')  return result !== 0 && result % 2 === 1 ? 1 : 0;
-  if (kind === 'EVEN') return result !== 0 && result % 2 === 0 ? 1 : 0;
-  if (kind === 'LOW')  return result >= 1 && result <= 18 ? 1 : 0;
-  if (kind === 'HIGH') return result >= 19 && result <= 36 ? 1 : 0;
+    case "SPLIT":
+      return Array.isArray(payload?.numbers) && payload.numbers.length===2 && payload.numbers.includes(result);
 
-  // Dozen 2:1
-  if (kind === 'DOZEN_1') return result >= 1 && result <= 12 ? 2 : 0;
-  if (kind === 'DOZEN_2') return result >= 13 && result <= 24 ? 2 : 0;
-  if (kind === 'DOZEN_3') return result >= 25 && result <= 36 ? 2 : 0;
+    case "STREET":
+      return Array.isArray(payload?.numbers) && payload.numbers.length===3 && payload.numbers.includes(result);
 
-  // Column 2:1
-  if (kind === 'COLUMN_1') return COLUMN_1.has(result) ? 2 : 0;
-  if (kind === 'COLUMN_2') return COLUMN_2.has(result) ? 2 : 0;
-  if (kind === 'COLUMN_3') return COLUMN_3.has(result) ? 2 : 0;
+    case "CORNER":
+      return Array.isArray(payload?.numbers) && payload.numbers.length===4 && payload.numbers.includes(result);
 
-  // 直注 35:1
-  if (kind.startsWith('NUMBER_')) {
-    const n = Number(kind.slice(7));
-    return n === result ? 35 : 0;
+    case "LINE":
+      return Array.isArray(payload?.numbers) && payload.numbers.length===6 && payload.numbers.includes(result);
+
+    case "DOZEN": {
+      const d = dozenIndex(result); // 0,1,2
+      return typeof payload?.dozen === "number" && payload.dozen === d;
+    }
+
+    case "COLUMN": {
+      const c = columnIndex(result); // 0,1,2
+      return typeof payload?.column === "number" && payload.column === c;
+    }
+
+    case "RED_BLACK":
+      if (payload?.color === "RED") return isRed(result as any);
+      if (payload?.color === "BLACK") return isBlack(result as any);
+      return false;
+
+    case "ODD_EVEN":
+      if (payload?.parity === "ODD") return isOdd(result as any);
+      if (payload?.parity === "EVEN") return isEven(result as any);
+      return false;
+
+    case "LOW_HIGH":
+      if (payload?.range === "LOW") return isLow(result as any);
+      if (payload?.range === "HIGH") return isHigh(result as any);
+      return false;
   }
-  return 0;
 }
