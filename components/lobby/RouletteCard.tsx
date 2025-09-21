@@ -11,18 +11,25 @@ type Props = {
   countdown?: number; // 秒
   href?: string;      // 預設 /casino/roulette
   title?: string;     // 預設「輪盤」
+  phase?: "BETTING" | "REVEALING" | "SETTLED"; // ⬅ 可選：後端帶 phase 來控制 glow
 };
 
-function _RouletteCard({ online = 0, countdown = 0, href = "/casino/roulette", title = "輪盤" }: Props) {
+function _RouletteCard({
+  online = 0,
+  countdown = 0,
+  href = "/casino/roulette",
+  title = "輪盤",
+  phase,
+}: Props) {
   return (
     <Link href={href} className="lb-gamecard lb-roulette">
       <div className="lb-gamecard__media">
-        <div className="lottie-wrap glow">
+        <div className={`lottie-wrap ${phase === "REVEALING" ? "glow" : ""}`}>
           <Lottie
-            animationData={require("@/public/lotties/roulette.json")}
+            animationData={require("../../../public/lottie/roulette.json")}
             loop
             autoplay
-            style={{ width: 260, height: 260 }}  // ⬅ 稍微大一點
+            style={{ width: 260, height: 260 }}
           />
           <div className="lottie-pin" aria-hidden />
         </div>
