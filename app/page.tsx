@@ -47,6 +47,13 @@ type Announcement = {
   createdAt?: string;
 };
 
+// ⬇ 給輪盤大廳卡片用的 Overview 型別（和後端對齊：msLeft 為毫秒）
+type RouletteOverview = {
+  phase: "BETTING" | "REVEALING" | "SETTLED";
+  msLeft: number;        // 後端回傳剩餘毫秒
+  online?: number;       // 可選：當前在線數
+};
+
 export default function LobbyPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -59,6 +66,10 @@ export default function LobbyPage() {
 
   // 公告
   const [anns, setAnns] = useState<Announcement[]>([]);
+
+  // ✅ 輪盤卡片：倒數 & 在線（以 RL_R60 為大廳顯示房）
+  const [rlCountdown, setRlCountdown] = useState<number>(0); // 以秒為單位
+  const [rlOnline, setRlOnline] = useState<number>(0);
 
   useEffect(() => {
     fetch("/api/users/me", { credentials: "include" })
@@ -89,6 +100,50 @@ export default function LobbyPage() {
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((d) => setWeeklyLB(d.items ?? []))
       .catch(() => setWeeklyLB([]));
+  }, []);
+
+  // ✅ 讀取輪盤 RL_R60 房間的 Overview：每 5 秒同步一次，並本地每秒倒數
+  useEffect(() => {
+    let tickTimer: ReturnType<typeof setInterval> | null = null;
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+    const loadRoulette = async () => {
+      try {
+        const r = await fetch("/api/casino/roulette/overview?room=RL_R60", { cache: "no-store" });
+        if (!r.ok) throw new Error("bad");
+        const d: RouletteOverview | { ms_left?: number; online?: number; phase?: string } = await r.json();
+
+        // 兼容 msLeft / ms_left
+        const ms =
+          typeof (d as RouletteOverview).msLeft === "number"
+            ? (d as RouletteOverview).msLeft
+            : typeof (d as any).ms_left === "number"
+              ? (d as any).ms_left
+              : 0;
+
+        setRlCountdown(Math.max(0, Math.ceil(ms / 1000)));
+        setRlOnline((d as any).online ?? 0);
+      } catch {
+        // 若失敗：給個預設值（例如 30 秒），避免 UI 空白
+        setRlCountdown((s) => (s > 0 ? s : 30));
+      }
+    };
+
+    // 第一次載入
+    loadRoulette();
+
+    // 本地每秒倒數
+    tickTimer = setInterval(() => {
+      setRlCountdown((s) => (s > 0 ? s - 1 : 0));
+    }, 1000);
+
+    // 每 5 秒向伺服器同步一次（避免本地與伺服器漂移）
+    pollTimer = setInterval(loadRoulette, 5000);
+
+    return () => {
+      if (tickTimer) clearInterval(tickTimer);
+      if (pollTimer) clearInterval(pollTimer);
+    };
   }, []);
 
   async function onLogout() {
@@ -164,8 +219,8 @@ export default function LobbyPage() {
           {/* 銀行卡片 */}
           <div className="lb-bank" aria-label="銀行">
             <div className="lb-bank__head">
-              <div className="lb-bank__titlewrap">{/* ⬅ 新增一層包裝，插動畫 */}
-                <BankLottie /> 
+              <div className="lb-bank__titlewrap">
+                <BankLottie />
                 <div className="lb-bank__title">銀行</div>
               </div>
               <Link href="/bank" className="lb-btn-mini ghost">前往銀行</Link>
@@ -210,6 +265,9 @@ export default function LobbyPage() {
         {/* 中欄 */}
         <section className="lb-main">
           <div className="lb-games">
+            {/* ✅ 新增：輪盤卡片（會顯示 RL_R60 的倒數與在線） */}
+            <GameCard title="輪盤" online={rlOnline} countdown={rlCountdown} href="/casino/roulette" />
+
             <GameCard title="百家樂" online={328} countdown={27} href="/casino/baccarat" />
             <GameCard title="骰寶" online={152} countdown={41} href="/casino/sicbo" />
             <GameCard title="樂透" online={93} href="/casino/lotto" />
