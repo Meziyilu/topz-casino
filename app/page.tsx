@@ -1,6 +1,7 @@
+// app/page.tsx
 "use client";
 
-// ✅ 一次載入大廳樣式 + 頭框特效樣式 + 補充樣式
+// ✅ 一次載入大廳樣式 + 頭框特效樣式 + 本次補充樣式
 import "@/public/styles/lobby.css";
 import "@/public/styles/headframes.css";
 import "@/public/styles/lobby-extras.css";
@@ -15,9 +16,14 @@ import GameCard from "@/components/lobby/GameCard";
 import ChatBox from "@/components/lobby/ChatBox";
 import ServiceWidget from "@/components/lobby/ServiceWidget";
 import Leaderboard from "@/components/lobby/Leaderboard";
-import CheckinCard from "@/components/lobby/CheckinCard"; 
+import CheckinCard from "@/components/lobby/CheckinCard";
 import BankLottie from "@/components/bank/BankLottie";
-import RouletteLottie from "@/components/roulette/RouletteLottie"; // ✅ 新增
+
+// ⬇ 四個 Lottie（你已把 json 放在 /public/lottie/）
+import RouletteLottie from "@/components/roulette/RouletteLottie";
+import BaccaratLottie from "@/components/baccarat/BaccaratLottie";
+import SicboLottie from "@/components/sicbo/SicboLottie";
+import LottoLottie from "@/components/lotto/LottoLottie";
 
 type Me = {
   id: string;
@@ -48,7 +54,7 @@ type Announcement = {
   createdAt?: string;
 };
 
-// ✅ 輪盤大廳卡片用的 Overview 型別
+// 大廳輪盤卡片會用到的概覽資料
 type RouletteOverview = {
   phase: "BETTING" | "REVEALING" | "SETTLED";
   msLeft: number;
@@ -63,43 +69,39 @@ export default function LobbyPage() {
   const [weeklyLB, setWeeklyLB] = useState<LbItem[]>([]);
   const [anns, setAnns] = useState<Announcement[]>([]);
 
-  // ✅ 輪盤 RL_R60 倒數 + 在線
+  // ✅ 輪盤卡片（以 RL_R60 為大廳顯示房）
   const [rlCountdown, setRlCountdown] = useState<number>(0);
   const [rlOnline, setRlOnline] = useState<number>(0);
 
-  // 抓取玩家資料
   useEffect(() => {
     fetch("/api/users/me", { credentials: "include" })
-      .then(r => (r.ok ? r.json() : Promise.reject()))
-      .then(d => setMe(d.user ?? null))
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => setMe(d.user ?? null))
       .catch(() => setMe(null));
   }, []);
 
-  // 跑馬燈
   useEffect(() => {
     fetch("/api/marquee", { cache: "no-store" })
-      .then(r => (r.ok ? r.json() : Promise.reject()))
-      .then(d => setMarquee(d.texts ?? []))
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => setMarquee(d.texts ?? []))
       .catch(() => setMarquee([]));
   }, []);
 
-  // 公告
   useEffect(() => {
     fetch("/api/announcement?enabled=1&limit=10", { cache: "no-store" })
-      .then(r => (r.ok ? r.json() : Promise.reject()))
-      .then(d => setAnns(d.items ?? []))
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => setAnns(d.items ?? []))
       .catch(() => setAnns([]));
   }, []);
 
-  // 週排行榜
   useEffect(() => {
     fetch("/api/leaderboard?period=WEEKLY&limit=10", { cache: "no-store" })
-      .then(r => (r.ok ? r.json() : Promise.reject()))
-      .then(d => setWeeklyLB(d.items ?? []))
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => setWeeklyLB(d.items ?? []))
       .catch(() => setWeeklyLB([]));
   }, []);
 
-  // 輪盤 RL_R60 Overview
+  // ✅ 讀 RL_R60 狀態：每 5s 同步一次，平時每秒本地倒數
   useEffect(() => {
     let tickTimer: ReturnType<typeof setInterval> | null = null;
     let pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -118,12 +120,12 @@ export default function LobbyPage() {
         setRlCountdown(Math.max(0, Math.ceil(ms / 1000)));
         setRlOnline((d as any).online ?? 0);
       } catch {
-        setRlCountdown(s => (s > 0 ? s : 30));
+        setRlCountdown((s) => (s > 0 ? s : 30));
       }
     };
 
     loadRoulette();
-    tickTimer = setInterval(() => setRlCountdown(s => (s > 0 ? s - 1 : 0)), 1000);
+    tickTimer = setInterval(() => setRlCountdown((s) => (s > 0 ? s - 1 : 0)), 1000);
     pollTimer = setInterval(loadRoulette, 5000);
 
     return () => {
@@ -136,9 +138,8 @@ export default function LobbyPage() {
     try {
       setLoggingOut(true);
       await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
-    } finally {
-      window.location.href = "/login";
-    }
+    } catch {}
+    window.location.href = "/login";
   }
 
   return (
@@ -229,7 +230,7 @@ export default function LobbyPage() {
             <div className="lb-card-title">公告</div>
             <ul className="lb-list soft" id="ann-list">
               {anns.length ? (
-                anns.map(a => (
+                anns.map((a) => (
                   <li key={a.id} className="ann-item">
                     <div className="ann-title">{a.title}</div>
                     <div className="ann-body">{a.body}</div>
@@ -247,19 +248,38 @@ export default function LobbyPage() {
         {/* 中欄 */}
         <section className="lb-main">
           <div className="lb-games">
-            {/* ✅ 輪盤卡片（帶 Lottie 動畫） */}
-            <div className="lobby-card-with-lottie">
-              <GameCard title="輪盤" online={rlOnline} countdown={rlCountdown} href="/casino/roulette" />
-              <div className="gc-lottie-wrap">
-                <RouletteLottie size={170} speed={1.05} />
+            {/* 輪盤（右側 Lottie） */}
+            <GameCard title="輪盤" online={rlOnline} countdown={rlCountdown} href="/casino/roulette">
+              <div className="gc-overlay gc-right">
+                <RouletteLottie size={190} speed={1.05} />
               </div>
-            </div>
+            </GameCard>
 
-            <GameCard title="百家樂" online={328} countdown={27} href="/casino/baccarat" />
-            <GameCard title="骰寶" online={152} countdown={41} href="/casino/sicbo" />
-            <GameCard title="樂透" online={93} href="/casino/lotto" />
+            {/* 百家樂 */}
+            <GameCard title="百家樂" online={328} countdown={27} href="/casino/baccarat">
+              <div className="gc-overlay gc-right">
+                <BaccaratLottie size={190} speed={1.05} />
+              </div>
+            </GameCard>
+
+            {/* 骰寶 */}
+            <GameCard title="骰寶" online={152} countdown={41} href="/casino/sicbo">
+              <div className="gc-overlay gc-right">
+                <SicboLottie size={190} speed={1.05} />
+              </div>
+            </GameCard>
+
+            {/* 樂透 */}
+            <GameCard title="樂透" online={93} href="/casino/lotto">
+              <div className="gc-overlay gc-right">
+                <LottoLottie size={190} speed={1.05} />
+              </div>
+            </GameCard>
+
+            {/* 21點暫未開放 */}
             <GameCard title="21點" online={0} disabled href="/casino/blackjack" />
           </div>
+
           <ChatBox room="LOBBY" />
         </section>
 
@@ -273,6 +293,23 @@ export default function LobbyPage() {
       </div>
 
       <ServiceWidget />
+
+      {/* ⬇ 把 Lottie 改到卡片「右側置中」 */}
+      <style jsx global>{`
+        .game-card { position: relative; overflow: hidden; }
+        .game-card .gc-overlay.gc-right {
+          position: absolute;
+          right: 8px;
+          top: 50%;
+          transform: translateY(-50%);
+          pointer-events: none;
+          filter: drop-shadow(0 6px 16px rgba(0,0,0,.35));
+        }
+        /* 小螢幕縮小動畫避免溢出 */
+        @media (max-width: 640px) {
+          .game-card .gc-overlay.gc-right { right: 4px; transform: translateY(-50%) scale(.9); }
+        }
+      `}</style>
     </main>
   );
 }
