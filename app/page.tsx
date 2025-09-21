@@ -17,7 +17,7 @@ import ServiceWidget from "@/components/lobby/ServiceWidget";
 import Leaderboard from "@/components/lobby/Leaderboard";
 import CheckinCard from "@/components/lobby/CheckinCard"; // ⬅ 新增：簽到卡
 import BankLottie from "@/components/bank/BankLottie";   // ⬅ 新增：銀行動畫
-import RouletteCard from "@/components/lobby/RouletteCard"; // ⬅ 新增
+import RouletteLottie from "@/components/roulette/RouletteLottie"; // ⬅ 新增
 
 type Me = {
   id: string;
