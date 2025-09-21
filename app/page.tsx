@@ -19,7 +19,7 @@ import Leaderboard from "@/components/lobby/Leaderboard";
 import CheckinCard from "@/components/lobby/CheckinCard";
 import BankLottie from "@/components/bank/BankLottie";
 
-// ⬇ 四個 Lottie（你已把 json 放在 /public/lottie/）
+// ⬇ 四個 Lottie（json 放在 /public/lottie/）
 import RouletteLottie from "@/components/roulette/RouletteLottie";
 import BaccaratLottie from "@/components/baccarat/BaccaratLottie";
 import SicboLottie from "@/components/sicbo/SicboLottie";
@@ -54,7 +54,7 @@ type Announcement = {
   createdAt?: string;
 };
 
-// 大廳輪盤卡片會用到的概覽資料
+// 大廳輪盤卡片概覽
 type RouletteOverview = {
   phase: "BETTING" | "REVEALING" | "SETTLED";
   msLeft: number;
@@ -120,6 +120,7 @@ export default function LobbyPage() {
         setRlCountdown(Math.max(0, Math.ceil(ms / 1000)));
         setRlOnline((d as any).online ?? 0);
       } catch {
+        // 失敗時避免 UI 空白
         setRlCountdown((s) => (s > 0 ? s : 30));
       }
     };
@@ -305,7 +306,6 @@ export default function LobbyPage() {
           pointer-events: none;
           filter: drop-shadow(0 6px 16px rgba(0,0,0,.35));
         }
-        /* 小螢幕縮小動畫避免溢出 */
         @media (max-width: 640px) {
           .game-card .gc-overlay.gc-right { right: 4px; transform: translateY(-50%) scale(.9); }
         }
