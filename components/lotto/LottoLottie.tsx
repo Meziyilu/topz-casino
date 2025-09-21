@@ -1,15 +1,16 @@
-// components/lotto/LottoLottie.tsx
 "use client";
-import { Player } from "@lottiefiles/react-lottie-player";
+import { Player } from "@/components/lottie/LottiePlayer";
 
-export default function LottoLottie({ size = 160, speed = 1 }) {
+export default function LottoLottie({ size=190, speed=1 }: { size?: number; speed?: number }) {
   return (
-    <Player
-      autoplay
-      loop
-      speed={speed}
-      src="/lottie/lotto.json"
-      style={{ width: size, height: size }}
-    />
+    <div style={{ width: size, height: size }}>
+      <Player
+        autoplay
+        loop
+        src="/lottie/lotto.json"
+        speed={speed}
+        style={{ width: "100%", height: "100%" }}
+      />
+    </div>
   );
 }
