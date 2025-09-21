@@ -473,6 +473,19 @@ model Badge {
   createdAt  DateTime    @default(now())
   userBadges UserBadge[]
 }
+/** ======================== Avatar/Headframe（期限型擁有） ======================== */
+model UserHeadframe {
+  id         String        @id @default(cuid())
+  userId     String
+  code       HeadframeCode
+  acquiredAt DateTime      @default(now())
+  expiresAt  DateTime?     // null 代表永久
+
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, code], name: "userId_code")
+  @@index([userId, expiresAt])
+}
 
 model UserBadge {
   id         String   @id @default(cuid())
