@@ -1,214 +1,172 @@
-// app/casino/roulette/[room]/page.tsx
 "use client";
 import { useEffect, useRef, useState } from "react";
 import type { RouletteRoomCode, RouletteBetKind } from "@prisma/client";
+import RouletteWheel from "@/components/roulette/RouletteWheel";
 
 type Phase = "BETTING" | "REVEALING" | "SETTLED";
 
 export default function RoomPage({ params }: { params: { room: RouletteRoomCode } }) {
   const room = params.room;
-  const [state, setState] = useState<{ phase: Phase; msLeft: number; result?: number }>();
+  const [state, setState] = useState<{ phase: Phase; msLeft: number; result?: number|null }>();
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    // 進房就啟動 loop + 讓該房開始循環（server 會避免重覆啟動）
+    // 進房就啟動（用你現有的啟動 API）
     fetch("/api/casino/roulette/room/start", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ room }),
-    });
+    }).catch(()=>{});
 
-    const tick = async () => {
-      const res = await fetch(`/api/casino/roulette/state?room=${room}`, { cache: "no-store" }).then(r => r.json());
-      setState(res);
-      timerRef.current = window.setTimeout(tick, 800); // 輕量輪詢
+    const loop = async () => {
+      const r = await fetch(`/api/casino/roulette/state?room=${room}`, { cache: "no-store" });
+      const j = await r.json();
+      setState({ phase: j.round?.phase ?? j.phase, msLeft: j.msLeft ?? j.ms_left ?? 0, result: j.round?.result ?? j.result });
+      timerRef.current = window.setTimeout(loop, 800);
     };
-    tick();
+    loop();
 
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [room]);
 
-  async function bet(kind: RouletteBetKind, amount: number) {
-    const res = await fetch(`/api/casino/roulette/bet`, {
+  async function place(kind: RouletteBetKind, amount: number, payload?: any) {
+    const r = await fetch(`/api/casino/roulette/bet`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ room, kind, amount }),
-    }).then(r => r.json());
-    if (!res.ok) alert(res.error ?? "BET_FAIL");
+      body: JSON.stringify({ room, kind, amount, payload }),
+    });
+    const j = await r.json();
+    if (!j.ok) alert(j.error ?? "下注失敗");
   }
 
   const sec = Math.ceil((state?.msLeft ?? 0) / 1000);
-  const isBetting = state?.phase === "BETTING";
-  const isRevealing = state?.phase === "REVEALING";
+  const phase = state?.phase ?? "BETTING";
 
   return (
-    <div className="room">
-      <h1>Roulette — {room}</h1>
+    <div className="rl-room">
+      <header className="rl-head glass">
+        <div className="left">
+          <h1>輪盤 <small className="muted">房間：{room}</small></h1>
+        </div>
+        <div className={`phase pill ${phase.toLowerCase()}`}>
+          {phase === "BETTING" && "投注中"}
+          {phase === "REVEALING" && "開獎中"}
+          {phase === "SETTLED" && "已結算"}
+        </div>
+        <div className="timer">倒數 <b>{sec}s</b></div>
+      </header>
 
-      <div className={`phase ${state?.phase ?? ""}`}>
-        Phase: {state?.phase ?? "-"} | Left: {sec}s{" "}
-        {state?.result != null && state.phase !== "BETTING" && <span>Result: {state.result}</span>}
-      </div>
-
-      {/* 轉盤 + 動畫 */}
-      <div className="roulette-stage">
-        <div className={`wheel ${isRevealing ? "spinning" : ""}`} aria-live="polite">
-          <div className="pin" />
-          <div className="ring" />
-          {/* 結果燈號（揭示時先隱藏，結束再亮） */}
-          <div className={`result-bubble ${state?.phase === "SETTLED" ? "show" : ""}`}>
-            {state?.result ?? "-"}
+      <section className="rl-main">
+        {/* 左：盤面 */}
+        <div className="panel glass">
+          <RouletteWheel
+            size={320}
+            phase={phase as any}
+            result={state?.result ?? null}
+            spinMs={10000}       // 10 秒動畫
+            idleSpeed={10}
+          />
+          <div className="result-chip">
+            {state?.result != null ? `結果：${state.result}` : "等待結果…"}
           </div>
         </div>
 
-        {/* 開獎動畫層（10s）：閃光/粒子/掃光 */}
-        {isRevealing && (
-          <div className="reveal-overlay" aria-hidden>
-            <div className="flash" />
-            <div className="sweep" />
-            <div className="sparks" />
-            <div className="countdown-bar">
-              <div className="fill" />
-            </div>
+        {/* 右：下注面板（中文） */}
+        <div className="panel glass bet-panel">
+          <h3>快速下注</h3>
+          <div className="chips">
+            {[10, 50, 100, 500, 1000].map(v => (
+              <button key={v} className="chip" onClick={() => place("RED_BLACK" as RouletteBetKind, v, { color: "RED" })}>紅 {v}</button>
+            ))}
           </div>
-        )}
-      </div>
 
-      {/* 簡易下注面板（揭示或結算時鎖定按鈕） */}
-      <div className="bets">
-        <button disabled={!isBetting} onClick={() => bet("RED_BLACK" as RouletteBetKind, 10)}>Red $10</button>
-        <button disabled={!isBetting} onClick={() => bet("ODD_EVEN"  as RouletteBetKind, 10)}>Odd $10</button>
-        <button disabled={!isBetting} onClick={() => bet("LOW_HIGH"  as RouletteBetKind, 10)}>Low $10</button>
-        <button disabled={!isBetting} onClick={() => bet("STRAIGHT"  as RouletteBetKind, 10)}>Straight $10</button>
-      </div>
+          <h4>常用玩法</h4>
+          <div className="grid grid-2">
+            <button onClick={() => place("RED_BLACK" as RouletteBetKind, 50, { color: "RED" })}>紅</button>
+            <button onClick={() => place("RED_BLACK" as RouletteBetKind, 50, { color: "BLACK" })}>黑</button>
+            <button onClick={() => place("ODD_EVEN" as RouletteBetKind, 50, { odd: true })}>單</button>
+            <button onClick={() => place("ODD_EVEN" as RouletteBetKind, 50, { odd: false })}>雙</button>
+            <button onClick={() => place("LOW_HIGH" as RouletteBetKind, 50, { high: false })}>小(1–18)</button>
+            <button onClick={() => place("LOW_HIGH" as RouletteBetKind, 50, { high: true })}>大(19–36)</button>
+          </div>
+
+          <h4>打／列</h4>
+          <div className="grid grid-3">
+            {[1,2,3].map(d => (
+              <button key={`dozen-${d}`} onClick={() => place("DOZEN" as RouletteBetKind, 50, { dozen: d-1 })}>第{d}打</button>
+            ))}
+            {[1,2,3].map(c => (
+              <button key={`col-${c}`} onClick={() => place("COLUMN" as RouletteBetKind, 50, { col: c-1 })}>第{c}列</button>
+            ))}
+          </div>
+
+          <h4>直注（單號）</h4>
+          <div className="nums">
+            {Array.from({length:37}).map((_,i)=>(
+              <button key={i} onClick={() => place("STRAIGHT" as RouletteBetKind, 10, { n: i })}>{i}</button>
+            ))}
+          </div>
+        </div>
+      </section>
 
       <style jsx>{`
-        .phase {
-          padding: 8px 12px; margin: 10px 0 16px; border-radius: 8px;
-          transition: background 400ms, box-shadow 400ms;
+        .muted { opacity:.7; font-weight:400; }
+        .rl-room { padding: 20px; }
+        .glass {
+          background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+          border: 1px solid rgba(255,255,255,.08);
+          border-radius: 14px;
+          box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.05);
+          backdrop-filter: blur(10px);
         }
-        .phase.BETTING { background: rgba(0,200,0,.1); box-shadow: 0 0 24px rgba(0,255,0,.2); }
-        .phase.REVEALING { background: rgba(200,160,0,.12); box-shadow: 0 0 32px rgba(255,220,0,.35); animation: flash 1.2s infinite; }
-        .phase.SETTLED { background: rgba(80,80,80,.12); }
-
-        .roulette-stage {
-          position: relative;
-          width: min(520px, 90vw);
-          height: min(520px, 90vw);
-          margin: 0 auto 18px;
+        .rl-head {
+          display:flex; align-items:center; gap:16px; padding:12px 16px; margin-bottom:16px;
         }
-        .wheel {
-          position: relative;
-          width: 100%; height: 100%;
-          border-radius: 50%;
-          background: radial-gradient(circle at 50% 50%, #222 0%, #111 60%, #000 100%);
-          border: 8px solid #333;
-          overflow: hidden;
+        .phase.pill {
+          padding:6px 10px; border-radius:999px; font-weight:600;
+          background: rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12);
         }
-        .wheel::before {
-          content: "";
-          position: absolute; inset: -40%;
-          background:
-            conic-gradient(from 0deg,
-              #c00, #222 5deg, #222 10deg,
-              #0c0, #222 15deg, #222 20deg,
-              #c00, #222 25deg, #222 30deg,
-              #0c0, #222 35deg, #222 40deg,
-              #c00, #222 45deg, #222 50deg,
-              #0c0, #222 55deg, #222 60deg,
-              #c00, #222 65deg, #222 70deg,
-              #0c0, #222 75deg, #222 80deg,
-              #c00, #222 85deg, #222 90deg,
-              #0c0, #222 95deg, #222 100deg,
-              #c00, #222 105deg, #222 110deg,
-              #0c0, #222 115deg, #222 120deg,
-              #c00, #222 125deg, #222 130deg,
-              #0c0, #222 135deg, #222 140deg,
-              #c00, #222 145deg, #222 150deg,
-              #0c0, #222 155deg, #222 160deg,
-              #c00, #222 165deg, #222 170deg,
-              #0c0, #222 175deg, #222 180deg);
-          opacity: .9;
-          transition: transform .6s cubic-bezier(.2,.8,.2,1);
-        }
-        .wheel.spinning::before {
-          animation: spin 10s cubic-bezier(.2,.8,.2,1) forwards;
+        .phase.betting { color:#26d37d; }
+        .phase.revealing { color:#ffd34d; animation: glow 1.2s infinite; }
+        .phase.settled { color:#aab; }
+        .timer { margin-left:auto; }
+        @keyframes glow {
+          0% { text-shadow:0 0 0 rgba(255,240,120,.0); }
+          50% { text-shadow:0 0 12px rgba(255,240,120,.9); }
+          100% { text-shadow:0 0 0 rgba(255,240,120,.0); }
         }
 
-        .pin {
-          position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
-          width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent;
-          border-bottom: 16px solid #ffd44d; filter: drop-shadow(0 2px 6px rgba(0,0,0,.6));
-        }
-        .ring {
-          position: absolute; inset: 10%;
-          border-radius: 50%;
-          border: 4px dashed rgba(255,255,255,.15);
-        }
-        .result-bubble {
-          position: absolute; inset: 35% 35%;
-          display: grid; place-items: center;
-          border-radius: 50%;
-          background: radial-gradient(circle at 50% 40%, #333, #111 70%);
-          color: #fff; font-weight: 700; font-size: clamp(22px, 6vw, 40px);
-          opacity: 0; transform: scale(.6);
-          transition: opacity .4s, transform .4s;
-          box-shadow: inset 0 0 10px rgba(255,255,255,.06), 0 0 24px rgba(255,255,160,.08);
-        }
-        .result-bubble.show { opacity: 1; transform: scale(1); }
-
-        .reveal-overlay {
-          position: absolute; inset: 0; pointer-events: none; overflow: hidden;
-        }
-        .flash {
-          position: absolute; inset: -5%;
-          background: radial-gradient(circle at 50% 50%, rgba(255,240,120,.25), transparent 60%);
-          animation: pulse 1.2s ease-in-out infinite;
-        }
-        .sweep {
-          position: absolute; top: 0; bottom: 0; left: -40%;
-          width: 40%; transform: skewX(-20deg);
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,.32), transparent);
-          animation: sweep 2.2s linear infinite;
-        }
-        .sparks {
-          position: absolute; inset: 0;
-          background-image:
-            radial-gradient(circle, rgba(255,255,200,.9) 0 2px, transparent 3px),
-            radial-gradient(circle, rgba(255,220,120,.7) 0 2px, transparent 3px),
-            radial-gradient(circle, rgba(255,255,255,.8) 0 2px, transparent 3px);
-          background-size: 6px 6px, 8px 8px, 7px 7px;
-          background-position:
-            10% 30%, 25% 50%, 40% 20%,
-            60% 70%, 75% 35%, 85% 60%;
-          opacity: .0; animation: twinkle 2.4s ease-in-out infinite;
-        }
-        .countdown-bar {
-          position: absolute; left: 8%; right: 8%; bottom: 10%;
-          height: 6px; border-radius: 999px; background: rgba(255,255,255,.1); overflow: hidden;
-        }
-        .countdown-bar .fill {
-          width: 100%; height: 100%;
-          background: linear-gradient(90deg, #ffd766, #ff9b3f);
-          transform-origin: left center;
-          animation: bar 10s linear forwards;
-          filter: drop-shadow(0 0 8px rgba(255,160,0,.6));
+        .rl-main { display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+        .panel { padding:16px; }
+        .panel .result-chip {
+          margin-top:12px; font-weight:700; text-align:center; letter-spacing:.5px;
+          color:#fff; opacity:.9;
         }
 
-        .bets { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
-        .bets button { padding: 10px 14px; border-radius: 8px; border: 1px solid #333; cursor: pointer; }
-        .bets button[disabled] { opacity: .5; cursor: not-allowed; }
+        .bet-panel h3 { margin:0 0 10px; }
+        .bet-panel h4 { margin:16px 0 8px; font-size:14px; opacity:.9; }
+        .chips { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:6px; }
+        .chip {
+          padding:8px 12px; border-radius:999px; border:1px solid rgba(255,255,255,.12);
+          background: rgba(255,255,255,.06); cursor:pointer;
+        }
+        .grid { display:grid; gap:8px; }
+        .grid-2 { grid-template-columns: repeat(2, 1fr); }
+        .grid-3 { grid-template-columns: repeat(3, 1fr); }
+        .grid button, .nums button, .chip {
+          color:#fff; font-weight:600; transition: transform .08s ease, background .2s;
+        }
+        .grid button:hover, .nums button:hover, .chip:hover { transform: translateY(-1px); background: rgba(255,255,255,.1); }
+        .nums {
+          display:grid; gap:6px; grid-template-columns: repeat(10, 1fr);
+          max-height: 260px; overflow:auto; padding-right:4px;
+        }
+        .nums button {
+          border:1px solid rgba(255,255,255,.1); border-radius:10px; padding:8px 0; background: rgba(255,255,255,.04);
+        }
 
-        @keyframes flash { 0% { filter: drop-shadow(0 0 0 rgba(255,255,160,0)); } 50% { filter: drop-shadow(0 0 12px rgba(255,255,200,.9)); } 100% { filter: drop-shadow(0 0 0 rgba(255,255,160,0)); } }
-        @keyframes spin { from { transform: rotate(0); } to { transform: rotate(1440deg); } } /* 任意 1440=4圈，可自行調整 */
-        @keyframes pulse { 0%,100% { opacity:.2 } 50% { opacity:.45 } }
-        @keyframes sweep { from { transform: translateX(0) skewX(-20deg);} to { transform: translateX(180%) skewX(-20deg);} }
-        @keyframes twinkle { 0%,100% { opacity: .0; } 50% { opacity: .45; } }
-        @keyframes bar { from { transform: scaleX(1); } to { transform: scaleX(0); } }
-
-        @media (prefers-reduced-motion: reduce) {
-          .wheel.spinning::before,
-          .flash, .sweep, .sparks, .countdown-bar .fill { animation: none !important; }
+        @media (max-width: 960px) {
+          .rl-main { grid-template-columns: 1fr; }
         }
       `}</style>
     </div>
