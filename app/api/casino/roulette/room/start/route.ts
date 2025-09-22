@@ -1,4 +1,3 @@
-// app/api/casino/roulette/room/start/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { startRoomLoop } from "@/services/roulette.service";
 import type { RouletteRoomCode } from "@prisma/client";
