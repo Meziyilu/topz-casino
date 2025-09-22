@@ -1,87 +1,133 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import "@/public/styles/checkin.css";
+import dynamic from "next/dynamic";
 
-type CheckinState = {
-  canClaim: boolean;
+const LottiePlayer = dynamic(() => import("@/components/common/LottiePlayer"), { ssr: false });
+
+type StateResp = {
+  lastClaimedYmd: string | null;
   streak: number;
   totalClaims: number;
+  nextAvailableAt: string;
+  canClaim: boolean;
   todayClaimed: boolean;
-  todayAmount: number;
-  nextAvailableAt: string | null;
+  amountPreview: number;
+  previewDetail?: { base: number; sundayBonus: number; streakAfter: number };
+};
+
+type HistItem = {
+  id: string;
+  ymd: string;
+  amount: number;
+  streakBefore: number;
+  streakAfter: number;
+  createdAt: string;
 };
 
 export default function CheckinCard() {
-  const [s, setS] = useState<CheckinState | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [state, setState] = useState<StateResp | null>(null);
+  const [history, setHistory] = useState<HistItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [claiming, setClaiming] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
-  async function load() {
-    const r = await fetch("/api/checkin", { cache: "no-store" });
-    const d = await r.json();
-    setS(d);
+  const [play, setPlay] = useState(false);
+  const lottieWrapRef = useRef<HTMLDivElement | null>(null);
+
+  async function refresh() {
+    setLoading(true);
+    setErr(null);
+    try {
+      const [s, h] = await Promise.all([
+        fetch("/api/checkin/state", { cache: "no-store" }).then(r => r.json()),
+        fetch("/api/checkin/history?limit=14", { cache: "no-store" }).then(r => r.json()),
+      ]);
+      setState(s);
+      setHistory(h.list ?? []);
+    } catch {
+      setErr("載入失敗");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function claim() {
-    if (!s?.canClaim) return;
-    setBusy(true);
-    setMsg(null);
-    const r = await fetch("/api/checkin", { method: "POST" });
-    const d = await r.json();
-    setBusy(false);
-    if (d.ok && !d.already) {
-      setMsg(`簽到成功，獲得 ${d.amount} 金幣！`);
-    } else {
-      setMsg("今天已簽到。");
+    if (!state?.canClaim) return;
+    setClaiming(true);
+    setErr(null);
+    try {
+      const res = await fetch("/api/checkin/claim", { method: "POST" });
+      const data = await res.json();
+      if (data.claimed) {
+        setPlay(true); // 播 Lottie
+        setTimeout(() => setPlay(false), 2500);
+        await refresh();
+      } else if (data.reason === "ALREADY_CLAIMED") {
+        await refresh();
+      } else {
+        setErr("簽到失敗，請稍後再試");
+      }
+    } catch {
+      setErr("簽到失敗");
+    } finally {
+      setClaiming(false);
     }
-    load();
   }
 
-  useEffect(() => {
-    load();
-  }, []);
+  useEffect(() => { refresh(); }, []);
+
+  const nextAtStr = state ? new Date(state.nextAvailableAt).toLocaleString() : "";
+  const sundayBonus = state?.previewDetail?.sundayBonus ?? 0;
 
   return (
-    <div className="lb-card">
-      <div className="lb-card-title">每日簽到</div>
+    <div className="pf-checkin-card">
+      {/* Lottie on top */}
+      <div ref={lottieWrapRef} className={`pf-lottie-wrap ${play ? "playing" : ""}`}>
+        {play && (
+          <LottiePlayer
+            path="/lotties/checkin-fireworks.json"
+            loop={false}
+            autoplay={true}
+            speed={1.1}
+          />
+        )}
+      </div>
+      <div className={`pf-glow ${play ? "" : "dim"}`} />
 
-      {s ? (
-        <div style={{ display: "grid", gap: 10 }}>
-          <div className="lb-row">
-            <span className="lb-muted">連續天數</span>
-            <b>{s.streak} 天</b>
-          </div>
-          <div className="lb-row">
-            <span className="lb-muted">今日獎勵</span>
-            <b>{s.todayAmount} 金幣</b>
-          </div>
+      <div className="pf-checkin-title">
+        每日簽到（1–30天表＋週日大獎）
+      </div>
 
-          {/* 特別提示：第 6 天後，隔天有 10000 金幣 */}
-          {s.streak === 6 && s.canClaim && (
-            <div className="lb-hint">🎉 明天簽到可領取 10000 金幣！</div>
-          )}
+      {err && <div className="pf-badge" style={{ borderColor: "var(--pf-danger,#f87171)" }}>{err}</div>}
 
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              className="lb-btn"
-              onClick={claim}
-              disabled={!s.canClaim || busy}
-              style={{ padding: "10px 14px" }}
-            >
-              {s.canClaim ? (busy ? "領取中…" : "領取簽到獎勵") : "今日已簽到"}
-            </button>
-            {!s.canClaim && s.nextAvailableAt && (
-              <span className="lb-muted" style={{ alignSelf: "center" }}>
-                下次：{new Date(s.nextAvailableAt).toLocaleString()}
-              </span>
-            )}
-          </div>
+      <div className="pf-checkin-row">
+        <div className="pf-badge">連續天數：<b>{state?.streak ?? 0}</b></div>
+        <div className="pf-badge">累積簽到：<b>{state?.totalClaims ?? 0}</b></div>
+        <div className="pf-badge">今日預覽：<b>{state?.amountPreview ?? 0}</b></div>
+        {sundayBonus > 0 && <div className="pf-badge">含週日加碼：+{sundayBonus}</div>}
+        <button
+          className="pf-cta"
+          onClick={claim}
+          disabled={loading || claiming || !state?.canClaim}
+          title={state?.canClaim ? "領取今日簽到獎勵" : "下一次可領：" + nextAtStr}
+        >
+          {claiming ? "領取中…" : state?.todayClaimed ? "今天已領" : "領取獎勵"}
+        </button>
+      </div>
 
-          {msg && <div className="lb-hint">{msg}</div>}
-        </div>
-      ) : (
-        <div className="lb-muted">讀取中…</div>
-      )}
+      {!state?.canClaim && <div className="pf-muted">下一次可領時間：{nextAtStr}</div>}
+
+      <ul className="pf-list">
+        {history.map((it) => (
+          <li key={it.id}>
+            <span>{new Date(it.ymd).toLocaleDateString()}</span>
+            <span>+{it.amount}（{it.streakAfter} 天）</span>
+          </li>
+        ))}
+        {history.length === 0 && <li><span className="pf-muted">尚無歷史紀錄</span><span /></li>}
+      </ul>
     </div>
   );
 }

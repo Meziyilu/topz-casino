@@ -1,0 +1,75 @@
+/* public/styles/checkin.css */
+.pf-checkin-card {
+  background: var(--pf-card, rgba(18,22,33,.55));
+  border: 1px solid var(--pf-border, rgba(255,255,255,.16));
+  border-radius: 18px;
+  padding: 16px;
+  backdrop-filter: blur(var(--pf-blur,16px));
+  box-shadow: 0 8px 24px var(--pf-shadow, rgba(0,0,0,.38));
+  color: var(--pf-text, #dfe6ff);
+  position: relative;
+  overflow: hidden;
+}
+
+.pf-checkin-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pf-checkin-row {
+  display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  margin: 8px 0;
+}
+
+.pf-badge {
+  background: var(--pf-glass, rgba(255,255,255,.06));
+  border: 1px solid var(--pf-border, rgba(255,255,255,.16));
+  border-radius: 12px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.pf-cta {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--pf-border, rgba(255,255,255,.16));
+  background: var(--pf-primary, #5ac8fa);
+  color: #0b0f1a;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform .06s ease, opacity .2s ease;
+}
+.pf-cta[disabled]{ opacity:.6; cursor:not-allowed; }
+.pf-cta:active{ transform: translateY(1px); }
+
+.pf-list { margin-top: 12px; font-size: 13px; max-height: 220px; overflow: auto; }
+.pf-list li { display:flex; justify-content:space-between; padding:6px 0; border-bottom: 1px dashed var(--pf-border, rgba(255,255,255,.16)); }
+.pf-muted { color: var(--pf-muted, #8ea0bf); font-size: 12px; }
+
+/* === Lottie 區（浮在卡片頂層，點擊不擋互動）=== */
+.pf-lottie-wrap {
+  position: absolute; inset: -10px -10px auto -10px; height: 140px;
+  pointer-events: none; opacity: 0; transform: translateY(-6px);
+  transition: opacity .25s ease, transform .25s ease;
+  z-index: 2;
+}
+.pf-lottie-wrap.playing { opacity: 1; transform: translateY(0); }
+
+.pf-glow {
+  position: absolute; inset: -12px; pointer-events: none;
+  background: radial-gradient(1200px 400px at 50% -10%, rgba(138,180,255,.26), transparent 60%),
+              radial-gradient(1000px 300px at 20% 0%, rgba(90,200,250,.18), transparent 60%),
+              radial-gradient(900px 300px at 80% 0%, rgba(139,92,246,.18), transparent 60%);
+  opacity: .45; filter: blur(8px);
+  z-index: 1;
+  transition: opacity .3s ease;
+}
+.pf-glow.dim { opacity: .15; }

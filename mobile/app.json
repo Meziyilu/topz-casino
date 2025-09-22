@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "Topzcasino",
+    "slug": "topzcasino-mobile",
+    "scheme": "topzcasino",
+    "orientation": "portrait",
+    "plugins": [
+      "expo-secure-store",
+      "expo-router"
+    ],
+    "ios": {
+      "supportsTablet": false
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#000000"
+      }
+    }
+  }
+}
