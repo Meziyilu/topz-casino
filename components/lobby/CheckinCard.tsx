@@ -87,7 +87,7 @@ export default function CheckinCard() {
       <div ref={lottieWrapRef} className={`pf-lottie-wrap ${play ? "playing" : ""}`}>
         {play && (
           <LottiePlayer
-            path="/lotties/checkin-fireworks.json"
+            path="/lottie/checkin-fireworks.json"
             loop={false}
             autoplay={true}
             speed={1.1}
