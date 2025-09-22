@@ -44,8 +44,8 @@ export default function RouletteLobby() {
   async function pullState(room: Room) {
     const r = await fetch(`/api/casino/roulette/state?room=${room}`, { cache: "no-store" });
     if (!r.ok) return;
-    const j: StateResp = await r.json();                   // 先 await
-    setStates((s) => ({ ...s, [room]: j }));               // 再 setState
+    const j: StateResp = await r.json();
+    setStates((s) => ({ ...s, [room]: j }));
   }
 
   async function pullOverview(room: Room) {
@@ -68,13 +68,13 @@ export default function RouletteLobby() {
   }, []);
 
   return (
-    <div className="rlb-wrap" style={{ padding: 20 }}>
+    <div className="rlb-wrap">
       <header className="rlb-head">
         <h1>Roulette Lobby</h1>
-        <p className="muted">選擇一個房間進入下注</p>
+        <p className="rlb-muted">選擇一個房間進入下注</p>
       </header>
 
-      <section className="rlb-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
+      <section className="rlb-grid">
         {ROOMS.map((r) => {
           const st = states[r.code];
           const ov = overviews[r.code];
@@ -84,45 +84,66 @@ export default function RouletteLobby() {
           const res = st?.round.result ?? "-";
 
           return (
-            <Link key={r.code} href={`/casino/roulette/rooms/${r.code}`} className="rlb-card glass"
-              style={{ padding: 16, borderRadius: 12, textDecoration: "none", color: "inherit" }}>
-              <div className={`badge ${String(phase).toLowerCase()}`}>{phase}</div>
+            <Link key={r.code} href={`/casino/roulette/rooms/${r.code}`} className="rlb-card glass">
+              <div className={`rlb-badge ${String(phase).toLowerCase()}`}>{phase}</div>
 
-              <div className="wheel" style={{ height: 140, display: "grid", placeItems: "center" }}>
+              <div className="rlb-wheel">
                 <div className="pin" />
-                <div className={`result`}>{res}</div>
+                <div className="result">{res}</div>
               </div>
 
-              <h3 className="title" style={{ marginTop: 6 }}>{r.label}</h3>
+              <h3 className="title">{r.label}</h3>
               <p className="desc">{r.desc}</p>
 
-              <div className="stats" style={{ display: "flex", gap: 12 }}>
+              <div className="stats">
                 <span>Bet close in <b>{lock}</b>s</span>
                 <span>Settle in <b>{end}</b>s</span>
               </div>
 
-              <div className="overview" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, marginTop: 8 }}>
-                <div className="ov">
-                  <div className="ov-k">我本局</div>
-                  <div className="ov-v">${ov?.myTotal ?? 0}</div>
-                </div>
-                <div className="ov">
-                  <div className="ov-k">投注量</div>
-                  <div className="ov-v">${ov?.totalAmount ?? 0}</div>
-                </div>
-                <div className="ov">
-                  <div className="ov-k">筆數</div>
-                  <div className="ov-v">{ov?.totalBets ?? 0}</div>
-                </div>
-                <div className="ov">
-                  <div className="ov-k">人數</div>
-                  <div className="ov-v">{ov?.uniqueUsers ?? 0}</div>
-                </div>
+              <div className="overview">
+                <div className="ov"><div className="ov-k">我本局</div><div className="ov-v">${ov?.myTotal ?? 0}</div></div>
+                <div className="ov"><div className="ov-k">投注量</div><div className="ov-v">${ov?.totalAmount ?? 0}</div></div>
+                <div className="ov"><div className="ov-k">筆數</div><div className="ov-v">{ov?.totalBets ?? 0}</div></div>
+                <div className="ov"><div className="ov-k">人數</div><div className="ov-v">{ov?.uniqueUsers ?? 0}</div></div>
               </div>
             </Link>
           );
         })}
       </section>
+
+      <style jsx global>{`
+        .rlb-wrap { padding:20px; }
+        .rlb-head { margin-bottom:16px; }
+        .rlb-muted { opacity:.7; font-weight:400; }
+        .rlb-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px; }
+
+        .glass {
+          background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+          border: 1px solid rgba(255,255,255,.08);
+          border-radius: 14px;
+          box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.05);
+          backdrop-filter: blur(10px);
+        }
+
+        .rlb-card { padding:16px; border-radius:12px; color:inherit; position:relative; display:grid; gap:8px; }
+        .rlb-card:hover { background:rgba(255,255,255,.05); }
+
+        .rlb-badge { position:absolute; top:10px; left:10px; padding:4px 8px; border-radius:999px; font-size:12px; }
+        .rlb-badge.betting { color:#26d37d; }
+        .rlb-badge.revealing { color:#ffd34d; animation:glow 1.2s infinite; }
+        .rlb-badge.settled { color:#aab; }
+        @keyframes glow { 50% { text-shadow:0 0 12px rgba(255,240,120,.9); } }
+
+        .rlb-wheel { height:140px; display:grid; place-items:center; position:relative; }
+        .rlb-wheel .result { font-weight:700; letter-spacing:.5px; opacity:.9; }
+
+        .title { margin-top:6px; font-weight:700; }
+        .desc { opacity:.85; font-size:13px; }
+        .stats { display:flex; gap:12px; font-size:13px; opacity:.9; }
+        .overview { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:4px; }
+        .ov-k { font-size:12px; opacity:.8; }
+        .ov-v { font-weight:700; }
+      `}</style>
     </div>
   );
 }
