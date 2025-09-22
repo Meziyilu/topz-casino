@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { View, Text, TextInput, Pressable, Alert } from "react-native";
 import { router } from "expo-router";
-import { login } from "~//src/api";
+import { login } from "~/src/api";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");

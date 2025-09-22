@@ -8,7 +8,6 @@ export default function LottiePlayer({
   loop = false,
   autoplay = false,
   className,
-  onComplete,
   speed = 1,
 }: {
   path: string;
@@ -16,7 +15,6 @@ export default function LottiePlayer({
   autoplay?: boolean;
   className?: string;
   speed?: number;
-  onComplete?: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const animRef = useRef<AnimationItem | null>(null);
@@ -24,26 +22,34 @@ export default function LottiePlayer({
   useEffect(() => {
     let mounted = true;
     (async () => {
-      const lottie = (await import("lottie-web")).default;
-      if (!ref.current || !mounted) return;
-      const anim = lottie.loadAnimation({
-        container: ref.current,
-        renderer: "svg",
-        loop,
-        autoplay,
-        path,
-      });
-      anim.setSpeed(speed);
-      animRef.current = anim;
-      if (onComplete) anim.addEventListener("complete", onComplete);
+      try {
+        const lottie = (await import("lottie-web")).default;
+
+        // 先抓 JSON，路徑錯誤會有清楚的錯誤訊息
+        const res = await fetch(path, { cache: "no-store" });
+        if (!res.ok) throw new Error(`Lottie fetch ${res.status} ${res.statusText} for ${path}`);
+        const animationData = await res.json();
+
+        if (!ref.current || !mounted) return;
+        const anim = lottie.loadAnimation({
+          container: ref.current,
+          renderer: "svg",
+          loop,
+          autoplay,
+          animationData,
+        });
+        anim.setSpeed(speed);
+        animRef.current = anim;
+      } catch (e) {
+        console.error("[Lottie] load failed:", e);
+      }
     })();
 
     return () => {
-      mounted = false;
       animRef.current?.destroy();
       animRef.current = null;
     };
-  }, [path, loop, autoplay, speed, onComplete]);
+  }, [path, loop, autoplay, speed]);
 
   return <div ref={ref} className={className} />;
 }

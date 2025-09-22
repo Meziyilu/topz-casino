@@ -1,17 +1,9 @@
 import { useEffect, useState } from "react";
 import { View, Text, Pressable, Alert } from "react-native";
 import { router } from "expo-router";
-import { me } from "~//src/api";
+import { me } from "~/src/api";
 
-type Me = {
-  id: string;
-  displayName: string;
-  balance: number;
-  bankBalance: number;
-  vipTier: number;
-  avatarUrl?: string | null;
-  headframe?: string | null;
-};
+type Me = { displayName: string; balance: number; bankBalance: number; vipTier: number };
 
 export default function LobbyScreen() {
   const [profile, setProfile] = useState<Me | null>(null);
@@ -22,8 +14,8 @@ export default function LobbyScreen() {
       try {
         const data = await me();
         setProfile(data);
-      } catch (e: any) {
-        Alert.alert("Not logged in", "請先登入");
+      } catch {
+        Alert.alert("未登入", "請先登入");
         router.replace("/(auth)/login");
       } finally {
         setLoading(false);
@@ -45,11 +37,9 @@ export default function LobbyScreen() {
         </View>
       ) : null}
 
-      <View style={{ height: 12 }} />
-
       <Pressable
         onPress={() => router.push("/casino/baccarat/r30")}
-        style={{ backgroundColor: "#8b5cf6", padding: 14, borderRadius: 10, alignItems: "center" }}
+        style={{ backgroundColor: "#8b5cf6", padding: 14, borderRadius: 10, alignItems: "center", marginTop: 12 }}
       >
         <Text style={{ color: "#fff", fontWeight: "700" }}>進入 百家樂 R30</Text>
       </Pressable>

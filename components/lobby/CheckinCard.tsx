@@ -36,32 +36,60 @@ export default function CheckinCard() {
   const [play, setPlay] = useState(false);
   const lottieWrapRef = useRef<HTMLDivElement | null>(null);
 
+  function disabledReason(s: StateResp | null, load: boolean, claim: boolean): string {
+    if (load) return "正在載入狀態";
+    if (claim) return "領取中";
+    if (!s) return "尚未取得簽到狀態（可能未登入或 API 被攔）";
+    if (!s.canClaim) return "今天已領或尚未到可領時間";
+    return "";
+  }
+
   async function refresh() {
     setLoading(true);
     setErr(null);
     try {
+      const readJsonOrThrow = async (res: Response, label: string) => {
+        const ct = res.headers.get("content-type") || "";
+        if (!res.ok) {
+          const body = await res.text().catch(() => "");
+          throw new Error(`[${label}] HTTP ${res.status} ${res.statusText} | CT=${ct} | Body=${body.slice(0,200)}`);
+        }
+        if (!ct.includes("application/json")) {
+          const body = await res.text().catch(() => "");
+          throw new Error(`[${label}] NON_JSON | CT=${ct} | Body=${body.slice(0,200)}`);
+        }
+        return res.json();
+      };
+
       const [s, h] = await Promise.all([
-        fetch("/api/checkin/state", { cache: "no-store" }).then(r => r.json()),
-        fetch("/api/checkin/history?limit=14", { cache: "no-store" }).then(r => r.json()),
+        fetch("/api/checkin/state", { cache: "no-store", credentials: "include" }).then(r => readJsonOrThrow(r, "state")),
+        fetch("/api/checkin/history?limit=14", { cache: "no-store", credentials: "include" }).then(r => readJsonOrThrow(r, "history")),
       ]);
+
       setState(s);
       setHistory(h.list ?? []);
-    } catch {
-      setErr("載入失敗");
+    } catch (e: any) {
+      setErr(e?.message || "載入失敗");
     } finally {
       setLoading(false);
     }
   }
 
   async function claim() {
-    if (!state?.canClaim) return;
+    if (!state?.canClaim || claiming) return;
     setClaiming(true);
     setErr(null);
     try {
-      const res = await fetch("/api/checkin/claim", { method: "POST" });
+      const res = await fetch("/api/checkin/claim", { method: "POST", credentials: "include" });
+      const ct = res.headers.get("content-type") || "";
+      if (!ct.includes("application/json")) {
+        const body = await res.text().catch(()=> "");
+        throw new Error(`[claim] NON_JSON | CT=${ct} | Body=${body.slice(0,200)}`);
+      }
       const data = await res.json();
+
       if (data.claimed) {
-        setPlay(true); // 播 Lottie
+        setPlay(true);
         setTimeout(() => setPlay(false), 2500);
         await refresh();
       } else if (data.reason === "ALREADY_CLAIMED") {
@@ -69,8 +97,8 @@ export default function CheckinCard() {
       } else {
         setErr("簽到失敗，請稍後再試");
       }
-    } catch {
-      setErr("簽到失敗");
+    } catch (e:any) {
+      setErr(e?.message || "簽到失敗");
     } finally {
       setClaiming(false);
     }
@@ -83,51 +111,28 @@ export default function CheckinCard() {
 
   return (
     <div className="pf-checkin-card">
-      {/* Lottie on top */}
-      <div ref={lottieWrapRef} className={`pf-lottie-wrap ${play ? "playing" : ""}`}>
+      {/* Lottie：使用你的實際路徑 /public/lottie/checkin-fireworks.json */}
+      <div ref={lottieWrapRef} className={`pf-lottie-wrap ${play ? "playing" : ""}`} style={{height: 180}}>
         {play && (
           <LottiePlayer
             path="/lottie/checkin-fireworks.json"
             loop={false}
             autoplay={true}
-            speed={1.1}
+            speed={1.05}
           />
         )}
       </div>
       <div className={`pf-glow ${play ? "" : "dim"}`} />
 
-      <div className="pf-checkin-title">
-        每日簽到（1–30天表＋週日大獎）
-      </div>
+      <div className="pf-checkin-title">每日簽到（1–30天表＋週日大獎）</div>
 
-      {err && <div className="pf-badge" style={{ borderColor: "var(--pf-danger,#f87171)" }}>{err}</div>}
+      {err && (
+        <div className="pf-badge" style={{ borderColor: "var(--pf-danger,#f87171)", whiteSpace:"pre-wrap" }}>
+          {err}
+        </div>
+      )}
 
       <div className="pf-checkin-row">
         <div className="pf-badge">連續天數：<b>{state?.streak ?? 0}</b></div>
         <div className="pf-badge">累積簽到：<b>{state?.totalClaims ?? 0}</b></div>
-        <div className="pf-badge">今日預覽：<b>{state?.amountPreview ?? 0}</b></div>
-        {sundayBonus > 0 && <div className="pf-badge">含週日加碼：+{sundayBonus}</div>}
-        <button
-          className="pf-cta"
-          onClick={claim}
-          disabled={loading || claiming || !state?.canClaim}
-          title={state?.canClaim ? "領取今日簽到獎勵" : "下一次可領：" + nextAtStr}
-        >
-          {claiming ? "領取中…" : state?.todayClaimed ? "今天已領" : "領取獎勵"}
-        </button>
-      </div>
-
-      {!state?.canClaim && <div className="pf-muted">下一次可領時間：{nextAtStr}</div>}
-
-      <ul className="pf-list">
-        {history.map((it) => (
-          <li key={it.id}>
-            <span>{new Date(it.ymd).toLocaleDateString()}</span>
-            <span>+{it.amount}（{it.streakAfter} 天）</span>
-          </li>
-        ))}
-        {history.length === 0 && <li><span className="pf-muted">尚無歷史紀錄</span><span /></li>}
-      </ul>
-    </div>
-  );
-}
+        <div classNam
