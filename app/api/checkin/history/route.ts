@@ -3,16 +3,12 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-
-async function getUserIdFromCookie(req: Request): Promise<string | null> {
-  const cookie = req.headers.get("cookie") || "";
-  const m = /uid=([^;]+)/.exec(cookie);
-  return m?.[1] || null;
-}
+import { getUserFromRequest } from "@/lib/auth";
 
 export async function GET(req: Request) {
-  const userId = await getUserIdFromCookie(req);
-  if (!userId) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  const user = await getUserFromRequest(req);
+  if (!user) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  const userId = user.id;
 
   const { searchParams } = new URL(req.url);
   const limit = Math.max(1, Math.min(100, Number(searchParams.get("limit") || 14)));

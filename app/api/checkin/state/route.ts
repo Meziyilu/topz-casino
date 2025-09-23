@@ -3,14 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-
-/** 你自己的登入驗證。如果已有共用方法，換成你的實作 */
-async function getUserIdFromCookie(req: Request): Promise<string | null> {
-  // 最簡版：讀 cookie "uid"
-  const cookie = req.headers.get("cookie") || "";
-  const m = /uid=([^;]+)/.exec(cookie);
-  return m?.[1] || null;
-}
+import { getUserFromRequest } from "@/lib/auth"; // ← 用你現有的登入驗證
 
 function ymdDate(d = new Date()) {
   const x = new Date(d);
@@ -40,51 +33,47 @@ async function loadConfig() {
   try {
     if (tableCfg?.valueString) {
       const parsed = JSON.parse(tableCfg.valueString);
-      if (Array.isArray(parsed) && parsed.length === 30) table = parsed.map((v) => Number(v || 0));
+      if (Array.isArray(parsed) && parsed.length === 30) {
+        table = parsed.map((v) => Number(v || 0));
+      }
     }
   } catch {}
-  const sundayBonus = Number(sundayCfg?.valueInt || sundayCfg?.valueFloat || sundayCfg?.valueBool ? 0 : sundayCfg?.valueInt) || Number(sundayCfg?.valueInt || 0);
-
-  return { table, sundayBonus: Number(isNaN(sundayBonus) ? 0 : sundayBonus) };
+  const sundayBonus = Number(sundayCfg?.valueInt ?? 0);
+  return { table, sundayBonus: isNaN(sundayBonus) ? 0 : sundayBonus };
 }
 
 export async function GET(req: Request) {
-  const userId = await getUserIdFromCookie(req);
-  if (!userId) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  const user = await getUserFromRequest(req);
+  if (!user) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  const userId = user.id;
 
   const today = ymdDate();
-  const todayKey = ymdKey(today);
-
   const state = await prisma.userCheckinState.findUnique({ where: { userId } });
   const { table, sundayBonus } = await loadConfig();
 
-  // 推算 streak（昨天有領才延續，沒領會重置；今天若已領則 todayClaimed=true）
   const lastYmd = state?.lastClaimedYmd || null;
   const todayClaimed = lastYmd ? isSameYmd(lastYmd, today) : false;
 
-  let streak = state?.streak || 0;
-  if (!todayClaimed && lastYmd) {
-    // 只有「昨天」領過才延續，否則 streak 歸零
-    if (!isYesterday(today, new Date(lastYmd))) streak = 0;
+  // streak 今天已領就顯示目前值；未領則只有昨天有領才延續，否則視為中斷
+  let effectiveStreak = state?.streak || 0;
+  if (!todayClaimed && lastYmd && !isYesterday(today, new Date(lastYmd))) {
+    effectiveStreak = 0;
   }
 
-  // 預覽今日金額（1–30天循環）
-  const streakAfter = todayClaimed ? streak : Math.min(30, (streak || 0) + 1);
+  const streakAfter = todayClaimed ? effectiveStreak : Math.min(30, effectiveStreak + 1);
   const base = table[(streakAfter - 1 + 30) % 30] || 0;
-  const isSunday = today.getDay() === 0; // 週日=0
+  const isSunday = today.getDay() === 0;
   const amountPreview = base + (isSunday ? sundayBonus : 0);
 
-  // nextAvailableAt：如果今天已領 → 明天 00:00；否則現在就能領
   const next = new Date(today);
   if (todayClaimed) next.setDate(next.getDate() + 1);
-  const canClaim = !todayClaimed;
 
   return NextResponse.json({
     lastClaimedYmd: lastYmd ? new Date(lastYmd).toISOString() : null,
     streak: state?.streak || 0,
     totalClaims: state?.totalClaims || 0,
     nextAvailableAt: next.toISOString(),
-    canClaim,
+    canClaim: !todayClaimed,
     todayClaimed,
     amountPreview,
     previewDetail: { base, sundayBonus: isSunday ? sundayBonus : 0, streakAfter },

@@ -1,22 +1,12 @@
-// app/api/checkin/claim/route.ts
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getUserFromRequest } from "@/lib/auth";
 import type { Prisma } from "@prisma/client";
 
-async function getUserIdFromCookie(req: Request): Promise<string | null> {
-  const cookie = req.headers.get("cookie") || "";
-  const m = /uid=([^;]+)/.exec(cookie);
-  return m?.[1] || null;
-}
-
-function ymdDate(d = new Date()) {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
+function ymdDate(d = new Date()) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
 function isSameYmd(a: Date | string, b: Date | string) {
   return ymdDate(new Date(a)).getTime() === ymdDate(new Date(b)).getTime();
 }
@@ -32,14 +22,11 @@ async function loadConfig() {
   const sundayCfg = await prisma.gameConfig.findUnique({
     where: { gameCode_key: { gameCode: "GLOBAL", key: "CHECKIN_SUNDAY_BONUS" } },
   });
-
   let table: number[] = Array(30).fill(0);
   try {
     if (tableCfg?.valueString) {
       const parsed = JSON.parse(tableCfg.valueString);
-      if (Array.isArray(parsed) && parsed.length === 30) {
-        table = parsed.map((v) => Number(v || 0));
-      }
+      if (Array.isArray(parsed) && parsed.length === 30) table = parsed.map((v) => Number(v || 0));
     }
   } catch {}
   const sundayBonus = Number(sundayCfg?.valueInt ?? 0);
@@ -47,48 +34,39 @@ async function loadConfig() {
 }
 
 export async function POST(req: Request) {
-  const userId = await getUserIdFromCookie(req);
-  if (!userId) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  const user = await getUserFromRequest(req);
+  if (!user) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  const userId = user.id;
 
   const today = ymdDate();
   const { table, sundayBonus } = await loadConfig();
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      // 讀取狀態（不加鎖，靠唯一鍵防重入）
       const state = await tx.userCheckinState.findUnique({ where: { userId } });
       const lastYmd = state?.lastClaimedYmd || null;
 
-      // 今天已領直接回
       if (lastYmd && isSameYmd(lastYmd, today)) {
         return { claimed: false, reason: "ALREADY_CLAIMED" as const };
       }
 
-      // streak 計算（昨天有領才延續）
+      // 計算連續
       const streakBefore = state?.streak ?? 0;
       let baseStreak = streakBefore;
-      if (!lastYmd) baseStreak = 0;
-      else if (!isYesterday(today, new Date(lastYmd))) baseStreak = 0;
+      if (!lastYmd || !isYesterday(today, new Date(lastYmd))) baseStreak = 0;
 
       const streakAfter = Math.min(30, baseStreak + 1);
       const base = table[(streakAfter - 1 + 30) % 30] || 0;
       const isSunday = today.getDay() === 0;
       const amount = base + (isSunday ? sundayBonus : 0);
 
-      // 建立當日領取紀錄（唯一鍵 userId+ymd 防止重覆）
+      // 寫入當日領取（靠 schema 的 @@unique([userId, ymd]) 防併發）
       let claim;
       try {
         claim = await tx.dailyCheckinClaim.create({
-          data: {
-            userId,
-            ymd: today,
-            amount,
-            streakBefore,
-            streakAfter,
-          },
+          data: { userId, ymd: today, amount, streakBefore, streakAfter },
         });
       } catch (e: any) {
-        // 併發重覆 insert → P2002
         if ((e as Prisma.PrismaClientKnownRequestError)?.code === "P2002") {
           return { claimed: false, reason: "ALREADY_CLAIMED" as const };
         }
@@ -114,7 +92,7 @@ export async function POST(req: Request) {
         },
       });
 
-      // 記 Ledger 並加錢
+      // 記帳＋加錢到錢包
       await tx.ledger.create({
         data: {
           userId,
@@ -134,9 +112,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json(result);
   } catch (e: any) {
-    return NextResponse.json(
-      { error: "SERVER_ERROR", detail: String(e?.message || e) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "SERVER_ERROR", detail: String(e?.message || e) }, { status: 500 });
   }
 }
