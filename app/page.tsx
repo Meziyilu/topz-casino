@@ -1,13 +1,14 @@
 // app/page.tsx
 "use client";
 
-// ✅ 一次載入大廳樣式 + 頭框特效樣式 + 本次補充樣式
+// ✅ 全域樣式
 import "@/public/styles/lobby.css";
 import "@/public/styles/headframes.css";
 import "@/public/styles/lobby-extras.css";
-import "@/public/styles/popup.css"; // ✅ 新增：獨立彈窗樣式
+import "@/public/styles/popup.css";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import Clock from "@/components/lobby/Clock";
 import ThemeToggle from "@/components/lobby/ThemeToggle";
@@ -18,11 +19,19 @@ import ServiceWidget from "@/components/lobby/ServiceWidget";
 import Leaderboard from "@/components/lobby/Leaderboard";
 import CheckinCard from "@/components/lobby/CheckinCard";
 import BankLottie from "@/components/bank/BankLottie";
-import AnnouncementTicker from "@/components/lobby/AnnouncementTicker";
-import AnnouncementModal from "@/components/lobby/AnnouncementModal";
-import LobbyPopupModal from "@/components/lobby/LobbyPopupModal";
 
-// ⬇ 四個 Lottie（json 放在 /public/lottie/）
+// ⛑️ 這些元件內部會碰 window/localStorage → 動態載入並停用 SSR
+const AnnouncementTicker = dynamic(() => import("@/components/lobby/AnnouncementTicker"), {
+  ssr: false,
+});
+const AnnouncementModal = dynamic(() => import("@/components/lobby/AnnouncementModal"), {
+  ssr: false,
+});
+const LobbyPopupModal = dynamic(() => import("@/components/lobby/LobbyPopupModal"), {
+  ssr: false,
+});
+
+// ⬇ Lottie
 import RouletteLottie from "@/components/roulette/RouletteLottie";
 import BaccaratLottie from "@/components/baccarat/BaccaratLottie";
 import SicboLottie from "@/components/sicbo/SicboLottie";
@@ -57,7 +66,6 @@ type Announcement = {
   createdAt?: string;
 };
 
-// 大廳輪盤卡片概覽
 type RouletteOverview = {
   phase: "BETTING" | "REVEALING" | "SETTLED";
   msLeft: number;
@@ -65,15 +73,17 @@ type RouletteOverview = {
 };
 
 export default function LobbyPage() {
+  const [mounted, setMounted] = useState(false); // ✅ 僅在瀏覽器渲染需要 window 的東西
   const [me, setMe] = useState<Me | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
 
   const [weeklyLB, setWeeklyLB] = useState<LbItem[]>([]);
   const [anns, setAnns] = useState<Announcement[]>([]);
 
-  // ✅ 輪盤卡片（以 RL_R60 為大廳顯示房）
   const [rlCountdown, setRlCountdown] = useState<number>(0);
   const [rlOnline, setRlOnline] = useState<number>(0);
+
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     fetch("/api/users/me", { credentials: "include" })
@@ -82,7 +92,7 @@ export default function LobbyPage() {
       .catch(() => setMe(null));
   }, []);
 
-  // ✅ 公告：對齊 /api/announcements/active → { items: [...] }
+  // 公告卡片（列表）
   useEffect(() => {
     fetch("/api/announcements/active", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
@@ -90,6 +100,7 @@ export default function LobbyPage() {
       .catch(() => setAnns([]));
   }, []);
 
+  // 排行榜
   useEffect(() => {
     fetch("/api/leaderboard?period=WEEKLY&limit=10", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
@@ -97,7 +108,7 @@ export default function LobbyPage() {
       .catch(() => setWeeklyLB([]));
   }, []);
 
-  // ✅ 讀 RL_R60 狀態：每 5s 同步一次，平時每秒本地倒數
+  // RL_R60 狀態輪詢 + 倒數
   useEffect(() => {
     let tickTimer: ReturnType<typeof setInterval> | null = null;
     let pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -116,7 +127,6 @@ export default function LobbyPage() {
         setRlCountdown(Math.max(0, Math.ceil(ms / 1000)));
         setRlOnline((d as any).online ?? 0);
       } catch {
-        // 失敗時避免 UI 空白
         setRlCountdown((s) => (s > 0 ? s : 30));
       }
     };
@@ -144,15 +154,28 @@ export default function LobbyPage() {
       <div className="lb-bg" />
       <div className="lb-particles" aria-hidden />
 
-      {/* ⬆️ Announcement（公告）彈窗：讀 /api/announcements/latest，並記憶已讀 */}
-      <AnnouncementModal
-        autoOpen
-        showLatestOnly
-        storageScope="local"
-        storageKeyPrefix="topz"
-        refetchMs={300000}
-        okText="知道了"
-      />
+      {/* ⬆️ 公告彈窗（僅在瀏覽器端掛載） */}
+      {mounted && (
+        <>
+          <AnnouncementModal
+            autoOpen
+            showLatestOnly
+            storageScope="local"
+            storageKeyPrefix="topz"
+            refetchMs={300000}
+            okText="知道了"
+          />
+          <LobbyPopupModal
+            autoOpen
+            storageKeyPrefix="topz"
+            remindAfterMinutes={null}
+            useExternalStyle
+            variant="glass"       // "glass" | "neon" | "aurora"
+            animation="slide-up"  // "fade" | "zoom" | "slide-up"
+            className="popup--center"
+          />
+        </>
+      )}
 
       {/* Header */}
       <header className="lb-header">
@@ -162,8 +185,8 @@ export default function LobbyPage() {
         </div>
 
         <div className="center">
-          {/* ✅ 跑馬燈由元件自行抓 /api/marquee/active */}
-          <AnnouncementTicker />
+          {/* 跑馬燈只在瀏覽器端渲染，避免 SSR 碰到 window */}
+          {mounted ? <AnnouncementTicker /> : <div style={{ height: 24 }} />}
         </div>
 
         <div className="right" style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -250,35 +273,30 @@ export default function LobbyPage() {
         {/* 中欄 */}
         <section className="lb-main">
           <div className="lb-games">
-            {/* 輪盤（右側 Lottie） */}
             <GameCard title="輪盤" online={rlOnline} countdown={rlCountdown} href="/casino/roulette">
               <div className="gc-overlay gc-right">
                 <RouletteLottie size={190} speed={1.05} />
               </div>
             </GameCard>
 
-            {/* 百家樂 */}
             <GameCard title="百家樂" online={328} countdown={27} href="/casino/baccarat">
               <div className="gc-overlay gc-right">
                 <BaccaratLottie size={190} speed={1.05} />
               </div>
             </GameCard>
 
-            {/* 骰寶 */}
             <GameCard title="骰寶" online={152} countdown={41} href="/casino/sicbo">
               <div className="gc-overlay gc-right">
                 <SicboLottie size={190} speed={1.05} />
               </div>
             </GameCard>
 
-            {/* 樂透 */}
             <GameCard title="樂透" online={93} href="/casino/lotto">
               <div className="gc-overlay gc-right">
                 <LottoLottie size={190} speed={1.05} />
               </div>
             </GameCard>
 
-            {/* 21點暫未開放 */}
             <GameCard title="21點" online={0} disabled href="/casino/blackjack" />
           </div>
 
@@ -296,18 +314,7 @@ export default function LobbyPage() {
 
       <ServiceWidget />
 
-      {/* ✅ LobbyPopup（用獨立 CSS + 可選動畫/主題） */}
-      <LobbyPopupModal
-        autoOpen
-        storageKeyPrefix="topz"
-        remindAfterMinutes={null}
-        useExternalStyle
-        variant="glass"           // 可改："neon" | "aurora"
-        animation="slide-up"      // 可改："fade" | "zoom" | "slide-up"
-        className="popup--center" // 參考 popup.css 的定位工具類別
-      />
-
-      {/* ⬇ 把 Lottie 改到卡片「右側置中」 */}
+      {/* Lottie 定位微調 */}
       <style jsx global>{`
         .game-card { position: relative; overflow: hidden; }
         .game-card .gc-overlay.gc-right {
