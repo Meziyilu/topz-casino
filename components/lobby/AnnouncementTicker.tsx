@@ -5,10 +5,8 @@ import "/public/styles/marquee.css";
 
 type Msg = { id: string; text: string; priority?: number };
 type Props = {
-  /** 靜態文字（可選）；若提供則優先顯示這些 */
-  items?: string[];
-  /** 輪詢間隔（毫秒）；預設 15000 */
-  intervalMs?: number;
+  items?: string[];        // 可選：自訂顯示
+  intervalMs?: number;     // 預設 15000
 };
 
 export default function AnnouncementTicker({ items, intervalMs = 15000 }: Props) {
@@ -19,13 +17,10 @@ export default function AnnouncementTicker({ items, intervalMs = 15000 }: Props)
       const res = await fetch("/api/marquee/active", { cache: "no-store" });
       const json = await res.json();
       setRemote((json.items || []) as Msg[]);
-    } catch {
-      // ignore
-    }
+    } catch {}
   }
 
   useEffect(() => {
-    // 只有在沒有傳 props.items 時，才打 API
     if (!items || items.length === 0) {
       load();
       const t = setInterval(load, intervalMs);
@@ -33,7 +28,6 @@ export default function AnnouncementTicker({ items, intervalMs = 15000 }: Props)
     }
   }, [items, intervalMs]);
 
-  // 顯示優先順序：props.items -> API 取得
   const showList: string[] = useMemo(() => {
     if (items && items.length) return items;
     if (remote.length) return remote.map((m) => m.text);
@@ -42,7 +36,6 @@ export default function AnnouncementTicker({ items, intervalMs = 15000 }: Props)
 
   if (!showList.length) return null;
 
-  // 無縫滾動：複製一份
   const dupe = [...showList, ...showList];
 
   return (

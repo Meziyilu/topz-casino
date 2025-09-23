@@ -66,7 +66,6 @@ export default function LobbyPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
 
-  const [marquee, setMarquee] = useState<string[]>([]);
   const [weeklyLB, setWeeklyLB] = useState<LbItem[]>([]);
   const [anns, setAnns] = useState<Announcement[]>([]);
 
@@ -79,14 +78,6 @@ export default function LobbyPage() {
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((d) => setMe(d.user ?? null))
       .catch(() => setMe(null));
-  }, []);
-
-  // ✅ 跑馬燈：對齊 /api/marquee/active → { items: [{id,text,...}] }
-  useEffect(() => {
-    fetch("/api/marquee/active", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((d) => setMarquee((d.items ?? []).map((m: { text: string }) => m.text)))
-      .catch(() => setMarquee([]));
   }, []);
 
   // ✅ 公告：對齊 /api/announcements/active → { items: [...] }
@@ -151,8 +142,20 @@ export default function LobbyPage() {
       <div className="lb-bg" />
       <div className="lb-particles" aria-hidden />
 
-      {/* ⬆️ 全域公告彈窗（依 localStorage 判斷是否顯示） */}
-      <AnnouncementModal />
+      {/* ⬆️ 全域公告彈窗（依 localStorage / sessionStorage 判斷是否顯示） */}
+      <AnnouncementModal
+        // 有需要可以填 fallback；沒填就純讀 /api/announcements/latest
+        // fallback={[
+        //   { title: "系統維護通知", body: "今晚 02:00-03:00 維護，期間暫停下注服務。" },
+        //   { title: "新手禮包", body: "完成註冊與驗證，即可免費領取新手禮包！" },
+        // ]}
+        autoOpen
+        showLatestOnly
+        storageScope="local"
+        storageKeyPrefix="topz"
+        refetchMs={300000}
+        okText="知道了"
+      />
 
       {/* Header */}
       <header className="lb-header">
@@ -162,13 +165,8 @@ export default function LobbyPage() {
         </div>
 
         <div className="center">
-          <AnnouncementTicker
-            items={
-              marquee.length
-                ? marquee
-                : ["🎉 新手禮包開放領取！", "🔥 百家樂 R60 房間將於 21:00 開新局", "💎 連續簽到 7 天可抽稀有徽章"]
-            }
-          />
+          {/* ✅ 跑馬燈改為由元件自行抓 /api/marquee/active，不再傳 items */}
+          <AnnouncementTicker />
         </div>
 
         <div className="right" style={{ display: "flex", alignItems: "center", gap: 10 }}>
