@@ -18,6 +18,7 @@
     "db:push": "prisma db push",
     "db:reset": "prisma migrate reset --force",
     "db:seed": "prisma db seed",
+    "seed": "tsx prisma/seed-content.ts",              // ⬅️ 新增：主 seed 指令
     "seed:ts": "prisma db seed",
     "seed:headframes": "tsx scripts/seed-headframes.ts",
     "validate:structure": "ts-node --transpile-only scripts/validate-structure.ts",
