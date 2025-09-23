@@ -1,21 +1,20 @@
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-
-import prisma from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   const now = new Date();
-  const [item] = await prisma.announcement.findMany({
+
+  const item = await prisma.announcement.findFirst({
     where: {
       enabled: true,
-      AND: [
-        { OR: [{ startAt: null }, { startAt: { lte: now } }] },
-        { OR: [{ endAt: null }, { endAt: { gte: now } }] },
-      ],
+      OR: [{ startAt: null }, { startAt: { lte: now } }],
+      AND: [{ endAt: null }, { endAt: { gte: now } }],
     },
-    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-    take: 1,
+    orderBy: [
+      { updatedAt: "desc" },
+      { createdAt: "desc" },
+    ],
   });
-  return NextResponse.json({ item: item ?? null });
+
+  return NextResponse.json({ item });
 }
