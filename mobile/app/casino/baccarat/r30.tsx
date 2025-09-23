@@ -1,6 +1,6 @@
 import { View } from "react-native";
 import { WebView } from "react-native-webview";
-import { WEB_ORIGIN } from "~/src/config";
+import { WEB_ORIGIN } from "../../../src/config";
 
 export default function BaccaratR30() {
   const url = `${WEB_ORIGIN}/casino/baccarat/R30?embed=1`;

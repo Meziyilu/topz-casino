@@ -1,35 +1,19 @@
-import { API_BASE, ROUTES } from "./config";
-import { getAccessToken, saveTokens, clearTokens } from "./auth";
+// mobile/src/api.ts
+const USE_STUB = true; // 先看畫面用；要串真的就改成 false
 
-async function authedFetch(path: string, init: RequestInit = {}) {
-  const token = await getAccessToken();
-  const headers = new Headers(init.headers);
-  headers.set("Accept", "application/json");
-  if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-  return fetch(`${API_BASE}${path}`, { ...init, headers });
-}
+export type Me = { displayName: string; balance: number; bankBalance: number; vipTier: number };
 
-export async function login(email: string, password: string) {
-  const res = await fetch(`${API_BASE}${ROUTES.login}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Accept": "application/json" },
-    body: JSON.stringify({ email, password })
-  });
-  if (!res.ok) throw new Error(`Login failed: ${res.status}`);
-  const data = await res.json();
-  // 期望後端回傳 { accessToken, refreshToken }
-  if (data.accessToken && data.refreshToken) {
-    await saveTokens(data.accessToken, data.refreshToken);
+export async function me(): Promise<Me> {
+  if (USE_STUB) {
+    return Promise.resolve({
+      displayName: "Tester",
+      balance: 1000,
+      bankBalance: 5000,
+      vipTier: 3,
+    });
   }
-  return data;
-}
-
-export async function me() {
-  const res = await authedFetch(ROUTES.me, { method: "GET" });
-  if (res.status === 401) {
-    await clearTokens();
-    throw new Error("Unauthorized");
-  }
+  const API_BASE = process.env.API_BASE ?? "https://topz-casino.onrender.com";
+  const res = await fetch(`${API_BASE}/api/profile/me`, { method: "GET" });
+  if (!res.ok) throw new Error(`GET /api/profile/me ${res.status}`);
   return res.json();
 }

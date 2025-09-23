@@ -1,44 +1,38 @@
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, Alert } from "react-native";
+import { View, Text, TextInput, Pressable, StyleSheet } from "react-native";
 import { router } from "expo-router";
-import { login } from "~/src/api";
 
-export default function LoginScreen() {
+export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  async function onSubmit() {
-    try {
-      await login(email.trim(), password);
-      router.replace("/(lobby)");
-    } catch (e: any) {
-      Alert.alert("Login failed", e?.message ?? "Unknown error");
-    }
-  }
-
   return (
-    <View style={{ flex: 1, padding: 24, backgroundColor: "#0b0f1a", gap: 16, justifyContent: "center" }}>
-      <Text style={{ color: "#dfe6ff", fontSize: 24, fontWeight: "600" }}>Topzcasino</Text>
+    <View style={styles.container}>
+      <Text style={styles.title}>TopzCasino Login</Text>
       <TextInput
+        style={styles.input}
         placeholder="Email"
-        placeholderTextColor="#8ea0bf"
-        style={{ color: "#dfe6ff", borderWidth: 1, borderColor: "#263048", padding: 12, borderRadius: 8 }}
-        autoCapitalize="none"
-        keyboardType="email-address"
         value={email}
         onChangeText={setEmail}
       />
       <TextInput
+        style={styles.input}
         placeholder="Password"
-        placeholderTextColor="#8ea0bf"
-        style={{ color: "#dfe6ff", borderWidth: 1, borderColor: "#263048", padding: 12, borderRadius: 8 }}
         secureTextEntry
         value={password}
         onChangeText={setPassword}
       />
-      <Pressable onPress={onSubmit} style={{ backgroundColor: "#5ac8fa", padding: 14, borderRadius: 10, alignItems: "center" }}>
-        <Text style={{ color: "#001826", fontWeight: "700" }}>Login</Text>
+      <Pressable style={styles.button} onPress={() => router.push("/lobby")}>
+        <Text style={styles.buttonText}>Login</Text>
       </Pressable>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "center", padding: 20, backgroundColor: "#0b0f1a" },
+  title: { fontSize: 24, fontWeight: "bold", marginBottom: 20, color: "#fff", textAlign: "center" },
+  input: { borderWidth: 1, borderColor: "#263048", padding: 10, borderRadius: 6, marginBottom: 10, backgroundColor: "#fff" },
+  button: { backgroundColor: "#5ac8fa", padding: 15, borderRadius: 6 },
+  buttonText: { color: "#001826", fontWeight: "bold", textAlign: "center" }
+});

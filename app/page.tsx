@@ -5,6 +5,7 @@
 import "@/public/styles/lobby.css";
 import "@/public/styles/headframes.css";
 import "@/public/styles/lobby-extras.css";
+import "@/public/styles/popup.css"; // ✅ 新增：獨立彈窗樣式
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -19,6 +20,7 @@ import CheckinCard from "@/components/lobby/CheckinCard";
 import BankLottie from "@/components/bank/BankLottie";
 import AnnouncementTicker from "@/components/lobby/AnnouncementTicker";
 import AnnouncementModal from "@/components/lobby/AnnouncementModal";
+import LobbyPopupModal from "@/components/lobby/LobbyPopupModal";
 
 // ⬇ 四個 Lottie（json 放在 /public/lottie/）
 import RouletteLottie from "@/components/roulette/RouletteLottie";
@@ -142,13 +144,8 @@ export default function LobbyPage() {
       <div className="lb-bg" />
       <div className="lb-particles" aria-hidden />
 
-      {/* ⬆️ 全域公告彈窗（依 localStorage / sessionStorage 判斷是否顯示） */}
+      {/* ⬆️ Announcement（公告）彈窗：讀 /api/announcements/latest，並記憶已讀 */}
       <AnnouncementModal
-        // 有需要可以填 fallback；沒填就純讀 /api/announcements/latest
-        // fallback={[
-        //   { title: "系統維護通知", body: "今晚 02:00-03:00 維護，期間暫停下注服務。" },
-        //   { title: "新手禮包", body: "完成註冊與驗證，即可免費領取新手禮包！" },
-        // ]}
         autoOpen
         showLatestOnly
         storageScope="local"
@@ -165,7 +162,7 @@ export default function LobbyPage() {
         </div>
 
         <div className="center">
-          {/* ✅ 跑馬燈改為由元件自行抓 /api/marquee/active，不再傳 items */}
+          {/* ✅ 跑馬燈由元件自行抓 /api/marquee/active */}
           <AnnouncementTicker />
         </div>
 
@@ -298,6 +295,17 @@ export default function LobbyPage() {
       </div>
 
       <ServiceWidget />
+
+      {/* ✅ LobbyPopup（用獨立 CSS + 可選動畫/主題） */}
+      <LobbyPopupModal
+        autoOpen
+        storageKeyPrefix="topz"
+        remindAfterMinutes={null}
+        useExternalStyle
+        variant="glass"           // 可改："neon" | "aurora"
+        animation="slide-up"      // 可改："fade" | "zoom" | "slide-up"
+        className="popup--center" // 參考 popup.css 的定位工具類別
+      />
 
       {/* ⬇ 把 Lottie 改到卡片「右側置中」 */}
       <style jsx global>{`

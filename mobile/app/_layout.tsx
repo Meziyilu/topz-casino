@@ -7,8 +7,8 @@ export default function RootLayout() {
       <StatusBar style="light" />
       <Stack screenOptions={{ headerStyle: { backgroundColor: "#0b0f1a" }, headerTintColor: "#dfe6ff" }}>
         <Stack.Screen name="(auth)/login" options={{ title: "Login" }} />
-        <Stack.Screen name="(lobby)/index" options={{ title: "Lobby" }} />
-        <Stack.Screen name="casino/baccarat/r30" options={{ title: "Baccarat R30" }} />
+        <Stack.Screen name="lobby" options={{ title: "Lobby" }} />
+        <Stack.Screen name="baccarat/r30" options={{ title: "Baccarat R30" }} />
       </Stack>
     </>
   );

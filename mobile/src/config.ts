@@ -1,10 +1,2 @@
-import Constants from "expo-constants";
-const extra = (Constants.expoConfig?.extra ?? {}) as any;
-
-export const API_BASE = (extra.API_BASE as string) ?? "";
-export const WEB_ORIGIN = (extra.WEB_ORIGIN as string) ?? "";
-
-export const ROUTES = {
-  login: "/api/auth/login",
-  me: "/api/profile/me"
-};
+export const API_BASE = process.env.API_BASE ?? "http://192.168.1.xx:3000"; // 改成你的
+export const WEB_ORIGIN = process.env.WEB_ORIGIN ?? "http://192.168.1.xx:3000"; // 改成你的

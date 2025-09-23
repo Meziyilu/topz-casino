@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { View, Text, Pressable, Alert } from "react-native";
 import { router } from "expo-router";
-import { me } from "~/src/api";
+import { me } from "../../src/api";
 
 type Me = { displayName: string; balance: number; bankBalance: number; vipTier: number };
 
