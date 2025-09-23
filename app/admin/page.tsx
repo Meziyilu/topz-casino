@@ -62,7 +62,6 @@ export default function AdminHome() {
         </Link>
 
         {/* === 你原本的模組 === */}
-        {/* 百家樂 */}
         <Link className="tile glass" href="/admin/baccarat">
           <div className="icon" aria-hidden>
             <svg viewBox="0 0 24 24" width="24" height="24">
@@ -73,7 +72,6 @@ export default function AdminHome() {
           <div className="desc">開始 / 結算 / 自動輪播</div>
         </Link>
 
-        {/* 金幣管理 */}
         <Link className="tile glass" href="/admin/coins">
           <div className="icon" aria-hidden>
             <svg viewBox="0 0 24 24" width="24" height="24">
@@ -84,7 +82,6 @@ export default function AdminHome() {
           <div className="desc">搜尋玩家、加/扣金幣（錢包/銀行）</div>
         </Link>
 
-        {/* 骰寶管理 */}
         <Link className="tile glass" href="/admin/sicbo">
           <div className="icon" aria-hidden>
             <svg viewBox="0 0 24 24" width="24" height="24">
@@ -98,7 +95,6 @@ export default function AdminHome() {
           <div className="desc">開局 / 封盤 / 開獎動畫 / 自動開局</div>
         </Link>
 
-        {/* 樂透管理 */}
         <Link className="tile glass" href="/admin/lotto">
           <div className="icon" aria-hidden>
             <svg viewBox="0 0 24 24" width="24" height="24">
@@ -111,7 +107,6 @@ export default function AdminHome() {
           <div className="desc">開獎排程 / 開獎號碼 / 期別管理</div>
         </Link>
 
-        {/* 跑馬燈管理 */}
         <Link className="tile glass" href="/admin/marquee">
           <div className="icon" aria-hidden>
             <svg viewBox="0 0 24 24" width="24" height="24">
@@ -123,7 +118,6 @@ export default function AdminHome() {
           <div className="desc">滾動訊息設定 / 優先度排序 / 啟用停用</div>
         </Link>
 
-        {/* 公告欄管理 */}
         <Link className="tile glass" href="/admin/announcements">
           <div className="icon" aria-hidden>
             <svg viewBox="0 0 24 24" width="24" height="24">
@@ -133,6 +127,19 @@ export default function AdminHome() {
           </div>
           <div className="title">公告欄管理</div>
           <div className="desc">新增 / 編輯 / 啟用停用</div>
+        </Link>
+
+        {/* 新增：彈窗公告管理 */}
+        <Link className="tile glass" href="/admin/popups">
+          <div className="icon" aria-hidden>
+            {/* Popup / dialog icon */}
+            <svg viewBox="0 0 24 24" width="24" height="24">
+              <rect x="3" y="6" width="18" height="12" rx="2" ry="2" />
+              <path d="M8 12h8M12 8v8" />
+            </svg>
+          </div>
+          <div className="title">彈窗公告管理</div>
+          <div className="desc">設定進入大廳顯示的彈窗內容</div>
         </Link>
       </section>
 
