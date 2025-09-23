@@ -20,16 +20,10 @@ import Leaderboard from "@/components/lobby/Leaderboard";
 import CheckinCard from "@/components/lobby/CheckinCard";
 import BankLottie from "@/components/bank/BankLottie";
 
-// ⛑️ 這些元件內部會碰 window/localStorage → 動態載入並停用 SSR
-const AnnouncementTicker = dynamic(() => import("@/components/lobby/AnnouncementTicker"), {
-  ssr: false,
-});
-const AnnouncementModal = dynamic(() => import("@/components/lobby/AnnouncementModal"), {
-  ssr: false,
-});
-const LobbyPopupModal = dynamic(() => import("@/components/lobby/LobbyPopupModal"), {
-  ssr: false,
-});
+// ⛑️ 會碰 window/localStorage → 動態載入並停用 SSR
+const AnnouncementTicker = dynamic(() => import("@/components/lobby/AnnouncementTicker"), { ssr: false });
+const AnnouncementModal = dynamic(() => import("@/components/lobby/AnnouncementModal"), { ssr: false });
+const LobbyPopupModal = dynamic(() => import("@/components/lobby/LobbyPopupModal"), { ssr: false });
 
 // ⬇ Lottie
 import RouletteLottie from "@/components/roulette/RouletteLottie";
@@ -73,7 +67,7 @@ type RouletteOverview = {
 };
 
 export default function LobbyPage() {
-  const [mounted, setMounted] = useState(false); // ✅ 僅在瀏覽器渲染需要 window 的東西
+  const [mounted, setMounted] = useState(false);
   const [me, setMe] = useState<Me | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -154,7 +148,7 @@ export default function LobbyPage() {
       <div className="lb-bg" />
       <div className="lb-particles" aria-hidden />
 
-      {/* ⬆️ 公告彈窗（僅在瀏覽器端掛載） */}
+      {/* ⬆️ 公告彈窗（僅瀏覽器端） */}
       {mounted && (
         <>
           <AnnouncementModal
@@ -170,42 +164,45 @@ export default function LobbyPage() {
             storageKeyPrefix="topz"
             remindAfterMinutes={null}
             useExternalStyle
-            variant="glass"       // "glass" | "neon" | "aurora"
-            animation="slide-up"  // "fade" | "zoom" | "slide-up"
+            variant="glass"      // "glass" | "neon" | "aurora"
+            animation="slide-up" // "fade" | "zoom" | "slide-up"
             className="popup--center"
           />
         </>
       )}
 
-      {/* Header */}
+      {/* ===== Header（兩列）===== */}
       <header className="lb-header">
-        <div className="left">
-          <div className="lb-logo">TOPZCASINO</div>
-          <span className="lb-beta">LOBBY</span>
+        {/* 第一列：Logo/標題 + 右側工具 */}
+        <div className="lb-header-top">
+          <div className="left">
+            <div className="lb-logo">TOPZCASINO</div>
+            <span className="lb-beta">大廳</span>
+          </div>
+
+          <div className="right" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Clock />
+            <ThemeToggle />
+            <Link href="/profile" className="lb-user-mini">
+              <span className="name">{me?.displayName ?? "玩家"}</span>
+            </Link>
+            <button
+              type="button"
+              onClick={onLogout}
+              className="lb-btn"
+              disabled={loggingOut}
+              aria-label="登出"
+              title="登出"
+              style={{ padding: "8px 12px" }}
+            >
+              {loggingOut ? "登出中…" : "登出"}
+            </button>
+          </div>
         </div>
 
-        <div className="center">
-          {/* 跑馬燈只在瀏覽器端渲染，避免 SSR 碰到 window */}
+        {/* 第二列：跑馬燈（獨立一列，不會蓋標題） */}
+        <div className="lb-header-marquee">
           {mounted ? <AnnouncementTicker /> : <div style={{ height: 24 }} />}
-        </div>
-
-        <div className="right" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <Clock />
-          <ThemeToggle />
-          <Link href="/profile" className="lb-user-mini">
-            <span className="name">{me?.displayName ?? "玩家"}</span>
-          </Link>
-          <button
-            type="button"
-            onClick={onLogout}
-            className="lb-btn"
-            disabled={loggingOut}
-            aria-label="登出"
-            title="登出"
-            style={{ padding: "8px 12px" }}
-          >
-            {loggingOut ? "登出中…" : "登出"}
-          </button>
         </div>
       </header>
 
@@ -314,8 +311,30 @@ export default function LobbyPage() {
 
       <ServiceWidget />
 
-      {/* Lottie 定位微調 */}
+      {/* 局部 CSS：Header 兩列 + Lottie 定位 */}
       <style jsx global>{`
+        /* Header：直向排列，跑馬燈獨立一列 */
+        .lb-header {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          padding: 8px 16px;
+          position: relative;
+          z-index: 10;
+        }
+        .lb-header-top {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+        }
+        .lb-header-marquee {
+          overflow: hidden;
+          padding: 2px 0 0;
+          z-index: 5;
+        }
+
+        /* Lottie 覆蓋位置微調 */
         .game-card { position: relative; overflow: hidden; }
         .game-card .gc-overlay.gc-right {
           position: absolute;
