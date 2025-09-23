@@ -4,10 +4,7 @@ export const dynamic = "force-dynamic";
 import prisma from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
-async function assertAdmin() {
-  // TODO: 實作你自己的驗證邏輯
-  return true;
-}
+async function assertAdmin() { return true; }
 
 export async function GET(req: NextRequest) {
   await assertAdmin();
@@ -15,10 +12,10 @@ export async function GET(req: NextRequest) {
   const enabledParam = searchParams.get("enabled");
   const enabled = enabledParam === "" ? undefined : enabledParam === "1";
 
-  const items = await prisma.announcement.findMany({
+  const items = await prisma.marqueeMessage.findMany({
     where: typeof enabled === "boolean" ? { enabled } : undefined,
-    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-    take: 100,
+    orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
+    take: 200,
   });
   return NextResponse.json({ items });
 }
@@ -26,10 +23,10 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   await assertAdmin();
   const body = await req.json();
-  const item = await prisma.announcement.create({
+  const item = await prisma.marqueeMessage.create({
     data: {
-      title: String(body.title ?? ""),
-      body: String(body.body ?? ""),
+      text: String(body.text ?? ""),
+      priority: Number(body.priority ?? 0),
       enabled: Boolean(body.enabled ?? true),
       startAt: body.startAt ? new Date(body.startAt) : null,
       endAt: body.endAt ? new Date(body.endAt) : null,

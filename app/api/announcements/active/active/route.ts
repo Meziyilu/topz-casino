@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 
 export async function GET() {
   const now = new Date();
-  const items = await prisma.marqueeMessage.findMany({
+  const items = await prisma.announcement.findMany({
     where: {
       enabled: true,
       AND: [
@@ -14,8 +14,8 @@ export async function GET() {
         { OR: [{ endAt: null }, { endAt: { gte: now } }] },
       ],
     },
-    orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
-    take: 50,
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+    take: 20,
   });
   return NextResponse.json({ items });
 }
