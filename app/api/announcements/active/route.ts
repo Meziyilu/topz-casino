@@ -1,10 +1,10 @@
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-
-import prisma from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma"; // 依你的路徑
 
-export async function GET() {
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const limit = Number(searchParams.get("limit") ?? "20");
+
   const now = new Date();
   const items = await prisma.announcement.findMany({
     where: {
@@ -15,7 +15,11 @@ export async function GET() {
       ],
     },
     orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-    take: 20,
+    take: Math.max(1, Math.min(100, limit)),
   });
-  return NextResponse.json({ items });
+
+  return NextResponse.json(
+    { items },
+    { headers: { "cache-control": "no-store" } }
+  );
 }
