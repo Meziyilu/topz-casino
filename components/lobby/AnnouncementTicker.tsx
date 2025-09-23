@@ -1,50 +1,93 @@
+// components/lobby/AnnouncementTicker.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import "/public/styles/marquee.css";
+import { useEffect, useRef, useState } from "react";
 
-type Msg = { id: string; text: string; priority?: number };
-type Props = {
-  items?: string[];        // 可選：自訂顯示
-  intervalMs?: number;     // 預設 15000
-};
+type ActiveItem = { id: string; text: string };
 
-export default function AnnouncementTicker({ items, intervalMs = 15000 }: Props) {
-  const [remote, setRemote] = useState<Msg[]>([]);
+export default function AnnouncementTicker({
+  speed = 80,  // px/sec
+  gap = 48,    // 每則訊息間距
+  fallback = ["🎉 歡迎來到 TOPZ CASINO"],
+}: {
+  speed?: number;
+  gap?: number;
+  fallback?: string[];
+}) {
+  const [items, setItems] = useState<string[]>([]);
+  const railRef = useRef<HTMLDivElement>(null);
 
-  async function load() {
-    try {
-      const res = await fetch("/api/marquee/active", { cache: "no-store" });
-      const json = await res.json();
-      setRemote((json.items || []) as Msg[]);
-    } catch {}
-  }
-
+  // 抓 /api/marquee/active
   useEffect(() => {
-    if (!items || items.length === 0) {
-      load();
-      const t = setInterval(load, intervalMs);
-      return () => clearInterval(t);
-    }
-  }, [items, intervalMs]);
+    let alive = true;
+    const load = async () => {
+      try {
+        const r = await fetch("/api/marquee/active", { cache: "no-store" });
+        if (!r.ok) throw new Error(String(r.status));
+        const d = await r.json();
+        const texts = (d.items as ActiveItem[] | undefined)?.map((m) => m.text).filter(Boolean) ?? [];
+        if (alive) setItems(texts.length ? texts : fallback);
+      } catch {
+        if (alive) setItems(fallback);
+      }
+    };
+    load();
+    // 可選：每 5 分鐘刷新一次
+    const t = setInterval(load, 5 * 60 * 1000);
+    return () => { alive = false; clearInterval(t); };
+  }, [fallback]);
 
-  const showList: string[] = useMemo(() => {
-    if (items && items.length) return items;
-    if (remote.length) return remote.map((m) => m.text);
-    return [];
-  }, [items, remote]);
+  // 無限滾動
+  useEffect(() => {
+    const rail = railRef.current;
+    if (!rail || !items.length) return;
+    let raf = 0;
+    let x = 0;
 
-  if (!showList.length) return null;
+    const tick = () => {
+      x -= speed / 60;
+      const first = rail.firstElementChild as HTMLElement | null;
+      const w = first ? first.offsetWidth : 0;
+      if (w > 0 && -x >= w) x += w;
+      rail.style.transform = `translateX(${x}px)`;
+      raf = requestAnimationFrame(tick);
+    };
 
-  const dupe = [...showList, ...showList];
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [items, speed]);
+
+  if (!items.length) return null;
 
   return (
-    <div className="marquee-bar">
-      <div className="marquee-track">
-        {dupe.map((txt, i) => (
-          <span key={`${i}-${txt}`} className="marquee-item">
-            {txt}
-          </span>
+    <div
+      className="tc-wrap"
+      style={{
+        position: "relative",
+        overflow: "hidden",
+        width: "100%",
+        minHeight: 28,           // 保底高度避免被擠扁
+        display: "flex",
+        alignItems: "center",
+      }}
+      aria-label="跑馬燈"
+    >
+      <div
+        ref={railRef}
+        className="tc-rail"
+        style={{ display: "inline-flex", whiteSpace: "nowrap", willChange: "transform" }}
+      >
+        {[0, 1].map((k) => (
+          <div key={k} className="tc-chunk" style={{ display: "inline-flex" }}>
+            {items.map((t, i) => (
+              <span
+                key={`${k}-${i}`}
+                style={{ display: "inline-flex", alignItems: "center", paddingRight: gap, fontWeight: 700 }}
+              >
+                {t}
+              </span>
+            ))}
+          </div>
         ))}
       </div>
     </div>
