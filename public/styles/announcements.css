@@ -1,0 +1,22 @@
+.ann-modal-mask {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 70;
+}
+.ann-modal {
+  width: min(720px, 92vw);
+  background: var(--pf-card, rgba(18,22,33,0.55));
+  border: 1px solid var(--pf-border, rgba(255,255,255,0.16));
+  border-radius: 16px; box-shadow: 0 10px 30px var(--pf-shadow, rgba(0,0,0,0.38));
+  backdrop-filter: blur(var(--pf-blur,16px));
+  color: var(--pf-text,#dfe6ff);
+  padding: 20px;
+}
+.ann-title { font-size: 20px; margin-bottom: 10px; }
+.ann-body { white-space: pre-wrap; line-height: 1.7; }
+.ann-actions { display:flex; justify-content:flex-end; gap:8px; margin-top: 16px; }
+.ann-btn {
+  padding: 8px 14px; border-radius: 10px; border: 1px solid var(--pf-border, rgba(255,255,255,0.16));
+  background: var(--pf-glass, rgba(255,255,255,0.06)); color: var(--pf-text,#dfe6ff); cursor: pointer;
+}
+.ann-btn:hover { opacity: 0.9; }

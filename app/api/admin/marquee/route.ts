@@ -1,46 +1,68 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { verifyRequest } from "@/lib/jwt";
 import { z } from "zod";
+import { getUserFromRequest } from "@/lib/auth";
 
-const CreateSchema = z.object({
-  text: z.string().min(1, "text 必填"),
+const emptyToUndef = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), schema);
+
+const MarqueeSchema = z.object({
+  text: z.string().min(1),
+  priority: z.coerce.number().int().min(0).default(0),
   enabled: z.boolean().optional(),
-  priority: z.number().int().optional(),
+  startAt: emptyToUndef(z.coerce.date().optional()),
+  endAt: emptyToUndef(z.coerce.date().optional()),
 });
 
-// GET /api/admin/marquee
-export async function GET(req: Request) {
-  const auth = await verifyRequest(req);
-  if (!auth?.isAdmin) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+async function requireAdmin(req: NextRequest) {
+  const user = await getUserFromRequest(req);
+  if (!user || !user.isAdmin) {
+    return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+  }
+  return null as any;
+}
+
+export async function GET(req: NextRequest) {
+  const forbid = await requireAdmin(req);
+  if (forbid) return forbid;
+
+  const { searchParams } = new URL(req.url);
+  const enabled = searchParams.get("enabled");
+  const q = searchParams.get("q")?.trim();
+
+  const where: any = {};
+  if (enabled === "true") where.enabled = true;
+  if (enabled === "false") where.enabled = false;
+  if (q) where.text = { contains: q };
 
   const items = await prisma.marqueeMessage.findMany({
+    where,
     orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
+    take: 300,
   });
+
   return NextResponse.json({ items });
 }
 
-// POST /api/admin/marquee
-export async function POST(req: Request) {
-  const auth = await verifyRequest(req);
-  if (!auth?.isAdmin) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+export async function POST(req: NextRequest) {
+  const forbid = await requireAdmin(req);
+  if (forbid) return forbid;
 
-  const raw = await req.json();
-  const parsed = CreateSchema.safeParse(raw);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "BAD_REQUEST", detail: parsed.error.flatten() }, { status: 400 });
-  }
-  const b = parsed.data;
+  const json = await req.json();
+  const data = MarqueeSchema.parse(json);
 
-  const item = await prisma.marqueeMessage.create({
+  const row = await prisma.marqueeMessage.create({
     data: {
-      text: b.text,
-      enabled: b.enabled ?? true,
-      priority: b.priority ?? 0,
+      text: data.text,
+      priority: data.priority ?? 0,
+      enabled: data.enabled ?? true,
+      startAt: data.startAt ?? null,
+      endAt: data.endAt ?? null,
     },
   });
-  return NextResponse.json(item);
+
+  return NextResponse.json({ item: row });
 }

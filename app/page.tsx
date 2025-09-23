@@ -10,7 +10,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import Clock from "@/components/lobby/Clock";
 import ThemeToggle from "@/components/lobby/ThemeToggle";
-import AnnouncementTicker from "@/components/lobby/AnnouncementTicker";
 import ProfileCard from "@/components/lobby/ProfileCard";
 import GameCard from "@/components/lobby/GameCard";
 import ChatBox from "@/components/lobby/ChatBox";
@@ -18,6 +17,8 @@ import ServiceWidget from "@/components/lobby/ServiceWidget";
 import Leaderboard from "@/components/lobby/Leaderboard";
 import CheckinCard from "@/components/lobby/CheckinCard";
 import BankLottie from "@/components/bank/BankLottie";
+import AnnouncementTicker from "@/components/lobby/AnnouncementTicker";
+import AnnouncementModal from "@/components/lobby/AnnouncementModal";
 
 // ⬇ 四個 Lottie（json 放在 /public/lottie/）
 import RouletteLottie from "@/components/roulette/RouletteLottie";

@@ -1,51 +1,54 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { verifyRequest } from "@/lib/jwt";
 import { z } from "zod";
+import { getUserFromRequest } from "@/lib/auth";
 
-const UpdateSchema = z.object({
+const emptyToUndef = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), schema);
+
+const AnnouncementSchema = z.object({
   title: z.string().min(1).optional(),
   body: z.string().min(1).optional(),
   enabled: z.boolean().optional(),
+  startAt: emptyToUndef(z.coerce.date().optional()),
+  endAt: emptyToUndef(z.coerce.date().optional()),
 });
 
-// GET /api/admin/announcement/[id]
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  const item = await prisma.announcement.findUnique({ where: { id: params.id } });
-  if (!item) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
-  return NextResponse.json(item);
+async function requireAdmin(req: NextRequest) {
+  const user = await getUserFromRequest(req);
+  if (!user || !user.isAdmin) {
+    return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+  }
+  return null as any;
 }
 
-// PATCH /api/admin/announcement/[id]
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  const auth = await verifyRequest(req);
-  if (!auth?.isAdmin) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+  const forbid = await requireAdmin(req);
+  if (forbid) return forbid;
 
-  const raw = await req.json();
-  const parsed = UpdateSchema.safeParse(raw);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "BAD_REQUEST", detail: parsed.error.flatten() }, { status: 400 });
-  }
-  const b = parsed.data;
+  const json = await req.json();
+  const data = AnnouncementSchema.parse(json);
 
-  const item = await prisma.announcement.update({
+  const row = await prisma.announcement.update({
     where: { id: params.id },
     data: {
-      title: b.title ?? undefined,
-      body: b.body ?? undefined,
-      enabled: b.enabled ?? undefined,
+      ...("title" in data ? { title: data.title } : {}),
+      ...("body" in data ? { body: data.body } : {}),
+      ...("enabled" in data ? { enabled: data.enabled } : {}),
+      ...(data.startAt !== undefined ? { startAt: data.startAt ?? null } : {}),
+      ...(data.endAt !== undefined ? { endAt: data.endAt ?? null } : {}),
     },
   });
-  return NextResponse.json(item);
+
+  return NextResponse.json({ item: row });
 }
 
-// DELETE /api/admin/announcement/[id]
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
-  const auth = await verifyRequest(req);
-  if (!auth?.isAdmin) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  const forbid = await requireAdmin(req);
+  if (forbid) return forbid;
 
   await prisma.announcement.delete({ where: { id: params.id } });
   return NextResponse.json({ ok: true });

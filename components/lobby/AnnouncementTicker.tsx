@@ -1,23 +1,43 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
 
-export default function AnnouncementTicker({ items }: { items: string[] }) {
-  const [i, setI] = useState(0);
-  const timer = useRef<number | null>(null);
+import { useEffect, useState } from "react";
+import "/public/styles/marquee.css";
+
+type Msg = { id: string; text: string; priority: number };
+
+export default function AnnouncementTicker() {
+  const [items, setItems] = useState<Msg[]>([]);
+
+  async function load() {
+    try {
+      const res = await fetch("/api/marquee/active", { cache: "no-store" });
+      const json = await res.json();
+      setItems(json.items || []);
+    } catch (e) {
+      // ignore
+    }
+  }
+
   useEffect(() => {
-    if (items.length <= 1) return;
-    timer.current = window.setInterval(() => setI(v => (v + 1) % items.length), 3000);
-    return () => { if (timer.current) clearInterval(timer.current); };
-  }, [items.length]);
+    load();
+    const t = setInterval(load, 15000); // 每 15 秒更新
+    return () => clearInterval(t);
+  }, []);
+
+  if (!items.length) return null;
+
+  // 將訊息串接兩輪，達成無縫滾動（CSS 動畫）
+  const dupe = [...items, ...items];
+
   return (
-    <div style={{
-      minWidth: 0, maxWidth: 720,
-      border: "1px solid rgba(255,255,255,.14)",
-      borderRadius: 999, padding: "6px 12px",
-      background: "linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02))",
-      color: "#eaf6ff", overflow: "hidden", whiteSpace: "nowrap"
-    }}>
-      {items[i] ?? ""}
+    <div className="marquee-bar">
+      <div className="marquee-track">
+        {dupe.map((m, i) => (
+          <span key={`${m.id}-${i}`} className="marquee-item">
+            {m.text}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
