@@ -81,15 +81,17 @@ export default function LobbyPage() {
       .catch(() => setMe(null));
   }, []);
 
+  // ✅ 跑馬燈：對齊 /api/marquee/active → { items: [{id,text,...}] }
   useEffect(() => {
-    fetch("/api/marquee", { cache: "no-store" })
+    fetch("/api/marquee/active", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((d) => setMarquee(d.texts ?? []))
+      .then((d) => setMarquee((d.items ?? []).map((m: { text: string }) => m.text)))
       .catch(() => setMarquee([]));
   }, []);
 
+  // ✅ 公告：對齊 /api/announcements/active → { items: [...] }
   useEffect(() => {
-    fetch("/api/announcement?enabled=1&limit=10", { cache: "no-store" })
+    fetch("/api/announcements/active", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((d) => setAnns(d.items ?? []))
       .catch(() => setAnns([]));
@@ -116,8 +118,8 @@ export default function LobbyPage() {
           typeof (d as RouletteOverview).msLeft === "number"
             ? (d as RouletteOverview).msLeft
             : typeof (d as any).ms_left === "number"
-              ? (d as any).ms_left
-              : 0;
+            ? (d as any).ms_left
+            : 0;
         setRlCountdown(Math.max(0, Math.ceil(ms / 1000)));
         setRlOnline((d as any).online ?? 0);
       } catch {
@@ -148,6 +150,9 @@ export default function LobbyPage() {
     <main className="lb-wrap">
       <div className="lb-bg" />
       <div className="lb-particles" aria-hidden />
+
+      {/* ⬆️ 全域公告彈窗（依 localStorage 判斷是否顯示） */}
+      <AnnouncementModal />
 
       {/* Header */}
       <header className="lb-header">
