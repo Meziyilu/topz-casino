@@ -1,18 +1,16 @@
 // app/social/dm/page.tsx
-import { Suspense } from 'react';
-import DMPageClient from './page.client';
+'use client';
 
-export default function Page() {
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+import { Suspense } from 'react';
+import DmIndexInner from './page.client'; // 這支是 client 子元件（下一段）
+
+export default function DmIndexPage() {
   return (
-    <Suspense
-      fallback={
-        <main className="s-card padded">
-          <div className="s-card-title">私訊</div>
-          <div className="s-card-subtitle">載入中…</div>
-        </main>
-      }
-    >
-      <DMPageClient />
+    <Suspense fallback={<div className="s-card padded">載入中…</div>}>
+      <DmIndexInner />
     </Suspense>
   );
 }

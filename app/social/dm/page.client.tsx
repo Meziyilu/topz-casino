@@ -1,85 +1,68 @@
+// app/social/dm/page.client.tsx
 'use client';
 
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import '@/public/styles/social.css';
-import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'next/navigation';
 
-type Msg = { id: string; senderId?: string | null; kind: 'TEXT'|'SYSTEM'; body: string; createdAt: string };
+type Thread = {
+  id: string;
+  lastMessageAt?: string | null;
+  peer?: { id: string; displayName: string; avatarUrl?: string | null };
+};
 
-export default function ThreadClient() {
-  const { threadId } = useParams<{ threadId: string }>();
-  const [items, setItems] = useState<Msg[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
+export default function DmIndexInner() {
+  const sp = useSearchParams(); // ✅ 已放在 Suspense 裡使用
+  const q = sp.get('q') || '';
+  const [items, setItems] = useState<Thread[]>([]);
   const [loading, setLoading] = useState(false);
-  const [text, setText] = useState('');
-  const scrollerRef = useRef<HTMLDivElement>(null);
 
-  async function load(initial = false) {
-    setLoading(true);
-    try {
-      const url = new URL('/api/social/dm/messages', window.location.origin);
-      url.searchParams.set('threadId', String(threadId));
-      if (!initial && cursor) url.searchParams.set('cursor', cursor);
-      const r = await fetch(url.toString(), { cache: 'no-store' });
-      const d = await r.json();
-      if (r.ok) {
-        setItems(prev => initial ? d.items : [...d.items, ...prev]); // 加前面
-        setCursor(d.nextCursor);
-        if (initial) requestAnimationFrame(() => scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight }));
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const r = await fetch(`/api/social/dm/threads?${q ? `q=${encodeURIComponent(q)}` : ''}`, {
+          cache: 'no-store',
+        });
+        const d = await r.json();
+        setItems(d.items || []);
+      } catch {
+        setItems([]);
+      } finally {
+        setLoading(false);
       }
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => { load(true); /* 初次載入 */ }, [threadId]);
-
-  async function send() {
-    const t = text.trim();
-    if (!t) return;
-    setText('');
-    const r = await fetch('/api/social/dm/send', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ threadId, body: t }),
-    });
-    const d = await r.json();
-    if (r.ok) {
-      // 重新拉取最新訊息
-      load(true);
-    }
-  }
+    };
+    load();
+  }, [q]);
 
   return (
-    <main className="s-col s-gap-12">
-      <div className="s-card-title">對話</div>
+    <main className="social-wrap">
+      <section className="s-card padded">
+        <h1 className="s-card-title">私訊</h1>
+        <p className="s-card-subtitle">與其他玩家一對一聊天</p>
 
-      <div className="dm-msgs" ref={scrollerRef}>
-        <div className="s-col s-gap-8" style={{ padding: 10 }}>
-          {cursor && (
-            <button className="s-btn sm ghost" onClick={() => load(false)} disabled={loading} data-sound>
-              {loading ? '載入中…' : '載入更早訊息'}
-            </button>
-          )}
-
-          {items.map(m => (
-            <div key={m.id} className="s-card" style={{ padding: 10 }}>
-              <div style={{ fontSize: 12, opacity: .8 }}>{new Date(m.createdAt).toLocaleString()}</div>
-              <div style={{ marginTop: 6 }}>{m.kind === 'SYSTEM' ? <em>[系統]</em> : null} {m.body}</div>
-            </div>
-          ))}
+        <div className="s-list s-mt-12">
+          {loading && <div className="s-muted">載入中…</div>}
+          {!loading &&
+            items.map((t) => (
+              <Link key={t.id} href={`/social/dm/${t.id}`} className="s-list-item">
+                <img
+                  className="s-avatar"
+                  src={t.peer?.avatarUrl || '/avatar-default.png'}
+                  alt=""
+                  loading="lazy"
+                />
+                <div>
+                  <div style={{ fontWeight: 800 }}>{t.peer?.displayName || '玩家'}</div>
+                  <div className="s-card-subtitle">最後訊息：{t.lastMessageAt || '-'}</div>
+                </div>
+                <div aria-hidden>→</div>
+              </Link>
+            ))}
+          {!loading && !items.length && <div className="s-muted">目前沒有會話</div>}
         </div>
-      </div>
-
-      <div className="dm-inputbar">
-        <input
-          className="s-input"
-          placeholder="輸入訊息…"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
-        />
-        <button className="s-btn primary" onClick={send} data-sound>送出</button>
-      </div>
+      </section>
     </main>
   );
 }
