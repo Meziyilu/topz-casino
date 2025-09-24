@@ -1,154 +1,143 @@
+// components/lobby/LobbyPopupModal.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
-type PopupItem = {
-  id: string;
+type LatestAnn = {
   title: string;
   body: string;
 };
 
 type Props = {
-  autoOpen?: boolean;
-  storageKeyPrefix?: string;        // e.g. "topz"
-  remindAfterMinutes?: number | null; // null = 本次關閉後，本次 session 不再出；數值=多久後可再出
-  useExternalStyle?: boolean;       // 你已經有 /styles/popup.css
+  autoOpen?: boolean;         // 進頁面就打開（預設 true）
   variant?: "glass" | "neon" | "aurora";
   animation?: "fade" | "zoom" | "slide-up";
-  className?: string;               // 位置等客製
+  className?: string;
+  // 如果後端暫時沒有資料，可用 fallback 顯示
+  fallback?: LatestAnn | null;
 };
 
 export default function LobbyPopupModal({
   autoOpen = true,
-  storageKeyPrefix = "topz",
-  remindAfterMinutes = null,
-  useExternalStyle = true,
   variant = "glass",
   animation = "slide-up",
-  className = "popup--center",
+  className,
+  fallback = null,
 }: Props) {
   const [open, setOpen] = useState(false);
-  const [item, setItem] = useState<PopupItem | null>(null);
+  const [latest, setLatest] = useState<LatestAnn | null>(fallback);
 
-  // local/session key
-  const storeKey = useMemo(
-    () => `${storageKeyPrefix}:popup:last-closed`,
-    [storageKeyPrefix]
-  );
-  const seenKey = useMemo(
-    () => `${storageKeyPrefix}:popup:seen-id`,
-    [storageKeyPrefix]
-  );
-
-  // 讀最新公告（用現有 /api/announcements/latest）
+  // 每次掛載都抓最新公告
   useEffect(() => {
-    let abort = false;
-
-    async function run() {
+    let alive = true;
+    (async () => {
       try {
         const r = await fetch("/api/announcements/latest", { cache: "no-store" });
-        if (!r.ok) throw new Error("http");
-        const data = await r.json();
-        const latest = data?.item as PopupItem | null;
-        if (!latest || abort) return;
-
-        setItem({ id: latest.id, title: latest.title, body: latest.body });
-
-        if (!autoOpen) return;
-
-        // 關閉節流：同一公告 id 已看過？
-        const seenId = window.localStorage.getItem(seenKey);
-        if (seenId && seenId === latest.id) {
-          // 如果有 remindAfterMinutes，就看是否到期；否則本次 session 不再打開
-          if (remindAfterMinutes && remindAfterMinutes > 0) {
-            const last = window.localStorage.getItem(storeKey);
-            if (last) {
-              const lastTs = Number(last);
-              const now = Date.now();
-              const gap = remindAfterMinutes * 60 * 1000;
-              if (now - lastTs < gap) return; // 未到期，不開
-            }
-          } else {
-            return;
-          }
-        }
-
-        setOpen(true);
+        if (!r.ok) throw new Error("bad");
+        const d = await r.json();
+        // 後端格式預期：{ item: { title, body, ... } } 或 { title, body }
+        const item = d?.item ?? d ?? null;
+        if (alive) setLatest(item ? { title: item.title ?? "", body: item.body ?? "" } : null);
       } catch {
-        // 忽略錯誤
+        // 保持 fallback（如果有）
+      } finally {
+        // 不論有沒有抓到，都照設定直接打開
+        if (alive && autoOpen) setOpen(true);
       }
-    }
-    run();
+    })();
+    return () => { alive = false; };
+  }, [autoOpen]);
 
-    return () => {
-      abort = true;
-    };
-  }, [autoOpen, remindAfterMinutes, seenKey, storeKey]);
+  // 防止背景滾動（僅在開啟期間）
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
 
-  function close() {
-    setOpen(false);
-    if (item) {
-      try {
-        window.localStorage.setItem(seenKey, item.id);
-        window.localStorage.setItem(storeKey, String(Date.now()));
-      } catch {}
-    }
-  }
-
-  if (!item) return null;
+  if (!open) return null;
 
   return (
-    <>
-      {!useExternalStyle && (
-        <style>{popupCss}</style>
-      )}
+    <div className={`popup-overlay ${className ?? ""}`} role="dialog" aria-modal="true">
+      <div className={`popup ${variant} ${animation}`}>
+        <header className="popup__head">
+          <h3 className="popup__title">{latest?.title ?? "最新公告"}</h3>
+          <button className="popup__close" onClick={() => setOpen(false)} aria-label="關閉">×</button>
+        </header>
 
-      <div className={`popup-mask ${open ? "is-open" : ""}`} onClick={close} />
+        <section className="popup__body">
+          <div className="popup__content">
+            {latest?.body ? (
+              <p style={{ whiteSpace: "pre-wrap" }}>{latest.body}</p>
+            ) : (
+              <p>歡迎來到 TOPZ CASINO！祝你遊玩愉快 🎉</p>
+            )}
+          </div>
+        </section>
 
-      <div
-        className={[
-          "popup",
-          `popup--${variant}`,
-          `popup-anim--${animation}`,
-          open ? "is-open" : "",
-          className ?? "",
-        ].join(" ")}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="popup-title"
-      >
-        <button className="popup__close" aria-label="關閉" onClick={close}>×</button>
-
-        <div className="popup__body">
-          <h3 id="popup-title" className="popup__title">{item.title}</h3>
-          <div className="popup__content">{item.body}</div>
-        </div>
-
-        <div className="popup__actions">
-          <button className="popup__btn" onClick={close}>知道了</button>
-        </div>
+        <footer className="popup__foot">
+          <button className="popup__btn" onClick={() => setOpen(false)}>知道了</button>
+        </footer>
       </div>
-    </>
+
+      <style jsx>{`
+        .popup-overlay {
+          position: fixed; inset: 0;
+          background: rgba(0,0,0,.55);
+          display: grid; place-items: center;
+          z-index: 1100;
+          padding: clamp(12px, 4vw, 24px);
+        }
+        .popup {
+          width: min(680px, 92vw);
+          border-radius: 14px;
+          overflow: hidden;
+          color: #eaf2ff;
+          box-shadow: 0 18px 48px rgba(0,0,0,.35);
+        }
+        .popup.glass {
+          background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
+          border: 1px solid rgba(255,255,255,.16);
+          backdrop-filter: blur(14px);
+          -webkit-backdrop-filter: blur(14px);
+        }
+        .popup.neon { background: #0a0f1a; border: 1px solid rgba(80,240,255,.22); box-shadow: 0 0 24px rgba(0,255,240,.08); }
+        .popup.aurora { background: radial-gradient(1200px 600px at -10% -10%, rgba(0,248,255,.08), transparent),
+                                  radial-gradient(800px 400px at 120% 120%, rgba(255,0,248,.08), transparent),
+                                  rgba(7,11,20,.86);
+                         border: 1px solid rgba(255,255,255,.12);
+                       }
+
+        .popup__head { display:flex; align-items:center; justify-content:space-between; padding:16px 18px; }
+        .popup__title { font-size: clamp(18px, 2.4vw, 22px); font-weight: 800; letter-spacing:.02em; }
+        .popup__close { background:none; border:0; font-size: 22px; color:#cdd6f4; cursor:pointer; line-height:1; }
+
+        .popup__body { padding: 12px 18px 4px; }
+        .popup__content { font-size: 15px; line-height: 1.7; color:#dfe8ff; }
+
+        .popup__foot { padding: 16px 18px 20px; display:flex; justify-content:flex-end; }
+        .popup__btn {
+          background: linear-gradient(180deg, #5b96ff, #3b82f6);
+          border: 0; border-radius: 10px; padding: 10px 14px;
+          font-weight: 800; letter-spacing: .02em; color: #fff; cursor: pointer;
+        }
+
+        /* 動畫 */
+        .popup.fade   { animation: pop-fade .18s ease-out; }
+        .popup.zoom   { animation: pop-zoom .18s ease-out; transform-origin: 50% 50%; }
+        .popup.slide-up { animation: pop-slide-up .22s ease-out; }
+
+        @keyframes pop-fade { from {opacity:0} to {opacity:1} }
+        @keyframes pop-zoom { from {opacity:0; transform:scale(.95)} to {opacity:1; transform:scale(1)} }
+        @keyframes pop-slide-up { from {opacity:0; transform: translateY(10px)} to {opacity:1; transform: translateY(0)} }
+
+        /* 手機優化 */
+        @media (max-width: 480px) {
+          .popup { width: 94vw; }
+          .popup__content { font-size: 14px; }
+        }
+      `}</style>
+    </div>
   );
 }
-
-// 內建樣式（如果不想額外引入 /styles/popup.css）
-const popupCss = `
-.popup-mask{position:fixed;inset:0;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:.25s;z-index:60}
-.popup-mask.is-open{opacity:1;pointer-events:auto}
-.popup{position:fixed;left:50%;top:50%;transform:translate(-50%,-40%) scale(.96);opacity:0;z-index:61;width:min(560px,92vw);border-radius:16px;border:1px solid rgba(255,255,255,.12);background:rgba(17,23,40,.75);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 20px 60px rgba(0,0,0,.45);transition:opacity .25s,transform .25s}
-.popup.is-open{opacity:1;transform:translate(-50%,-50%) scale(1)}
-.popup--neon{box-shadow:0 20px 60px rgba(0,0,0,.45),0 0 24px rgba(80,160,255,.25) inset,0 0 24px rgba(80,160,255,.25)}
-.popup--aurora{background:radial-gradient(1200px 400px at 30% -10%,rgba(120,80,255,.25),transparent),radial-gradient(800px 300px at 80% 110%,rgba(0,220,180,.18),transparent),rgba(17,23,40,.72)}
-.popup__close{position:absolute;right:10px;top:8px;width:36px;height:36px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:#fff;font-size:20px}
-.popup__body{padding:22px 22px 6px}
-.popup__title{font-weight:800;font-size:18px;letter-spacing:.02em;margin:0 0 8px}
-.popup__content{white-space:pre-wrap;line-height:1.6;color:#eaf2ff}
-.popup__actions{display:flex;justify-content:flex-end;gap:10px;padding:12px 18px 18px}
-.popup__btn{padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.16);background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.06));color:#fff;font-weight:700}
-.popup-anim--fade{transition:opacity .22s}
-.popup-anim--zoom{transform:translate(-50%,-45%) scale(.9)}
-.popup-anim--zoom.is-open{transform:translate(-50%,-50%) scale(1)}
-.popup-anim--slide-up{transform:translate(-50%,-30%)}
-.popup-anim--slide-up.is-open{transform:translate(-50%,-50%)}
-`;

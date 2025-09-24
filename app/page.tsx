@@ -148,9 +148,10 @@ export default function LobbyPage() {
       <div className="lb-bg" />
       <div className="lb-particles" aria-hidden />
 
-      {/* ⬆️ 公告彈窗（僅瀏覽器端） */}
+      {/* ⬆️ 公告彈窗（僅瀏覽器端；每次進頁面都跳） */}
       {mounted && (
         <>
+          {/* 這個是原本公告彈窗（按你需求可保留或拿掉） */}
           <AnnouncementModal
             autoOpen
             showLatestOnly
@@ -159,6 +160,7 @@ export default function LobbyPage() {
             refetchMs={300000}
             okText="知道了"
           />
+          {/* 這個是「每次進來一定跳」的 LobbyPopupModal，不記紀錄 */}
           <LobbyPopupModal
             autoOpen
             storageKeyPrefix="topz"
