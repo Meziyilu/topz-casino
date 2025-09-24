@@ -5,109 +5,59 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 import { useCallback, useEffect, useState } from 'react';
-import dynamic from 'next/dynamic';
+import NextDynamic from 'next/dynamic'; // ✅ 改名避免跟 export const dynamic 衝突
 import '@/public/styles/social.css';
 
-// 這兩個元件本身應該也是 'use client' 的（你的程式裡已經是）
-// 如果不是，請在它們檔案最上面加上 'use client'
-const PostComposer = dynamic(() => import('@/components/social/PostComposer'), { ssr: false });
-const FeedList = dynamic(() => import('@/components/social/FeedList'), { ssr: false });
-
-type Post = {
-  id: string;
-  body: string;
-  imageUrl?: string | null;
-  createdAt: string;
-  user: { id: string; displayName: string; avatarUrl?: string | null };
-  likesCount: number;
-  likedByMe?: boolean;
-};
+// 這兩個元件需要 client-side interactivity，所以用 NextDynamic lazy import
+const PostComposer = NextDynamic(() => import('@/components/social/PostComposer'), { ssr: false });
+const FeedList = NextDynamic(() => import('@/components/social/FeedList'), { ssr: false });
 
 export default function SocialFeedPage() {
-  const [items, setItems] = useState<Post[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
+  const [refreshFlag, setRefreshFlag] = useState(0);
 
-  const load = useCallback(async (reset = false) => {
-    if (loading) return;
-    setLoading(true);
-    try {
-      const qs = new URLSearchParams();
-      if (!reset && cursor) qs.set('cursor', cursor);
-      const r = await fetch(`/api/social/feed?${qs}`, { cache: 'no-store' });
-      if (!r.ok) throw new Error('failed');
-      const d = await r.json();
-      setItems((prev) => (reset ? d.items : [...prev, ...d.items]));
-      setCursor(d.nextCursor ?? null);
-      setHasMore(!!d.nextCursor);
-    } catch {
-      // no-op
-    } finally {
-      setLoading(false);
-    }
-  }, [cursor, loading]);
+  // callback: 發文成功後觸發刷新
+  const handlePosted = useCallback(() => {
+    setRefreshFlag((f) => f + 1);
+  }, []);
 
-  useEffect(() => { load(true); /* 初次載入 */ }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handlePosted = (newPost: Post) => {
-    // 讓新貼文即時插到最上面
-    setItems((prev) => [newPost, ...prev]);
-  };
-
-  const handleLikeToggle = async (postId: string) => {
-    // 前端先行更新（optimistic）
-    setItems((prev) =>
-      prev.map((p) =>
-        p.id === postId
-          ? {
-              ...p,
-              likedByMe: !p.likedByMe,
-              likesCount: p.likedByMe ? p.likesCount - 1 : p.likesCount + 1,
-            }
-          : p
-      )
-    );
-    try {
-      await fetch(`/api/social/feed/like`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ postId }),
-      });
-    } catch {
-      // 還原
-      setItems((prev) =>
-        prev.map((p) =>
-          p.id === postId
-            ? {
-                ...p,
-                likedByMe: !p.likedByMe,
-                likesCount: p.likedByMe ? p.likesCount - 1 : p.likesCount + 1,
-              }
-            : p
-        )
-      );
-    }
-  };
+  // scroll-to-top 按鈕
+  useEffect(() => {
+    const btn = document.getElementById('scrollTopBtn');
+    if (!btn) return;
+    const onScroll = () => {
+      if (window.scrollY > 200) btn.style.display = 'flex';
+      else btn.style.display = 'none';
+    };
+    window.addEventListener('scroll', onScroll);
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   return (
     <main className="social-wrap">
-      <section className="s-card padded">
+      <header className="social-header">
         <h1 className="s-card-title">社交動態</h1>
-        <p className="s-card-subtitle">發佈貼文、上傳圖片、按讚、留言</p>
+        <p className="s-card-subtitle">發表貼文、按讚、互動交流</p>
+      </header>
 
-        {/* Composer（上傳 + 發文）—— onPosted 是在 client 這層定義的，不會再觸發 Server→Client 事件傳遞錯誤 */}
+      {/* 發文區 */}
+      <section className="s-card padded">
         <PostComposer onPosted={handlePosted} />
       </section>
 
-      <section className="s-card padded post-card">
-        <FeedList
-          items={items}
-          onEndReached={() => hasMore && !loading && load()}
-          onLikeToggle={handleLikeToggle}
-        />
-        {!hasMore && <div className="s-mt-12 s-center s-text-dim">沒有更多了</div>}
+      {/* 貼文清單 (無限滾動) */}
+      <section>
+        <FeedList refreshFlag={refreshFlag} />
       </section>
+
+      {/* scroll-to-top 按鈕 */}
+      <button
+        id="scrollTopBtn"
+        className="s-icon-btn"
+        style={{ position: 'fixed', bottom: '20px', right: '20px', display: 'none' }}
+        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+      >
+        ↑
+      </button>
     </main>
   );
 }
