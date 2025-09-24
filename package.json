@@ -21,6 +21,7 @@
     "seed": "tsx prisma/seed-content.ts",
     "seed:ts": "prisma db seed",
     "seed:headframes": "tsx scripts/seed-headframes.ts",
+    "seed:content": "tsx prisma/seed-content.ts",
     "validate:structure": "ts-node --transpile-only scripts/validate-structure.ts",
     "postinstall": "prisma generate",
     "auto:baccarat": "node --require esbuild-register scripts/auto-baccarat.ts"
