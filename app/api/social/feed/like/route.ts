@@ -1,27 +1,28 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { getUserFromRequest } from '@/lib/auth';
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
-export async function POST(req: NextRequest) {
-  try {
-    const me = await getUserFromRequest(req);
-    if (!me?.id) return NextResponse.json({ ok: false }, { status: 401 });
+export async function POST(req: Request) {
+  const { feedId } = await req.json();
+  if (!feedId) return NextResponse.json({ error: "Missing feedId" }, { status: 400 });
 
-    const { postId } = await req.json();
-    if (!postId) return NextResponse.json({ ok: false, error: 'BAD' }, { status: 400 });
+  await prisma.feed.update({
+    where: { id: feedId },
+    data: { likeCount: { increment: 1 } },
+  });
 
-    await prisma.wallLike.upsert({
-      where: { postId_userId: { postId, userId: me.id } },
-      update: {},
-      create: { postId, userId: me.id },
-    });
+  return NextResponse.json({ ok: true });
+}
 
-    const cnt = await prisma.wallLike.count({ where: { postId } });
-    return NextResponse.json({ ok: true, likes: cnt });
-  } catch (e) {
-    console.error('LIKE', e);
-    return NextResponse.json({ ok: false, error: 'INTERNAL' }, { status: 500 });
-  }
+export async function DELETE(req: Request) {
+  const { feedId } = await req.json();
+  if (!feedId) return NextResponse.json({ error: "Missing feedId" }, { status: 400 });
+
+  await prisma.feed.update({
+    where: { id: feedId },
+    data: { likeCount: { decrement: 1 } },
+  });
+
+  return NextResponse.json({ ok: true });
 }

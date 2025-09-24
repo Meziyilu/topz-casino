@@ -1,31 +1,26 @@
 // app/social/feed/page.tsx
-'use client';
+"use client";
 
-export const dynamic = 'force-dynamic'; // 即時渲染，不快取
+import { Suspense } from "react";
+import FeedClientPage from "./page.client";
 
-import { useState } from 'react';
-import FeedList from '@/components/social/FeedList';
-import '@/public/styles/social.css';
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default function FeedPage() {
-  const [refreshFlag, setRefreshFlag] = useState(0);
-
   return (
-    <main className="social-wrap">
-      <header className="social-header">
-        <h1 className="s-card-title">社交動態</h1>
-        <button
-          className="s-btn primary"
-          onClick={() => setRefreshFlag((v) => v + 1)}
-        >
-          重新整理
-        </button>
+    <main className="social-feed">
+      <header className="feed-head glass">
+        <h1 className="title">社交動態</h1>
+        <p className="sub">好友、全站的最新貼文</p>
       </header>
 
-      {/* 貼文清單 (無限滾動) */}
-      <section>
-        <FeedList refreshFlag={refreshFlag} />
-      </section>
+      {/* Feed 清單 + 發文框 */}
+      <Suspense fallback={<div className="loading">載入中...</div>}>
+        <FeedClientPage />
+      </Suspense>
+
+      <link rel="stylesheet" href="/styles/social.css" />
     </main>
   );
 }

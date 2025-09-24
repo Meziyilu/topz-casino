@@ -1,87 +1,57 @@
-'use client';
+"use client";
 
-import { useRef, useState } from 'react';
+import { useState } from "react";
 
 export default function PostComposer({ onPosted }: { onPosted?: () => void }) {
-  const [body, setBody] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [imgUrl, setImgUrl] = useState<string | null>(null);
+  const [body, setBody] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  async function uploadFile(file: File) {
-    setUploading(true);
-    try {
-      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-      const r = await fetch(`/api/media/upload-url?ext=${encodeURIComponent(ext)}`);
-      const d = await r.json();
-      if (!r.ok || !d.url || !d.cdnUrl) throw new Error('sign fail');
-      await fetch(d.url, { method: 'PUT', body: file, headers: { 'content-type': file.type } });
-      setImgUrl(d.cdnUrl);
-    } finally {
-      setUploading(false);
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!body && !file) return;
+
+    setLoading(true);
+    let imageUrl: string | undefined;
+
+    // 上傳圖片（簡化：直傳到 /api/social/upload-url）
+    if (file) {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/social/upload-url", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      imageUrl = data.url;
     }
-  }
 
-  async function submit() {
-    const payload: any = { body };
-    if (imgUrl) payload.imageUrl = imgUrl;
-
-    const r = await fetch('/api/social/feed/create', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
+    // 建立貼文
+    await fetch("/api/social/feed/post", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body, imageUrl }),
     });
-    if (r.ok) {
-      setBody('');
-      setImgUrl(null);
-      onPosted?.();
-    }
+
+    setBody("");
+    setFile(null);
+    setLoading(false);
+    onPosted?.();
   }
 
   return (
-    <div className="s-card s-col s-gap-10">
+    <form className="composer glass" onSubmit={handleSubmit}>
       <textarea
-        className="s-textarea"
-        placeholder="想說點什麼？"
         value={body}
         onChange={(e) => setBody(e.target.value)}
+        placeholder="發表新貼文…"
       />
-      {imgUrl && (
-        <div>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={imgUrl} className="post-media" alt="" />
-        </div>
-      )}
-      <div className="s-flex s-gap-10">
-        <button
-          type="button"
-          className="s-btn ghost"
-          onClick={() => fileRef.current?.click()}
-          data-sound
-        >
-          上傳圖片
-        </button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          hidden
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) uploadFile(f);
-          }}
-        />
-        <div style={{ flex: 1 }} />
-        <button
-          type="button"
-          className="s-btn primary"
-          onClick={submit}
-          disabled={uploading || (!body.trim() && !imgUrl)}
-          data-sound
-        >
-          發佈
+      <div className="actions">
+        <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+        <button type="submit" className="btn" disabled={loading}>
+          {loading ? "發送中…" : "發送"}
         </button>
       </div>
-    </div>
+    </form>
   );
 }

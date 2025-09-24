@@ -1,202 +1,74 @@
-'use client';
+"use client";
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from "react";
 
-type Comment = {
+type Feed = {
   id: string;
-  userId: string;
-  userName: string;
-  avatarUrl?: string | null;
   body: string;
-  createdAt: string;
-};
-
-type Post = {
-  id: string;
-  authorId: string;
-  authorName: string;
-  avatarUrl?: string | null;
-  body: string;
-  mediaUrl?: string | null;
-  createdAt: string;
+  imageUrl?: string | null;
   likeCount: number;
-  commentCount: number;
+  createdAt: string;
+  user: { id: string; displayName: string; avatarUrl?: string | null };
 };
 
-type FeedListProps = {
-  refreshFlag: number;
-};
-
-export default function FeedList({ refreshFlag }: FeedListProps) {
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
+export default function FeedList() {
+  const [feeds, setFeeds] = useState<Feed[]>([]);
+  const [likedMap, setLikedMap] = useState<Record<string, boolean>>({});
   const loaderRef = useRef<HTMLDivElement | null>(null);
 
-  // === 主 feed 載入 ===
-  useEffect(() => {
-    setPosts([]);
-    setPage(0);
-    setHasMore(true);
-  }, [refreshFlag]);
-
-  useEffect(() => {
-    if (!hasMore) return;
-    const fetchPage = async () => {
-      const res = await fetch(`/api/social/feed?page=${page}`, { cache: 'no-store' });
-      const data = await res.json();
-      if (data.items?.length) {
-        setPosts((prev) => [...prev, ...data.items]);
-      }
-      if (!data.items || data.items.length === 0) {
-        setHasMore(false);
-      }
-    };
-    fetchPage();
-  }, [page, hasMore]);
-
-  // === IntersectionObserver for 無限滾動 ===
-  useEffect(() => {
-    if (!loaderRef.current) return;
-    const observer = new IntersectionObserver((entries) => {
-      const entry = entries[0];
-      if (entry.isIntersecting) {
-        setPage((p) => p + 1);
-      }
-    });
-    observer.observe(loaderRef.current);
-    return () => observer.disconnect();
+  // === 載入貼文 ===
+  const loadFeeds = useCallback(async () => {
+    const res = await fetch("/api/social/feed/list");
+    const data = await res.json();
+    setFeeds(data.items);
   }, []);
 
+  useEffect(() => {
+    loadFeeds();
+  }, [loadFeeds]);
+
+  // === 按讚 / 取消讚 ===
+  async function toggleLike(feedId: string) {
+    const liked = likedMap[feedId];
+    await fetch("/api/social/feed/like", {
+      method: liked ? "DELETE" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ feedId }),
+    });
+
+    setFeeds((prev) =>
+      prev.map((f) =>
+        f.id === feedId
+          ? { ...f, likeCount: f.likeCount + (liked ? -1 : 1) }
+          : f
+      )
+    );
+
+    setLikedMap((prev) => ({ ...prev, [feedId]: !liked }));
+  }
+
   return (
-    <div className="s-list">
-      {posts.map((post) => (
-        <PostCard key={post.id} post={post} />
+    <div className="feed-list">
+      {feeds.map((f) => (
+        <article key={f.id} className="feed-card glass">
+          <header>
+            <img src={f.user.avatarUrl ?? "/default-avatar.png"} alt="avatar" />
+            <span>{f.user.displayName}</span>
+          </header>
+          <p>{f.body}</p>
+          {f.imageUrl && <img src={f.imageUrl} alt="pic" />}
+          <footer>
+            <button
+              className={`btn small ${likedMap[f.id] ? "active" : ""}`}
+              onClick={() => toggleLike(f.id)}
+            >
+              {likedMap[f.id] ? "💖" : "🤍"} {f.likeCount}
+            </button>
+          </footer>
+        </article>
       ))}
-      {hasMore && <div ref={loaderRef} className="s-center s-mt-16">載入中…</div>}
-    </div>
-  );
-}
 
-// ===== 單篇貼文卡 =====
-function PostCard({ post }: { post: Post }) {
-  const [showComments, setShowComments] = useState(false);
-
-  return (
-    <div className="s-card padded post-card">
-      <div className="s-flex s-gap-10">
-        <img src={post.avatarUrl ?? '/default-avatar.png'} className="s-avatar" alt="avatar" />
-        <div>
-          <div className="s-card-title">{post.authorName}</div>
-          <div className="s-card-subtitle">
-            {new Date(post.createdAt).toLocaleString()}
-          </div>
-        </div>
-      </div>
-
-      <div className="post-body s-mt-12">{post.body}</div>
-
-      {post.mediaUrl && (
-        <img src={post.mediaUrl} alt="media" className="post-media s-mt-12" />
-      )}
-
-      <div className="post-footer s-mt-12">
-        <button className="s-btn sm" onClick={() => alert('Like!')}>
-          ❤️ {post.likeCount}
-        </button>
-        <button className="s-btn sm" onClick={() => setShowComments((v) => !v)}>
-          💬 {post.commentCount}
-        </button>
-      </div>
-
-      {showComments && (
-        <CommentPanel postId={post.id} />
-      )}
-    </div>
-  );
-}
-
-// ===== 留言面板 (內建無限滾動) =====
-function CommentPanel({ postId }: { postId: string }) {
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const loaderRef = useRef<HTMLDivElement | null>(null);
-  const [text, setText] = useState('');
-
-  // 初始載入
-  useEffect(() => {
-    setComments([]);
-    setPage(0);
-    setHasMore(true);
-  }, [postId]);
-
-  useEffect(() => {
-    if (!hasMore) return;
-    const fetchComments = async () => {
-      const res = await fetch(`/api/social/comments?postId=${postId}&page=${page}`, { cache: 'no-store' });
-      const data = await res.json();
-      if (data.items?.length) {
-        setComments((prev) => [...prev, ...data.items]);
-      }
-      if (!data.items || data.items.length === 0) {
-        setHasMore(false);
-      }
-    };
-    fetchComments();
-  }, [page, hasMore, postId]);
-
-  // infinite scroll
-  useEffect(() => {
-    if (!loaderRef.current) return;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting) {
-        setPage((p) => p + 1);
-      }
-    });
-    observer.observe(loaderRef.current);
-    return () => observer.disconnect();
-  }, []);
-
-  // 發送留言
-  const submitComment = async () => {
-    if (!text.trim()) return;
-    await fetch('/api/social/comments', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ postId, body: text }),
-    });
-    setText('');
-    setPage(0);
-    setComments([]);
-    setHasMore(true);
-  };
-
-  return (
-    <div className="s-col s-gap-10 s-mt-12">
-      <div className="s-list">
-        {comments.map((c) => (
-          <div key={c.id} className="s-list-item">
-            <img src={c.avatarUrl ?? '/default-avatar.png'} className="s-avatar" alt="avatar" />
-            <div>
-              <div className="s-card-title">{c.userName}</div>
-              <div className="post-body">{c.body}</div>
-            </div>
-            <div className="s-card-subtitle">{new Date(c.createdAt).toLocaleString()}</div>
-          </div>
-        ))}
-        {hasMore && <div ref={loaderRef} className="s-center s-mt-8">載入留言中…</div>}
-      </div>
-
-      <div className="dm-inputbar">
-        <input
-          className="s-input"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="寫下留言..."
-        />
-        <button className="s-btn primary" onClick={submitComment}>送出</button>
-      </div>
+      <div ref={loaderRef} className="loader">載入中…</div>
     </div>
   );
 }
