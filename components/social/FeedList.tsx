@@ -13,45 +13,36 @@ type Post = {
   commentCount?: number;
 };
 
-export default function FeedList({ scope }: { scope: 'following' | 'global' }) {
+export default function FeedList({ scope, refreshToken }: { scope: 'following' | 'global'; refreshToken?: any }) {
   const [items, setItems] = useState<Post[]>([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    let abort = false;
-    const load = async () => {
-      setLoading(true);
-      try {
-        const url = new URL('/api/social/feed', window.location.origin);
-        url.searchParams.set('scope', scope.toUpperCase()); // 後端若吃 FOLLOWING/GLOBAL
-        const r = await fetch(url.toString(), { cache: 'no-store' });
-        if (!r.ok) throw new Error('bad');
-        const d = await r.json();
-        if (!abort) setItems(d.items ?? []);
-      } catch {
-        if (!abort) setItems([]);
-      } finally {
-        if (!abort) setLoading(false);
-      }
-    };
-    load();
-    return () => { abort = true; };
-  }, [scope]);
+  async function load() {
+    setLoading(true);
+    try {
+      const url = new URL('/api/social/feed', window.location.origin);
+      url.searchParams.set('scope', scope.toUpperCase());
+      const r = await fetch(url.toString(), { cache: 'no-store' });
+      if (!r.ok) throw new Error('bad');
+      const d = await r.json();
+      setItems(d.items ?? []);
+    } catch {
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, [scope, refreshToken]);
 
   const toggleLike = async (postId: string) => {
     try {
-      // 先行更新 UI
       setItems(list => list.map(p => p.id===postId ? {
         ...p,
         liked: !p.liked,
         likeCount: Math.max(0, (p.likeCount ?? 0) + (p.liked ? -1 : 1)),
       } : p));
-
-      await fetch(`/api/social/posts/${postId}/like`, {
-        method: 'POST',
-        headers: { 'content-type':'application/json' },
-        body: JSON.stringify({ like: true }),
-      });
+      await fetch(`/api/social/posts/${postId}/like`, { method: 'POST' });
     } catch {}
   };
 
@@ -69,7 +60,7 @@ export default function FeedList({ scope }: { scope: 'following' | 'global' }) {
               <div className="s-card-subtitle">{new Date(p.createdAt).toLocaleString()}</div>
             </div>
             <div style={{marginLeft:'auto'}}>
-              <button className="s-icon-btn" aria-label="更多" data-sound>⋯</button>
+              <a className="s-btn sm pill ghost" href={`/profile?uid=${p.user.id}`} data-sound>個人主頁</a>
             </div>
           </header>
 
