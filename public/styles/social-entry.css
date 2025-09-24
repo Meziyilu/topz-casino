@@ -1,0 +1,40 @@
+/* ============ Social Entrances ============ */
+.social-entry-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+@media (min-width: 1024px) {
+  .social-entry-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+.social-entry {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.08);
+  overflow: hidden;
+  transition: transform .15s ease, background .15s ease;
+  min-height: 120px;
+}
+.social-entry:hover {
+  transform: translateY(-2px);
+  background: rgba(255,255,255,.1);
+}
+
+.social-entry__lottie {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  pointer-events: none;
+  filter: drop-shadow(0 6px 16px rgba(0,0,0,.35));
+}
+
+.social-entry__title { font-weight: 700; font-size: 15px; }
+.social-entry__desc  { opacity: .75; font-size: 12px; }

@@ -1,4 +1,3 @@
-// app/page.tsx
 "use client";
 
 // ✅ 全域樣式
@@ -19,17 +18,18 @@ import ServiceWidget from "@/components/lobby/ServiceWidget";
 import Leaderboard from "@/components/lobby/Leaderboard";
 import CheckinCard from "@/components/lobby/CheckinCard";
 import BankLottie from "@/components/bank/BankLottie";
+import SocialEntrances from "@/components/social/SocialEntrances"; // 👈 新增
 
 // ⛑️ 會碰 window/localStorage → 動態載入並停用 SSR
 const AnnouncementTicker = dynamic(() => import("@/components/lobby/AnnouncementTicker"), { ssr: false });
-const AnnouncementModal = dynamic(() => import("@/components/lobby/AnnouncementModal"), { ssr: false });
-const LobbyPopupModal = dynamic(() => import("@/components/lobby/LobbyPopupModal"), { ssr: false });
+const AnnouncementModal  = dynamic(() => import("@/components/lobby/AnnouncementModal"),  { ssr: false });
+const LobbyPopupModal    = dynamic(() => import("@/components/lobby/LobbyPopupModal"),    { ssr: false });
 
 // ⬇ Lottie
 import RouletteLottie from "@/components/roulette/RouletteLottie";
 import BaccaratLottie from "@/components/baccarat/BaccaratLottie";
-import SicboLottie from "@/components/sicbo/SicboLottie";
-import LottoLottie from "@/components/lotto/LottoLottie";
+import SicboLottie    from "@/components/sicbo/SicboLottie";
+import LottoLottie    from "@/components/lotto/LottoLottie";
 
 type Me = {
   id: string;
@@ -151,7 +151,6 @@ export default function LobbyPage() {
       {/* ⬆️ 公告彈窗（僅瀏覽器端；每次進頁面都跳） */}
       {mounted && (
         <>
-          {/* 這個是原本公告彈窗（按你需求可保留或拿掉） */}
           <AnnouncementModal
             autoOpen
             showLatestOnly
@@ -160,14 +159,13 @@ export default function LobbyPage() {
             refetchMs={300000}
             okText="知道了"
           />
-          {/* 這個是「每次進來一定跳」的 LobbyPopupModal，不記紀錄 */}
           <LobbyPopupModal
             autoOpen
             storageKeyPrefix="topz"
             remindAfterMinutes={null}
             useExternalStyle
-            variant="glass"      // "glass" | "neon" | "aurora"
-            animation="slide-up" // "fade" | "zoom" | "slide-up"
+            variant="glass"
+            animation="slide-up"
             className="popup--center"
           />
         </>
@@ -175,7 +173,6 @@ export default function LobbyPage() {
 
       {/* ===== Header（兩列）===== */}
       <header className="lb-header">
-        {/* 第一列：Logo/標題 + 右側工具 */}
         <div className="lb-header-top">
           <div className="left">
             <div className="lb-logo">TOPZCASINO</div>
@@ -202,7 +199,6 @@ export default function LobbyPage() {
           </div>
         </div>
 
-        {/* 第二列：跑馬燈（獨立一列，不會蓋標題） */}
         <div className="lb-header-marquee">
           {mounted ? <AnnouncementTicker /> : <div style={{ height: 24 }} />}
         </div>
@@ -249,7 +245,6 @@ export default function LobbyPage() {
             </div>
           </div>
 
-          {/* 公告卡片 */}
           <div className="lb-card">
             <div className="lb-card-title">公告</div>
             <ul className="lb-list soft" id="ann-list">
@@ -299,6 +294,9 @@ export default function LobbyPage() {
             <GameCard title="21點" online={0} disabled href="/casino/blackjack" />
           </div>
 
+          {/* 👇 新增：社交入口卡片（含 Lottie 動畫） */}
+          <SocialEntrances />
+
           <ChatBox room="LOBBY" />
         </section>
 
@@ -316,34 +314,15 @@ export default function LobbyPage() {
       {/* 局部 CSS：Header 兩列 + Lottie 定位 */}
       <style jsx global>{`
         /* Header：直向排列，跑馬燈獨立一列 */
-        .lb-header {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-          padding: 8px 16px;
-          position: relative;
-          z-index: 10;
-        }
-        .lb-header-top {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-        }
-        .lb-header-marquee {
-          overflow: hidden;
-          padding: 2px 0 0;
-          z-index: 5;
-        }
+        .lb-header { display: flex; flex-direction: column; gap: 6px; padding: 8px 16px; position: relative; z-index: 10; }
+        .lb-header-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .lb-header-marquee { overflow: hidden; padding: 2px 0 0; z-index: 5; }
 
         /* Lottie 覆蓋位置微調 */
         .game-card { position: relative; overflow: hidden; }
         .game-card .gc-overlay.gc-right {
-          position: absolute;
-          right: 8px;
-          top: 50%;
-          transform: translateY(-50%);
-          pointer-events: none;
+          position: absolute; right: 8px; top: 50%;
+          transform: translateY(-50%); pointer-events: none;
           filter: drop-shadow(0 6px 16px rgba(0,0,0,.35));
         }
         @media (max-width: 640px) {
