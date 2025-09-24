@@ -2,13 +2,13 @@
 'use client';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 0; // ✅ 必須是數字或 false，不能是 object
+export const revalidate = 0; // ✅ 必須是數字或 false
 
 import { useState } from 'react';
 import FeedList from '@/components/social/FeedList';
 import '@/public/styles/social.css';
 
-export default function SocialFeedPage() {
+export default function FeedPage() {
   const [refreshFlag, setRefreshFlag] = useState(0);
 
   return (
@@ -16,8 +16,8 @@ export default function SocialFeedPage() {
       <header className="social-header">
         <h1 className="s-card-title">社交動態</h1>
         <button
-          className="s-btn primary sm"
-          onClick={() => setRefreshFlag((n) => n + 1)}
+          className="s-btn primary"
+          onClick={() => setRefreshFlag((v) => v + 1)}
         >
           重新整理
         </button>
