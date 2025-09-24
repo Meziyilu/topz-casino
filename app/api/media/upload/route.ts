@@ -1,24 +1,29 @@
+// app/api/media/upload/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import { promises as fs } from 'fs';
-import path from 'path';
-import os from 'os';
+import * as fs from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
 
-export const runtime = 'nodejs'; // 需要 Node 環境
+export const runtime = 'nodejs'; // 需要 Node 環境 (fs, os)
 
 export async function POST(req: NextRequest) {
   try {
     const fd = await req.formData();
     const file = fd.get('file') as File | null;
-    if (!file) return NextResponse.json({ ok: false, error: 'NO_FILE' }, { status: 400 });
+    if (!file) {
+      return NextResponse.json({ ok: false, error: 'NO_FILE' }, { status: 400 });
+    }
 
+    // 直接取得 Uint8Array（BodyInit/Node typings 都吃）
     const arrayBuf = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuf);
+    const bytes = new Uint8Array(arrayBuf);
 
     const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
     const id = randomUUID();
     const filePath = path.join(os.tmpdir(), `topz_${id}.${ext}`);
-    await fs.writeFile(filePath, buffer);
+
+    await fs.writeFile(filePath, bytes);
 
     // 回傳可讀取 URL
     const url = `/api/media/file/${id}.${ext}`;
