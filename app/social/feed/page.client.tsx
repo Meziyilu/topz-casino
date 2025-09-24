@@ -1,9 +1,9 @@
 // app/social/feed/page.client.tsx
-"use client";
+'use client';
 
-import { useEffect, useState, useCallback } from "react";
-import FeedList from "@/components/social/FeedList";
-import PostComposer from "@/components/social/PostComposer";
+import { useState, useCallback } from 'react';
+import FeedList from '@/components/social/FeedList';
+import PostComposer from '@/components/social/PostComposer';
 
 export default function FeedClientPage() {
   const [refreshFlag, setRefreshFlag] = useState(0);

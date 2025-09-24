@@ -1,11 +1,12 @@
 // app/social/feed/page.tsx
-"use client";
+'use client';
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0; // ✅ 必須是 number 或 false，不要包成物件
+export const dynamic = 'force-dynamic';
+// revalidate 要是數字或 false，不能是物件
+export const revalidate = 0; // ✅ 每次請求都重新渲染
 
-import FeedPageClient from "./page.client";
+import FeedClientPage from './page.client';
 
 export default function FeedPage() {
-  return <FeedPageClient />;
+  return <FeedClientPage />;
 }
