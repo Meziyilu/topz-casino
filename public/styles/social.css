@@ -38,20 +38,32 @@
 .s-w-full{width:100%}
 
 /* ---- card ---- */
-.s-card{
-  background:var(--s-bg);
-  border:1px solid var(--s-border);
-  border-radius:var(--s-card-radius);
-  box-shadow:var(--s-shadow);
-  backdrop-filter:var(--s-blur); -webkit-backdrop-filter:var(--s-blur);
-  color:var(--s-text)
+.s-card {
+  background: var(--s-bg);
+  border: 1px solid var(--s-border);
+  border-radius: var(--s-card-radius);
+  box-shadow: var(--s-shadow);
+  backdrop-filter: var(--s-blur); 
+  -webkit-backdrop-filter: var(--s-blur);
+  color: var(--s-text);
+  padding: 16px;
 }
-.s-card.padded{padding:16px}
-.s-card-title{font-weight:800;font-size:16px;margin-bottom:8px}
-.s-card-subtitle{font-size:12px;color:var(--s-text-mute);margin-bottom:8px}
+.s-card-title {
+  font-size: 1.25rem; /* 放大標題字體 */
+  font-weight: 800;
+  color: #ffffff; /* 白色 */
+  margin-bottom: 12px;
+}
+.s-card-subtitle {
+  font-size: 1rem; /* 放大副標題字體 */
+  font-weight: 500;
+  color: #ffffff; /* 白色 */
+  opacity: 0.9;
+  margin-bottom: 8px;
+}
 
 /* ---- buttons ---- */
-.s-btn{
+.s-btn {
   display:inline-flex;align-items:center;justify-content:center;
   padding:10px 14px;border-radius:var(--s-btn-radius);
   font-weight:700;letter-spacing:.2px;border:1px solid var(--s-border-weak);
@@ -98,9 +110,13 @@
 .s-list{display:grid;gap:10px}
 .s-list-item{
   display:grid;grid-template-columns:48px 1fr auto;gap:10px;align-items:center;
-  padding:10px;border:1px solid var(--s-border);border-radius:14px;background:rgba(255,255,255,.04)
+  padding:10px;border:1px solid var(--s-border);border-radius:14px;background:rgba(255,255,255,.04);
+  color:#fff;
 }
-.s-list-item:hover{background:rgba(255,255,255,.06)}
+.s-list-item:hover{
+  background:rgba(255,255,255,0.08);
+  transition: background 0.2s ease;
+}
 .s-avatar{width:48px;height:48px;border-radius:50%;object-fit:cover}
 
 /* ---- grid ---- */
@@ -139,41 +155,18 @@
 }
 .social-entry:hover{transform:translateY(-2px);background:var(--s-bg-strong)}
 .social-entry__lottie{position:absolute;top:50%;right:8px;transform:translateY(-50%);pointer-events:none;filter:drop-shadow(0 6px 16px rgba(0,0,0,.35))}
-.social-entry__title{font-weight:700;font-size:15px}
-.social-entry__desc{opacity:.75;font-size:12px}
+.social-entry__title{
+  font-weight:700;
+  font-size:1.1rem; /* 比原本更大 */
+  color:#fff;
+}
+.social-entry__desc{
+  opacity:.95;
+  font-size:0.95rem; /* 字體也稍微放大 */
+  color:#fff;
+}
 
 /* ---- reduced motion ---- */
 @media (prefers-reduced-motion: reduce){
   .s-btn,.s-icon-btn,.s-card,.social-entry{transition:none}
-}
-
-/* ========== 社交入口卡片樣式 ========== */
-.s-card {
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 16px;
-  padding: 16px;
-  color: #fff; /* 文字預設白色 */
-}
-
-.s-card-title {
-  font-size: 1.25rem; /* 放大標題字體 */
-  font-weight: 700;
-  color: #ffffff; /* 白色 */
-  margin-bottom: 12px;
-}
-
-.s-card-subtitle {
-  font-size: 1rem; /* 放大副標題字體 */
-  font-weight: 500;
-  color: #ffffff; /* 白色 */
-  opacity: 0.9;
-}
-
-.s-list-item {
-  color: #fff;
-}
-
-.s-list-item:hover {
-  background: rgba(255, 255, 255, 0.08);
-  transition: background 0.2s ease;
 }
