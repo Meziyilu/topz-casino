@@ -2,98 +2,98 @@
 
 import { useEffect, useState } from 'react';
 
-type Scope = 'following' | 'global';
+type Post = {
+  id: string;
+  user: { id: string; displayName: string; avatarUrl?: string | null; vipTier?: number };
+  body: string;
+  imageUrl?: string | null;
+  createdAt: string;
+  liked?: boolean;
+  likeCount?: number;
+  commentCount?: number;
+};
 
-export default function FeedList({ scope }: { scope: Scope }) {
-  const [items, setItems] = useState<any[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
+export default function FeedList({ scope }: { scope: 'following' | 'global' }) {
+  const [items, setItems] = useState<Post[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const load = async (reset = false) => {
-    if (loading) return;
-    if (!reset && done) return;
-    setLoading(true);
-    try {
-      const url = new URL('/api/social/wall/feed', window.location.origin);
-      url.searchParams.set('scope', scope);
-      if (!reset && cursor) url.searchParams.set('cursor', cursor);
-      const res = await fetch(url.toString());
-      const j = await res.json();
-      if (reset) {
-        setItems(j.items || []);
-      } else {
-        setItems((prev) => [...prev, ...(j.items || [])]);
+  useEffect(() => {
+    let abort = false;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const url = new URL('/api/social/feed', window.location.origin);
+        url.searchParams.set('scope', scope.toUpperCase()); // 後端若吃 FOLLOWING/GLOBAL
+        const r = await fetch(url.toString(), { cache: 'no-store' });
+        if (!r.ok) throw new Error('bad');
+        const d = await r.json();
+        if (!abort) setItems(d.items ?? []);
+      } catch {
+        if (!abort) setItems([]);
+      } finally {
+        if (!abort) setLoading(false);
       }
-      setCursor(j.nextCursor || null);
-      setDone(!j.nextCursor);
-    } finally {
-      setLoading(false);
-    }
+    };
+    load();
+    return () => { abort = true; };
+  }, [scope]);
+
+  const toggleLike = async (postId: string) => {
+    try {
+      // 先行更新 UI
+      setItems(list => list.map(p => p.id===postId ? {
+        ...p,
+        liked: !p.liked,
+        likeCount: Math.max(0, (p.likeCount ?? 0) + (p.liked ? -1 : 1)),
+      } : p));
+
+      await fetch(`/api/social/posts/${postId}/like`, {
+        method: 'POST',
+        headers: { 'content-type':'application/json' },
+        body: JSON.stringify({ like: true }),
+      });
+    } catch {}
   };
 
-  // 初次與 scope 切換時載入
-  useEffect(() => {
-    setCursor(null);
-    setDone(false);
-    load(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scope]);
-
-  // 發文後自動刷新
-  useEffect(() => {
-    const onCreated = () => load(true);
-    window.addEventListener('post:created', onCreated);
-    return () => window.removeEventListener('post:created', onCreated);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scope]);
-
   return (
-    <section className="space-y-3">
+    <div className="s-col s-gap-12">
+      {loading && <div className="s-card-subtitle">載入中…</div>}
+      {!loading && items.length === 0 && <div className="s-card-subtitle">目前沒有貼文</div>}
+
       {items.map((p) => (
-        <article key={p.id} className="glass p-4 rounded-xl space-y-2">
-          <header className="flex items-center gap-3">
-            <img
-              src={p.user?.avatarUrl || '/avatar-default.png'}
-              className="w-10 h-10 rounded-full object-cover"
-              alt=""
-            />
-            <div className="flex-1">
-              <div className="font-semibold">{p.user?.displayName || 'User'}</div>
-              <div className="text-xs opacity-70">{new Date(p.createdAt).toLocaleString()}</div>
+        <article key={p.id} className="s-card padded post-card">
+          <header className="s-flex s-gap-10" style={{alignItems:'center'}}>
+            <img src={p.user.avatarUrl || '/avatar-default.png'} alt="" className="s-avatar" />
+            <div className="s-col">
+              <div style={{fontWeight:800}}>{p.user.displayName}</div>
+              <div className="s-card-subtitle">{new Date(p.createdAt).toLocaleString()}</div>
+            </div>
+            <div style={{marginLeft:'auto'}}>
+              <button className="s-icon-btn" aria-label="更多" data-sound>⋯</button>
             </div>
           </header>
-          <div className="whitespace-pre-wrap">{p.body}</div>
-          {p.imageUrl && (
-            <img
-              src={p.imageUrl}
-              alt=""
-              className="w-full rounded-lg object-cover max-h-[420px]"
-            />
-          )}
-          {Array.isArray(p.medias) && p.medias.length > 0 && (
-            <div className="grid grid-cols-2 gap-2">
-              {p.medias.map((m: any) => (
-                <img key={m.id} src={m.url} alt="" className="rounded-lg object-cover" />
-              ))}
-            </div>
-          )}
-          <footer className="text-sm opacity-80">
-            💬 {p._count?.comments ?? 0}　❤️ {p._count?.likes ?? 0}
+
+          <div className="post-body s-mt-8">{p.body}</div>
+          {p.imageUrl && <img className="post-media s-mt-8" src={p.imageUrl} alt="" />}
+
+          <footer className="post-footer s-mt-12">
+            <button
+              className={`s-btn sm pill ${p.liked ? 'primary' : 'ghost'}`}
+              onClick={() => toggleLike(p.id)}
+              aria-pressed={!!p.liked}
+              data-sound
+            >
+              讚 {p.likeCount ?? 0}
+            </button>
+            <a className="s-btn sm pill ghost" href={`/social/posts/${p.id}`} data-sound>
+              留言 {p.commentCount ?? 0}
+            </a>
+            <button className="s-btn sm pill ghost" onClick={() => navigator.share?.({ text: p.body })} data-sound>
+              分享
+            </button>
           </footer>
         </article>
       ))}
-
-      {!done && (
-        <div className="flex justify-center">
-          <button className="btn" onClick={() => load(false)} disabled={loading}>
-            {loading ? '載入中…' : '載入更多'}
-          </button>
-        </div>
-      )}
-      {done && items.length === 0 && (
-        <div className="text-center opacity-70">尚無貼文</div>
-      )}
-    </section>
+    </div>
   );
 }

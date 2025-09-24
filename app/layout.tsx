@@ -1,10 +1,9 @@
-// app/layout.tsx
 "use client";
 
 import Script from "next/script";
 import { useEffect, useRef, useState } from "react";
 
-const CLICK_SRC = "/sounds/click.mp3"; // 可換 .wav/.ogg
+const CLICK_SRC = "/sounds/click.mp3"; // 確認檔案存在
 const HOVER_SRC = "/sounds/hover.mp3";
 const STORAGE_KEY = "sfx-muted";
 
@@ -12,27 +11,41 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const [muted, setMuted] = useState(false);
   const mutedRef = useRef(muted);
 
-  // 預設音量（可自行調整）
   const clickVolRef = useRef(0.55);
   const hoverVolRef = useRef(0.32);
 
-  // 基底音源（clone 播放避免連點卡住）
   const clickBaseRef = useRef<HTMLAudioElement | null>(null);
   const hoverBaseRef = useRef<HTMLAudioElement | null>(null);
-
   const unlockedRef = useRef(false);
 
-  // 便利函式：判斷是否為要發聲的目標
+  // 是否為要播放聲音的互動元素
   const isSoundTarget = (node: Element | null) => {
     if (!node) return false;
     const el = node as HTMLElement;
-    return (
-      !!el.closest("button, [data-sound]") || // 一般按鈕/帶 data-sound
-      !!el.closest(".lb-games a")             // 大廳卡片
+    // 若明確關閉 data-sound
+    if (el.closest('[data-sound="off"]')) return false;
+
+    return !!(
+      // 典型按鈕
+      el.closest('button, [role="button"]') ||
+      // 明確指定
+      el.closest('[data-sound]') ||
+      // 大廳遊戲卡
+      el.closest('.lb-games a') ||
+      // 社交常用元素
+      el.closest('.s-btn, .s-icon-btn, .social-entry, .social-tab, .lb-btn')
     );
   };
 
-  // 載入靜音狀態
+  // 是否被禁用
+  const isDisabled = (node: Element | null) => {
+    if (!node) return false;
+    const btn = (node as HTMLElement).closest('button') as HTMLButtonElement | null;
+    if (btn && btn.disabled) return true;
+    const aria = (node as HTMLElement).closest('[aria-disabled="true"]');
+    return !!aria;
+  };
+
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -44,7 +57,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     } catch {}
   }, []);
 
-  // 同步靜音狀態
   useEffect(() => {
     mutedRef.current = muted;
     try {
@@ -53,7 +65,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   }, [muted]);
 
   useEffect(() => {
-    // 建立基底音源 + 預載
     clickBaseRef.current = new Audio(CLICK_SRC);
     hoverBaseRef.current = new Audio(HOVER_SRC);
     if (clickBaseRef.current) {
@@ -65,7 +76,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       hoverBaseRef.current.volume = hoverVolRef.current;
     }
 
-    // 第一次真實互動 → 解鎖音訊（iOS/Chrome 自動播放限制）
     const unlockOnce = () => {
       if (unlockedRef.current) return;
       unlockedRef.current = true;
@@ -86,15 +96,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     };
     document.addEventListener("pointerdown", unlockOnce, { passive: true });
 
-    // 點擊（用 pointerdown 更即時，涵蓋滑鼠/觸控/手寫筆）
     const onPointerDown = (e: PointerEvent) => {
       if (mutedRef.current) return;
       const target = e.target as HTMLElement;
       if (!isSoundTarget(target)) return;
-
-      // 忽略 disabled 的 button
-      const btn = target.closest("button") as HTMLButtonElement | null;
-      if (btn?.disabled) return;
+      if (isDisabled(target)) return;
 
       const base = clickBaseRef.current;
       if (!base) return;
@@ -105,18 +111,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       void sfx.play().catch(() => {});
     };
 
-    // hover 只在有滑鼠的裝置
     const hasMouse = matchMedia("(hover: hover)").matches && matchMedia("(pointer: fine)").matches;
-
-    // 用捕獲階段的 pointerenter，避免因子元素冒泡造成多次觸發
     const onPointerEnter = (e: Event) => {
       if (!hasMouse || mutedRef.current) return;
       const target = e.target as HTMLElement;
       if (!isSoundTarget(target)) return;
-
-      // 忽略 disabled 的 button
-      const btn = target.closest("button") as HTMLButtonElement | null;
-      if (btn?.disabled) return;
+      if (isDisabled(target)) return;
 
       const base = hoverBaseRef.current;
       if (!base) return;
@@ -127,12 +127,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       void sfx.play().catch(() => {});
     };
 
-    // 鍵盤 Enter/Space 也給 click 聲
     const onKeyDown = (e: KeyboardEvent) => {
       if (mutedRef.current) return;
       if (e.key !== "Enter" && e.key !== " ") return;
       const target = e.target as HTMLElement;
       if (!isSoundTarget(target)) return;
+      if (isDisabled(target)) return;
 
       const base = clickBaseRef.current;
       if (!base) return;
@@ -158,16 +158,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="zh-Hant">
       <head>
-        {/* 預載音效，減少第一次延遲 */}
+        {/* 預載音效 */}
         <link rel="preload" as="audio" href={CLICK_SRC} />
         <link rel="preload" as="audio" href={HOVER_SRC} />
 
-        {/* 既有樣式 */}
+        {/* 既有樣式（保留你原本的） */}
         <link rel="stylesheet" href="/styles/shop.css" />
         <link rel="stylesheet" href="/styles/headframes.css" />
         <link rel="stylesheet" href="/styles/bank.css" />
 
-        {/* 音效開關樣式 */}
         <style>{`
           .sfx-toggle {
             position: fixed;
@@ -196,20 +195,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         `}</style>
       </head>
       <body>
-        {/* 全域音效開關（會記住狀態） */}
         <button
           type="button"
           className={`sfx-toggle ${muted ? "sfx-off" : "sfx-on"}`}
           aria-label={muted ? "開啟音效" : "關閉音效"}
           onClick={() => setMuted((m) => !m)}
+          data-sound
         >
-          音效 {muted ? "關閉" : "開啟"}
-          <span className="dot" />
+          音效 {muted ? "關閉" : "開啟"} <span className="dot" />
         </button>
 
         {children}
 
-        {/* 既有客服 Script */}
         <Script
           id="tawk-embed"
           src="https://embed.tawk.to/68b349c7d19aeb19234310df/1j3u5gcnb"
