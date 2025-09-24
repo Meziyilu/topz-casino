@@ -1,35 +1,34 @@
 'use client';
+import '@/public/styles/social.css';
 import { useEffect, useState } from 'react';
-import UserCardMini from '@/components/social/UserCardMini';
+import Link from 'next/link';
 
 export default function VisitorsPage() {
   const [items, setItems] = useState<any[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
-
-  const load = async () => {
-    if (done) return;
-    const url = `/api/social/profile/visitors${cursor ? `?cursor=${cursor}` : ''}`;
-    const j = await fetch(url).then(r => r.json());
-    setItems(prev => [...prev, ...(j.items || [])]);
-    setCursor(j.nextCursor || null);
-    if (!j.nextCursor) setDone(true);
-  };
-
-  useEffect(() => { load(); }, []);
-
+  useEffect(() => {
+    fetch('/api/social/visitors').then(r=>r.json()).then(d=>setItems(d.items||[]));
+  }, []);
   return (
-    <main className="container mx-auto p-4 space-y-4">
-      <h1 className="text-xl font-bold">最近訪客</h1>
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-        {items.map((row) => (
-          <div key={row.id} className="space-y-2">
-            <UserCardMini user={row.viewer} />
-            <div className="text-xs opacity-70">造訪時間：{new Date(row.visitedAt).toLocaleString()}</div>
-          </div>
+    <main className="s-card padded">
+      <div className="s-card-title">最近訪客</div>
+      <div className="visitors-grid s-mt-8">
+        {items.map(v => (
+          <article key={v.id} className="s-card padded">
+            <div className="s-flex s-gap-10">
+              <img src={v.viewer?.avatarUrl || '/avatar-default.png'} className="s-avatar" alt="" />
+              <div className="s-col s-gap-4">
+                <div style={{fontWeight:800}}>{v.viewer?.displayName || '玩家'}</div>
+                <div className="s-card-subtitle">{new Date(v.visitedAt).toLocaleString()}</div>
+                <div className="s-flex s-gap-8">
+                  <Link href={`/profile?uid=${v.viewerId}`} className="s-btn sm ghost pill">看個人頁</Link>
+                  <button className="s-btn sm pill">+ 追蹤</button>
+                </div>
+              </div>
+            </div>
+          </article>
         ))}
+        {items.length === 0 && <div className="s-card-subtitle">暫無訪客</div>}
       </div>
-      {!done && <button className="btn" onClick={load}>載入更多</button>}
     </main>
   );
 }
