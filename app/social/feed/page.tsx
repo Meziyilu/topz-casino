@@ -1,8 +1,7 @@
 // app/social/feed/page.tsx
 'use client';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0; // ✅ 必須是數字或 false
+export const dynamic = 'force-dynamic'; // 即時渲染，不快取
 
 import { useState } from 'react';
 import FeedList from '@/components/social/FeedList';
