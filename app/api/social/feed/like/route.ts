@@ -4,11 +4,11 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  const { feedId } = await req.json();
-  if (!feedId) return NextResponse.json({ error: "Missing feedId" }, { status: 400 });
+  const { postId } = await req.json();
+  if (!postId) return NextResponse.json({ error: "Missing postId" }, { status: 400 });
 
-  await prisma.feed.update({
-    where: { id: feedId },
+  await prisma.wallPost.update({
+    where: { id: postId },
     data: { likeCount: { increment: 1 } },
   });
 
@@ -16,11 +16,11 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const { feedId } = await req.json();
-  if (!feedId) return NextResponse.json({ error: "Missing feedId" }, { status: 400 });
+  const { postId } = await req.json();
+  if (!postId) return NextResponse.json({ error: "Missing postId" }, { status: 400 });
 
-  await prisma.feed.update({
-    where: { id: feedId },
+  await prisma.wallPost.update({
+    where: { id: postId },
     data: { likeCount: { decrement: 1 } },
   });
 
