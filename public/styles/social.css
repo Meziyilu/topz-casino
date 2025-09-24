@@ -146,3 +146,34 @@
 @media (prefers-reduced-motion: reduce){
   .s-btn,.s-icon-btn,.s-card,.social-entry{transition:none}
 }
+
+/* ========== 社交入口卡片樣式 ========== */
+.s-card {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 16px;
+  color: #fff; /* 文字預設白色 */
+}
+
+.s-card-title {
+  font-size: 1.25rem; /* 放大標題字體 */
+  font-weight: 700;
+  color: #ffffff; /* 白色 */
+  margin-bottom: 12px;
+}
+
+.s-card-subtitle {
+  font-size: 1rem; /* 放大副標題字體 */
+  font-weight: 500;
+  color: #ffffff; /* 白色 */
+  opacity: 0.9;
+}
+
+.s-list-item {
+  color: #fff;
+}
+
+.s-list-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transition: background 0.2s ease;
+}
