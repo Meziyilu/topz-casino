@@ -186,3 +186,252 @@
     border-bottom-right-radius: 0;
   }
 }
+
+/* ===============================
+   Feed Page — Layout spacing
+   =============================== */
+.feed-page {
+  display: grid;
+  grid-template-columns: minmax(0,1fr);
+  gap: 18px;
+}
+@media (min-width: 1024px) {
+  .feed-page {
+    grid-template-columns: minmax(0, 640px) 320px; /* 主欄 + 側欄 */
+    align-items: start;
+  }
+}
+
+/* -------------------------------
+   Composer (發文框)
+   ------------------------------- */
+.post-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--s-bg);
+  border: 1px solid var(--s-border);
+  box-shadow: var(--s-shadow);
+  backdrop-filter: var(--s-blur);
+  -webkit-backdrop-filter: var(--s-blur);
+}
+
+.post-composer .pc-row {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.post-composer .pc-avatar {
+  width: 48px; height: 48px; border-radius: 50%;
+  object-fit: cover; display: block;
+  border: 1px solid var(--s-border-weak);
+}
+
+.post-composer .pc-inputs {
+  display: grid;
+  gap: 10px;
+}
+
+.post-composer .pc-textarea {
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+  padding: 12px 14px;
+  background: rgba(255,255,255,.05);
+  border: 1px solid var(--s-border);
+  color: var(--s-text);
+  border-radius: 12px;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.post-composer .pc-textarea:focus {
+  border-color: var(--s-primary);
+  box-shadow: 0 0 0 3px rgba(124,92,255,.25);
+  background: rgba(255,255,255,.07);
+}
+
+.post-composer .pc-url {
+  width: 100%;
+  padding: 9px 12px;
+  background: rgba(255,255,255,.05);
+  border: 1px solid var(--s-border);
+  color: var(--s-text);
+  border-radius: 10px;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.post-composer .pc-url:focus {
+  border-color: var(--s-primary);
+  box-shadow: 0 0 0 3px rgba(124,92,255,.2);
+  background: rgba(255,255,255,.07);
+}
+
+.post-composer .pc-actions {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 10px; margin-top: 4px;
+}
+.post-composer .pc-left { display: flex; gap: 8px; align-items: center; }
+.post-composer .pc-right { display: flex; gap: 10px; align-items: center; }
+
+.post-composer .pc-tool {
+  display:inline-flex; align-items:center; justify-content:center;
+  gap: 8px; padding: 8px 12px;
+  border-radius: 10px; border: 1px solid var(--s-border-weak);
+  background: rgba(255,255,255,.04); color: var(--s-text-dim);
+  cursor: pointer;
+  transition: transform .15s ease, background .15s ease, color .15s ease;
+}
+.post-composer .pc-tool:hover { transform: translateY(-1px); background: var(--s-bg-strong); color: var(--s-text); }
+
+.post-composer .pc-submit {
+  padding: 10px 16px; border-radius: 12px; border: none;
+  background: linear-gradient(180deg, var(--s-primary), var(--s-primary-2));
+  color: #fff; font-weight: 800; letter-spacing: .02em;
+  box-shadow: 0 8px 22px rgba(124,92,255,.35);
+  cursor: pointer; transition: transform .15s ease; 
+}
+.post-composer .pc-submit:hover { transform: translateY(-1px); }
+.post-composer .pc-submit:disabled { opacity: .55; cursor: not-allowed; }
+
+/* 預覽圖 */
+.post-composer .pc-preview {
+  display: grid; grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 8px; margin-top: 4px;
+}
+@media (max-width: 640px) { .post-composer .pc-preview { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+.post-composer .pc-thumb {
+  position: relative; overflow: hidden; border-radius: 12px; border: 1px solid var(--s-border);
+}
+.post-composer .pc-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+
+/* -------------------------------
+   Feed List / Post Card
+   ------------------------------- */
+.feed-list { display: grid; gap: 12px; }
+.post-card {
+  background: var(--s-bg);
+  border: 1px solid var(--s-border);
+  border-radius: 16px;
+  box-shadow: var(--s-shadow);
+  backdrop-filter: var(--s-blur);
+  -webkit-backdrop-filter: var(--s-blur);
+  padding: 14px;
+}
+
+.post-head {
+  display: grid; grid-template-columns: 48px 1fr auto; gap: 10px; align-items: center;
+}
+.post-head .ph-avatar {
+  width: 48px; height: 48px; border-radius: 50%; object-fit: cover;
+  border: 1px solid var(--s-border-weak);
+}
+.post-head .ph-meta { display: flex; flex-direction: column; gap: 2px; }
+.post-head .ph-name { font-weight: 800; color: var(--s-text); }
+.post-head .ph-time { font-size: 12px; color: var(--s-text-mute); }
+.post-head .ph-more { color: var(--s-text-dim); }
+
+.post-body { margin-top: 10px; color: var(--s-text); white-space: pre-wrap; line-height: 1.65; }
+
+.post-media-grid {
+  margin-top: 10px; display: grid; gap: 8px;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+}
+.post-media-grid.one   { grid-template-columns: 1fr; }
+.post-media-grid.two   { grid-template-columns: repeat(2, 1fr); }
+.post-media-grid.three { grid-template-columns: 2fr 1fr; grid-auto-rows: 160px; }
+.post-media-grid.four  { grid-template-columns: repeat(2, 1fr); }
+
+.post-media {
+  position: relative; overflow: hidden; border-radius: 12px; border: 1px solid var(--s-border);
+}
+.post-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* 動作列 */
+.post-actions {
+  display: flex; gap: 10px; align-items: center; margin-top: 12px;
+  color: var(--s-text-dim);
+}
+.post-actions .pa-btn {
+  display:inline-flex; gap:8px; align-items:center; padding:8px 12px;
+  background: rgba(255,255,255,.04); border:1px solid var(--s-border-weak);
+  border-radius: 999px; cursor: pointer;
+  transition: transform .15s ease, background .15s ease, color .15s ease, border-color .15s ease;
+}
+.post-actions .pa-btn:hover { transform: translateY(-1px); background: var(--s-bg-strong); color: var(--s-text); border-color: var(--s-border); }
+.post-actions .pa-btn.active { color: #fff; background: linear-gradient(180deg,var(--s-primary),var(--s-primary-2)); border-color: transparent; box-shadow: 0 8px 22px rgba(124,92,255,.3); }
+
+/* 留言區（簡版） */
+.comments {
+  margin-top: 12px; border-top: 1px dashed var(--s-border-weak); padding-top: 10px; display: grid; gap: 10px;
+}
+.comment-item {
+  display: grid; grid-template-columns: 32px 1fr; gap: 8px;
+}
+.comment-item .ci-avatar{
+  width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border:1px solid var(--s-border-weak);
+}
+.comment-item .ci-bubble{
+  background: rgba(255,255,255,.05); border:1px solid var(--s-border-weak);
+  border-radius: 12px; padding: 8px 10px; line-height: 1.5; color: var(--s-text);
+}
+.comment-form { display:flex; gap: 8px; }
+.comment-form input {
+  flex: 1; padding: 8px 10px; border-radius: 10px;
+  border:1px solid var(--s-border); background: rgba(255,255,255,.05); color: var(--s-text);
+}
+.comment-form button {
+  padding: 8px 12px; border-radius: 10px; border: none; cursor: pointer;
+  background: linear-gradient(180deg,var(--s-primary),var(--s-primary-2)); color: #fff; font-weight: 800;
+}
+
+/* -------------------------------
+   Empty / Loading / Sentinel
+   ------------------------------- */
+.feed-empty {
+  display: grid; place-items: center; padding: 40px 16px;
+  color: var(--s-text-mute);
+  border: 1px dashed var(--s-border-weak);
+  border-radius: 14px;
+  background: rgba(255,255,255,.04);
+}
+.feed-loading {
+  display:flex; align-items:center; justify-content:center; gap: 10px;
+  color: var(--s-text-dim); padding: 14px;
+}
+.loader-dot {
+  width: 8px; height: 8px; border-radius: 999px;
+  background: var(--s-primary); box-shadow: 0 0 10px var(--s-primary);
+  animation: pulseDot 1.2s infinite ease-in-out;
+}
+.loader-dot:nth-child(2) { animation-delay: .15s; }
+.loader-dot:nth-child(3) { animation-delay: .3s; }
+@keyframes pulseDot {
+  0%, 80%, 100% { transform: scale(.8); opacity: .7; }
+  40% { transform: scale(1.2); opacity: 1; }
+}
+
+/* -------------------------------
+   Side column / Sticky hints
+   ------------------------------- */
+.feed-aside { position: sticky; top: 16px; display:grid; gap: 12px; }
+.feed-card {
+  background: var(--s-bg);
+  border: 1px solid var(--s-border);
+  border-radius: 16px;
+  box-shadow: var(--s-shadow);
+  backdrop-filter: var(--s-blur);
+  -webkit-backdrop-filter: var(--s-blur);
+  padding: 16px; color: var(--s-text);
+}
+.feed-card .title { font-weight: 800; margin-bottom: 6px; }
+
+/* -------------------------------
+   Responsive tweaks
+   ------------------------------- */
+@media (max-width: 1024px) {
+  .feed-aside { position: static; }
+}
