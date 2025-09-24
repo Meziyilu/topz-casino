@@ -1,4 +1,3 @@
-// app/admin/page.tsx
 "use client";
 
 import Link from "next/link";
@@ -140,6 +139,20 @@ export default function AdminHome() {
           </div>
           <div className="title">彈窗公告管理</div>
           <div className="desc">設定進入大廳顯示的彈窗內容</div>
+        </Link>
+
+        {/* 🆕 新增：簽到管理 */}
+        <Link className="tile glass" href="/admin/checkin">
+          <div className="icon" aria-hidden>
+            {/* Calendar / check icon */}
+            <svg viewBox="0 0 24 24" width="24" height="24">
+              <rect x="3" y="4" width="18" height="16" rx="2" ry="2"/>
+              <path d="M16 2v4M8 2v4M3 10h18"/>
+              <path d="m9 15 2 2 4-4"/>
+            </svg>
+          </div>
+          <div className="title">簽到管理</div>
+          <div className="desc">1–30 天金額、週日加碼、領取紀錄</div>
         </Link>
       </section>
 
