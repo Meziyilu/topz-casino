@@ -1,3 +1,4 @@
+// app/admin/page.tsx
 "use client";
 
 import Link from "next/link";
@@ -12,7 +13,7 @@ export default function AdminHome() {
 
       <section className="admin-home-grid">
         {/* === 商店管理 === */}
-        <Link className="tile glass" href="/admin/shop">
+        <Link className="tile glass" href="/admin/shop" data-sound>
           <div className="icon" aria-hidden>
             {/* Storefront icon */}
             <svg viewBox="0 0 24 24" width="24" height="24">
@@ -24,7 +25,7 @@ export default function AdminHome() {
           <div className="desc">銷售概況 / 熱門商品 / 快速入口</div>
         </Link>
 
-        <Link className="tile glass" href="/admin/shop/items">
+        <Link className="tile glass" href="/admin/shop/items" data-sound>
           <div className="icon" aria-hidden>
             {/* Tag/price icon */}
             <svg viewBox="0 0 24 24" width="24" height="24">
@@ -36,7 +37,7 @@ export default function AdminHome() {
           <div className="desc">新增商品、上架頭框、SKU 管理</div>
         </Link>
 
-        <Link className="tile glass" href="/admin/shop/bundles">
+        <Link className="tile glass" href="/admin/shop/bundles" data-sound>
           <div className="icon" aria-hidden>
             {/* Bundle/box icon */}
             <svg viewBox="0 0 24 24" width="24" height="24">
@@ -48,7 +49,7 @@ export default function AdminHome() {
           <div className="desc">建立套組 / 加入 SKU / 定價</div>
         </Link>
 
-        <Link className="tile glass" href="/admin/shop/purchases">
+        <Link className="tile glass" href="/admin/shop/purchases" data-sound>
           <div className="icon" aria-hidden>
             {/* Receipt/list icon */}
             <svg viewBox="0 0 24 24" width="24" height="24">
@@ -60,8 +61,8 @@ export default function AdminHome() {
           <div className="desc">查詢訂單、SKU 使用數、退款</div>
         </Link>
 
-        {/* === 你原本的模組 === */}
-        <Link className="tile glass" href="/admin/baccarat">
+        {/* === 既有遊戲管理 === */}
+        <Link className="tile glass" href="/admin/baccarat" data-sound>
           <div className="icon" aria-hidden>
             <svg viewBox="0 0 24 24" width="24" height="24">
               <path d="M7 3h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm11 4h-1v10a3 3 0 0 1-3 3H8v1a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
@@ -71,7 +72,7 @@ export default function AdminHome() {
           <div className="desc">開始 / 結算 / 自動輪播</div>
         </Link>
 
-        <Link className="tile glass" href="/admin/coins">
+        <Link className="tile glass" href="/admin/coins" data-sound>
           <div className="icon" aria-hidden>
             <svg viewBox="0 0 24 24" width="24" height="24">
               <path d="M12 2C6.477 2 2 4.239 2 7s4.477 5 10 5 10-2.239 10-5-4.477-5-10-5Zm0 12c-5.523 0-10-2.239-10-5v4c0 2.761 4.477 5 10 5s10-2.239 10-5V9c0 2.761-4.477 5-10 5Zm0 6c-5.523 0-10-2.239-10-5v4c0 2.761 4.477 5 10 5s10-2.239 10-5v-4c0 2.761-4.477 5-10 5Z"/>
@@ -81,7 +82,7 @@ export default function AdminHome() {
           <div className="desc">搜尋玩家、加/扣金幣（錢包/銀行）</div>
         </Link>
 
-        <Link className="tile glass" href="/admin/sicbo">
+        <Link className="tile glass" href="/admin/sicbo" data-sound>
           <div className="icon" aria-hidden>
             <svg viewBox="0 0 24 24" width="24" height="24">
               <path d="M11 2 3 6v8l8 4 8-4V6l-8-4Zm0 2.236L17.764 6 11 9.764 4.236 6 11 4.236ZM5 7.618l6 3.146V19l-6-3V7.618Zm14 8.382-6 3v-6.236l6-3V16Z"/>
@@ -94,7 +95,7 @@ export default function AdminHome() {
           <div className="desc">開局 / 封盤 / 開獎動畫 / 自動開局</div>
         </Link>
 
-        <Link className="tile glass" href="/admin/lotto">
+        <Link className="tile glass" href="/admin/lotto" data-sound>
           <div className="icon" aria-hidden>
             <svg viewBox="0 0 24 24" width="24" height="24">
               <circle cx="7.5" cy="8.5" r="3.5"/>
@@ -106,7 +107,7 @@ export default function AdminHome() {
           <div className="desc">開獎排程 / 開獎號碼 / 期別管理</div>
         </Link>
 
-        <Link className="tile glass" href="/admin/marquee">
+        <Link className="tile glass" href="/admin/marquee" data-sound>
           <div className="icon" aria-hidden>
             <svg viewBox="0 0 24 24" width="24" height="24">
               <path d="M3 10v4a2 2 0 0 0 2 2h2l2 3h2v-3h1l7-4V8l-7-4H7a4 4 0 0 0-4 4Z"/>
@@ -117,7 +118,7 @@ export default function AdminHome() {
           <div className="desc">滾動訊息設定 / 優先度排序 / 啟用停用</div>
         </Link>
 
-        <Link className="tile glass" href="/admin/announcements">
+        <Link className="tile glass" href="/admin/announcements" data-sound>
           <div className="icon" aria-hidden>
             <svg viewBox="0 0 24 24" width="24" height="24">
               <path d="M5 3h14a2 2 0 0 1 2 2v11l-4-3H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/>
@@ -129,7 +130,7 @@ export default function AdminHome() {
         </Link>
 
         {/* 新增：彈窗公告管理 */}
-        <Link className="tile glass" href="/admin/popups">
+        <Link className="tile glass" href="/admin/popups" data-sound>
           <div className="icon" aria-hidden>
             {/* Popup / dialog icon */}
             <svg viewBox="0 0 24 24" width="24" height="24">
@@ -141,8 +142,57 @@ export default function AdminHome() {
           <div className="desc">設定進入大廳顯示的彈窗內容</div>
         </Link>
 
-        {/* 🆕 新增：簽到管理 */}
-        <Link className="tile glass" href="/admin/checkin">
+        {/* 🆕 社交管理 */}
+        <Link className="tile glass" href="/admin/social/feed" data-sound>
+          <div className="icon" aria-hidden>
+            {/* Feed moderation */}
+            <svg viewBox="0 0 24 24" width="24" height="24">
+              <rect x="3" y="4" width="18" height="14" rx="2" ry="2"/>
+              <path d="M7 8h10M7 12h6M7 16h8"/>
+            </svg>
+          </div>
+          <div className="title">社交動態審核</div>
+          <div className="desc">貼文/留言檢舉、下架、黑名單</div>
+        </Link>
+
+        <Link className="tile glass" href="/admin/social/dm" data-sound>
+          <div className="icon" aria-hidden>
+            {/* Paper plane / message */}
+            <svg viewBox="0 0 24 24" width="24" height="24">
+              <path d="m22 2-7 20-4-9-9-4 20-7Z"/>
+              <path d="M22 2 11 13"/>
+            </svg>
+          </div>
+          <div className="title">私訊系統訊息</div>
+          <div className="desc">群發/個發、模板、追蹤已讀</div>
+        </Link>
+
+        <Link className="tile glass" href="/admin/social/notifications" data-sound>
+          <div className="icon" aria-hidden>
+            {/* Bell */}
+            <svg viewBox="0 0 24 24" width="24" height="24">
+              <path d="M6 8a6 6 0 1 1 12 0v5l2 3H4l2-3V8Z"/>
+              <path d="M9 19a3 3 0 0 0 6 0"/>
+            </svg>
+          </div>
+          <div className="title">站內通知 / 推播</div>
+          <div className="desc">建立通知、發送測試、篩選對象</div>
+        </Link>
+
+        <Link className="tile glass" href="/admin/social/blocks" data-sound>
+          <div className="icon" aria-hidden>
+            {/* Shield / block */}
+            <svg viewBox="0 0 24 24" width="24" height="24">
+              <path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5l-8-3Z"/>
+              <path d="M9 9l6 6M15 9l-6 6"/>
+            </svg>
+          </div>
+          <div className="title">封鎖 / 檢舉</div>
+          <div className="desc">維護用戶安全，管理黑名單</div>
+        </Link>
+
+        {/* 🆕 簽到管理 */}
+        <Link className="tile glass" href="/admin/checkin" data-sound>
           <div className="icon" aria-hidden>
             {/* Calendar / check icon */}
             <svg viewBox="0 0 24 24" width="24" height="24">
