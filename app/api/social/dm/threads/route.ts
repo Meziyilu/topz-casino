@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
     const me = await getUserFromRequest(req);
@@ -9,30 +11,36 @@ export async function GET(req: NextRequest) {
 
     const parts = await prisma.directParticipant.findMany({
       where: { userId: me.id },
-      include: {
-        thread: {
-          include: {
-            participants: { include: { user: { select: { id: true, displayName: true, avatarUrl: true } } } },
-            messages: {
-              orderBy: { createdAt: 'desc' },
-              take: 1,
-              select: { body: true, createdAt: true },
-            },
+      select: { threadId: true },
+    });
+    const threadIds = parts.map(p => p.threadId);
+    if (!threadIds.length) return NextResponse.json({ ok: true, items: [] });
+
+    const threads = await prisma.directThread.findMany({
+      where: { id: { in: threadIds } },
+      orderBy: { updatedAt: 'desc' },
+      select: {
+        id: true, lastMessageAt: true,
+        participants: {
+          select: {
+            user: { select: { id: true, displayName: true, avatarUrl: true } },
+            userId: true,
           },
         },
+        messages: {
+          take: 1, orderBy: { createdAt: 'desc' }, select: { body: true, kind: true, createdAt: true },
+        },
       },
-      orderBy: { joinedAt: 'desc' },
-      take: 50,
     });
 
-    const items = parts.map((p) => {
-      const other = p.thread.participants.find((pp) => pp.userId !== me.id)?.user;
-      const last = p.thread.messages[0];
+    const items = threads.map(t => {
+      const peer = t.participants.map(p => p.user).find(u => u.id !== me.id) || t.participants[0]?.user;
+      const last = t.messages[0];
       return {
-        id: p.threadId,
-        peer: other || null,
-        lastSnippet: last?.body || null,
-        lastAt: last?.createdAt || null,
+        id: t.id,
+        peer,
+        lastSnippet: last ? (last.kind === 'TEXT' ? last.body : '[系統訊息]') : '',
+        lastAt: last?.createdAt || t.lastMessageAt,
       };
     });
 

@@ -1,63 +1,51 @@
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth';
-import { z } from 'zod';
 
-const PostSchema = z.object({
-  threadId: z.string().cuid().optional(),
-  toUserId: z.string().cuid().optional(),
-  body: z.string().min(1).max(2000),
-  kind: z.enum(['TEXT','SYSTEM','PAYOUT_NOTICE','POPUP_NOTICE']).optional(),
-});
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
-  const me = await getUserFromRequest(req);
-  const { searchParams } = new URL(req.url);
-  const threadId = searchParams.get('threadId') || '';
-  const cursor = searchParams.get('cursor') || undefined;
-  const limit = Math.min(parseInt(searchParams.get('limit') || '30', 10), 100);
+  try {
+    const me = await getUserFromRequest(req);
+    if (!me?.id) return NextResponse.json({ ok: false }, { status: 401 });
 
-  // 權限：必須是參與者
-  const p = await prisma.directParticipant.findFirst({ where: { threadId, userId: me.id } });
-  if (!p) return NextResponse.json({ ok: false, msg: 'Forbidden' }, { status: 403 });
+    const { searchParams } = new URL(req.url);
+    const threadId = searchParams.get('threadId') || '';
+    const limit = Math.min(parseInt(searchParams.get('limit') || '30', 10), 50);
+    const cursor = searchParams.get('cursor'); // `${createdAtMs}_${messageId}`
 
-  const items = await prisma.directMessage.findMany({
-    where: { threadId },
-    orderBy: { createdAt: 'desc' },
-    take: limit + 1,
-    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-  });
+    // 權限：必須是參與者
+    const part = await prisma.directParticipant.findFirst({ where: { threadId, userId: me.id } });
+    if (!part) return NextResponse.json({ ok: false, error: 'FORBIDDEN' }, { status: 403 });
 
-  const nextCursor = items.length > limit ? items.pop()!.id : null;
-  return NextResponse.json({ ok: true, items: items.reverse(), nextCursor });
-}
+    let cond: any = {};
+    if (cursor) {
+      const [ts, mid] = cursor.split('_');
+      cond = {
+        OR: [
+          { createdAt: { lt: new Date(Number(ts)) } },
+          { createdAt: new Date(Number(ts)), id: { lt: mid } },
+        ],
+      };
+    }
 
-export async function POST(req: NextRequest) {
-  const me = await getUserFromRequest(req);
-  const payload = PostSchema.parse(await req.json());
+    const msgs = await prisma.directMessage.findMany({
+      where: { threadId, ...(cursor ? cond : {}) },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+      select: { id: true, senderId: true, kind: true, body: true, meta: true, createdAt: true },
+    });
 
-  // 開新線或用 threadId
-  let threadId = payload.threadId;
-  if (!threadId) {
-    if (!payload.toUserId) return NextResponse.json({ ok: false, msg: 'toUserId required' }, { status: 400 });
-    // 禁止封鎖
-    const blocked = await prisma.userBlock.findFirst({ where: { OR: [{ blockerId: me.id, blockedId: payload.toUserId }, { blockerId: payload.toUserId, blockedId: me.id }] } });
-    if (blocked) return NextResponse.json({ ok: false, msg: 'Blocked' }, { status: 403 });
+    const hasMore = msgs.length > limit;
+    const items = msgs.slice(0, limit).reverse(); // 前端從舊到新顯示
 
-    const t = await prisma.directThread.create({ data: { participants: { create: [{ userId: me.id }, { userId: payload.toUserId }] } } });
-    threadId = t.id;
-  } else {
-    const p = await prisma.directParticipant.findFirst({ where: { threadId, userId: me.id } });
-    if (!p) return NextResponse.json({ ok: false, msg: 'Forbidden' }, { status: 403 });
+    const nextCursor = hasMore
+      ? `${new Date(items[0].createdAt).getTime()}_${items[0].id}`
+      : null;
+
+    return NextResponse.json({ ok: true, items, nextCursor });
+  } catch (e) {
+    console.error('DM_MESSAGES', e);
+    return NextResponse.json({ ok: false, error: 'INTERNAL' }, { status: 500 });
   }
-
-  const msg = await prisma.directMessage.create({
-    data: { threadId, senderId: me.id, body: payload.body.trim(), kind: payload.kind ?? 'TEXT' },
-  });
-
-  // 可在此發 Notification（略）
-  return NextResponse.json({ ok: true, message: msg });
 }

@@ -1,90 +1,121 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useInfiniteScroll } from './useInfiniteScroll';
+import dynamic from 'next/dynamic';
+
+const CommentPanel = dynamic(() => import('./CommentPanel'), { ssr: false });
 
 type Post = {
   id: string;
-  user: { id: string; displayName: string; avatarUrl?: string | null; vipTier?: number };
   body: string;
-  imageUrl?: string | null;
   createdAt: string;
+  author: { id: string; displayName: string; avatarUrl?: string | null };
+  media?: { url: string; kind: string }[];
+  likes: number;
+  comments: number;
   liked?: boolean;
-  likeCount?: number;
-  commentCount?: number;
 };
 
-export default function FeedList({ scope, refreshToken }: { scope: 'following' | 'global'; refreshToken?: any }) {
+export default function FeedList() {
   const [items, setItems] = useState<Post[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [openPostId, setOpenPostId] = useState<string | null>(null);
 
-  async function load() {
+  const load = useCallback(async (refresh = false) => {
+    if (loading) return;
     setLoading(true);
     try {
-      const url = new URL('/api/social/feed', window.location.origin);
-      url.searchParams.set('scope', scope.toUpperCase());
+      const url = new URL('/api/social/feed/list', window.location.origin);
+      url.searchParams.set('limit', '10');
+      if (!refresh && cursor) url.searchParams.set('cursor', cursor);
       const r = await fetch(url.toString(), { cache: 'no-store' });
-      if (!r.ok) throw new Error('bad');
       const d = await r.json();
-      setItems(d.items ?? []);
-    } catch {
-      setItems([]);
+      if (r.ok) {
+        setItems((prev) => (refresh ? d.items : [...prev, ...d.items]));
+        setCursor(d.nextCursor);
+      }
     } finally {
       setLoading(false);
     }
+  }, [cursor, loading]);
+
+  useEffect(() => { load(true); }, [load]);
+
+  // 無限滾動 sentinel
+  const { ref: bottomRef } = useInfiniteScroll(() => {
+    if (!loading && cursor) load(false);
+  }, { rootMargin: '600px 0px' });
+
+  async function toggleLike(p: Post) {
+    // 樂觀更新
+    setItems(list => list.map(x => x.id === p.id ? { ...x, liked: !p.liked, likes: p.liked ? x.likes - 1 : x.likes + 1 } : x));
+    const endpoint = p.liked ? '/api/social/feed/unlike' : '/api/social/feed/like';
+    const r = await fetch(endpoint, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ postId: p.id }),
+    });
+    if (!r.ok) {
+      // 還原
+      setItems(list => list.map(x => x.id === p.id ? { ...x, liked: p.liked, likes: p.likes } : x));
+    }
   }
 
-  useEffect(() => { load(); }, [scope, refreshToken]);
+  function openComments(postId: string) {
+    setOpenPostId(postId);
+  }
 
-  const toggleLike = async (postId: string) => {
-    try {
-      setItems(list => list.map(p => p.id===postId ? {
-        ...p,
-        liked: !p.liked,
-        likeCount: Math.max(0, (p.likeCount ?? 0) + (p.liked ? -1 : 1)),
-      } : p));
-      await fetch(`/api/social/posts/${postId}/like`, { method: 'POST' });
-    } catch {}
-  };
+  function closeComments() {
+    setOpenPostId(null);
+  }
+
+  const hasMore = useMemo(() => !!cursor, [cursor]);
 
   return (
-    <div className="s-col s-gap-12">
-      {loading && <div className="s-card-subtitle">載入中…</div>}
-      {!loading && items.length === 0 && <div className="s-card-subtitle">目前沒有貼文</div>}
-
-      {items.map((p) => (
-        <article key={p.id} className="s-card padded post-card">
-          <header className="s-flex s-gap-10" style={{alignItems:'center'}}>
-            <img src={p.user.avatarUrl || '/avatar-default.png'} alt="" className="s-avatar" />
-            <div className="s-col">
-              <div style={{fontWeight:800}}>{p.user.displayName}</div>
-              <div className="s-card-subtitle">{new Date(p.createdAt).toLocaleString()}</div>
+    <>
+      <div className="s-col s-gap-12">
+        {items.map((p) => (
+          <article key={p.id} className="s-card post-card">
+            <div className="s-flex s-gap-10" style={{ alignItems: 'center' }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={p.author.avatarUrl || '/avatar-default.png'} className="s-avatar" alt="" />
+              <div>
+                <div style={{ fontWeight: 800 }}>{p.author.displayName}</div>
+                <div className="s-card-subtitle">{new Date(p.createdAt).toLocaleString()}</div>
+              </div>
             </div>
-            <div style={{marginLeft:'auto'}}>
-              <a className="s-btn sm pill ghost" href={`/profile?uid=${p.user.id}`} data-sound>個人主頁</a>
-            </div>
-          </header>
 
-          <div className="post-body s-mt-8">{p.body}</div>
-          {p.imageUrl && <img className="post-media s-mt-8" src={p.imageUrl} alt="" />}
+            <div className="post-body s-mt-12">{p.body}</div>
 
-          <footer className="post-footer s-mt-12">
-            <button
-              className={`s-btn sm pill ${p.liked ? 'primary' : 'ghost'}`}
-              onClick={() => toggleLike(p.id)}
-              aria-pressed={!!p.liked}
-              data-sound
-            >
-              讚 {p.likeCount ?? 0}
-            </button>
-            <a className="s-btn sm pill ghost" href={`/social/posts/${p.id}`} data-sound>
-              留言 {p.commentCount ?? 0}
-            </a>
-            <button className="s-btn sm pill ghost" onClick={() => navigator.share?.({ text: p.body })} data-sound>
-              分享
-            </button>
-          </footer>
-        </article>
-      ))}
-    </div>
+            {p.media?.length ? (
+              <div className="s-mt-12">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={p.media[0].url} className="post-media" alt="" />
+              </div>
+            ) : null}
+
+            <footer className="post-footer s-mt-12">
+              <button className="s-btn sm" onClick={() => toggleLike(p)} data-sound>
+                {p.liked ? '已讚' : '按讚'} • {p.likes}
+              </button>
+              <button className="s-btn sm ghost" onClick={() => openComments(p.id)} data-sound>
+                留言 • {p.comments}
+              </button>
+            </footer>
+          </article>
+        ))}
+
+        {/* 無限滾動 sentinel */}
+        <div ref={bottomRef} />
+        <div className="s-center s-mt-12">
+          <button className="s-btn" disabled={!hasMore || loading} onClick={() => load(false)} data-sound>
+            {hasMore ? (loading ? '載入中…' : '載入更多') : '已到底'}
+          </button>
+        </div>
+      </div>
+
+      {openPostId && <CommentPanel postId={openPostId} onClose={closeComments} />}
+    </>
   );
 }
