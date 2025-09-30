@@ -1,14 +1,23 @@
-// app/social/feed/page.tsx
-'use client';
+import { Suspense } from "react";
+import NextDynamic from "next/dynamic";
 
-// ✅ 僅保留這一行即可，避免被預產生
-export const dynamic = 'force-dynamic';
+export const revalidate = false;           // 關閉 ISR，避免 revalidate 錯誤
+export const dynamic = "force-dynamic";    // 明確走動態（可保留或移除）
 
-// ⛔ 請不要在這裡宣告 export const revalidate = {...} 或任何物件
-// ⛔ 也不要從別的檔案 re-export revalidate
-
-import FeedClientPage from './page.client';
+const FeedClientPage = NextDynamic(() => import("./page.client"), { ssr: false });
 
 export default function FeedPage() {
-  return <FeedClientPage />;
+  return (
+    <Suspense
+      fallback={
+        <div className="feed-loading">
+          <span className="loader-dot" />
+          <span className="loader-dot" />
+          <span className="loader-dot" />
+        </div>
+      }
+    >
+      <FeedClientPage />
+    </Suspense>
+  );
 }
