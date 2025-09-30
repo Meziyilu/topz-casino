@@ -5,6 +5,8 @@ import "@/public/styles/lobby.css";
 import "@/public/styles/headframes.css";
 import "@/public/styles/lobby-extras.css";
 import "@/public/styles/popup.css";
+// ✅ 新增：背包 Dock 專用樣式
+import "@/public/styles/inventory-dock.css";
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
@@ -18,7 +20,10 @@ import ServiceWidget from "@/components/lobby/ServiceWidget";
 import Leaderboard from "@/components/lobby/Leaderboard";
 import CheckinCard from "@/components/lobby/CheckinCard";
 import BankLottie from "@/components/bank/BankLottie";
-import SocialEntrances from "@/components/social/SocialEntrances"; // 👈 新增
+import SocialEntrances from "@/components/social/SocialEntrances";
+
+// ⭐ 新增：背包 Dock
+import InventoryDock, { type InventorySummary } from "@/components/lobby/InventoryDock";
 
 // ⛑️ 會碰 window/localStorage → 動態載入並停用 SSR
 const AnnouncementTicker = dynamic(() => import("@/components/lobby/AnnouncementTicker"), { ssr: false });
@@ -77,6 +82,9 @@ export default function LobbyPage() {
   const [rlCountdown, setRlCountdown] = useState<number>(0);
   const [rlOnline, setRlOnline] = useState<number>(0);
 
+  // ⭐ 新增：背包摘要（給 InventoryDock）
+  const [invSum, setInvSum] = useState<InventorySummary | null>(null);
+
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
@@ -133,6 +141,14 @@ export default function LobbyPage() {
       if (tickTimer) clearInterval(tickTimer);
       if (pollTimer) clearInterval(pollTimer);
     };
+  }, []);
+
+  // ⭐ 背包摘要：進大廳就抓一次，之後靠背包頁操作
+  useEffect(() => {
+    fetch("/api/inventory/summary", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => setInvSum(d.data ?? null))
+      .catch(() => setInvSum(null));
   }, []);
 
   async function onLogout() {
@@ -218,6 +234,9 @@ export default function LobbyPage() {
             panelTint={me?.panelTint ?? undefined}
           />
 
+          {/* ✅ 背包 Dock（快速檢視/捷徑） */}
+          <InventoryDock data={invSum} />
+
           <CheckinCard />
 
           {/* 銀行卡片 */}
@@ -294,7 +313,7 @@ export default function LobbyPage() {
             <GameCard title="21點" online={0} disabled href="/casino/blackjack" />
           </div>
 
-          {/* 👇 新增：社交入口卡片（含 Lottie 動畫） */}
+          {/* 👇 社交入口卡片（你原本已新增） */}
           <SocialEntrances />
 
           <ChatBox room="LOBBY" />
