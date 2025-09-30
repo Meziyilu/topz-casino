@@ -1,0 +1,50 @@
+/* ===== 背包主視覺 ===== */
+.inventory-wrap { padding: var(--pf-page-pad, 20px); color: var(--pf-text, #dfe6ff); }
+.glass { background: var(--pf-glass, rgba(255,255,255,.06)); border: 1px solid var(--pf-border, rgba(255,255,255,.16)); border-radius: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+.inv-head.glass { padding: 16px 20px; margin-bottom: 12px; }
+.inv-head h1 { margin: 0; font-size: 20px; }
+.inv-head .sub { opacity: .8; margin-top: 4px; }
+
+/* ===== 工具列 ===== */
+.inv-toolbar { display: flex; justify-content: space-between; gap: 12px; margin: 12px 0; }
+.inv-toolbar .right { display: flex; gap: 8px; }
+.inv-toolbar select, .inv-toolbar input {
+  padding: 8px 10px; border-radius: 10px; border: 1px solid var(--pf-border);
+  background: rgba(255,255,255,.06); color: inherit; min-width: 140px;
+}
+
+/* ===== 裝備列 ===== */
+.equip-bar.glass { padding: 12px 14px; display: grid; gap: 12px; }
+.equip-bar .row { display: flex; gap: 10px; align-items: center; }
+.equip-bar .frames { display: flex; gap: 8px; flex-wrap: wrap; }
+.equip-bar .chip { padding: 6px 10px; border-radius: 999px; border: 1px solid var(--pf-border); background: transparent; color: inherit; }
+.equip-bar .badges-line { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.badge-chip { padding: 6px 10px; border-radius: 999px; border: 1px solid var(--pf-border); background: transparent; }
+.badge-chip.pinned { outline: 2px solid var(--pf-accent, #8b5cf6); }
+
+/* ===== 背包格 ===== */
+.inv-grid { margin-top: 12px; display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); }
+.inv-card.glass { padding: 12px; }
+.inv-card .meta { display: flex; justify-content: space-between; font-size: 12px; opacity: .9; }
+.inv-card .ref { opacity: .8; }
+.inv-card .body { margin-top: 10px; }
+.inv-card .qty { opacity: .9; }
+.inv-card .actions { margin-top: 10px; display: flex; gap: 8px; }
+.empty { opacity: .7; text-align: center; padding: 20px 8px; }
+
+/* ===== 收藏品區 ===== */
+.inv-collectibles.glass { margin-top: 16px; padding: 12px; }
+.inv-collectibles h3 { margin: 4px 0 10px; }
+.col-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); }
+.col-card { padding: 12px; border: 1px dashed var(--pf-border); border-radius: 12px; }
+.col-card .row { display: flex; justify-content: space-between; align-items: center; }
+
+/* ===== 管理端 ===== */
+.admin.inventory, .admin.inventory-grant { padding: var(--pf-page-pad, 20px); color: var(--pf-text,#dfe6ff); }
+.admin-bar { display: flex; gap: 10px; margin: 10px 0 14px; }
+.admin-user.glass { padding: 10px 12px; margin-bottom: 14px; }
+.adm-table { width: 100%; border-collapse: collapse; }
+.adm-table th, .adm-table td { border-bottom: 1px solid var(--pf-border); padding: 8px 10px; text-align: left; }
+.grant-form.glass { padding: 12px; display: grid; gap: 10px; max-width: 560px; }
+.grant-form input, .grant-form select { padding: 8px 10px; border-radius: 10px; border: 1px solid var(--pf-border); background: rgba(255,255,255,.06); color: inherit; }
+.tip { margin: 6px 0 0; opacity: .9; }
