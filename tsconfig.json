@@ -37,4 +37,11 @@
     "worker/**",
     "mobile/**"
   ]
-}
+  
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["*"]
+    }
+  }
+
