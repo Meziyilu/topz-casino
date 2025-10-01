@@ -1,47 +1,25 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "target": "ES2020",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
-
-    "allowJs": false,                       // ← 避免把 .js 也納入型別檢查（常見掛點）
-    "checkJs": false,
+    "allowJs": true,
     "skipLibCheck": true,
-
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
-
-    "strict": false,                        // 你目前是 false；維持即可（要嚴格再打開）
+    "strict": false,
     "forceConsistentCasingInFileNames": true,
     "noEmit": true,
     "incremental": true,
-    "isolatedModules": true,                // Next 預設；若有 const enum/複雜 re-export 再考慮關掉
+    "isolatedModules": true,
     "jsx": "preserve",
     "resolveJsonModule": true,
     "moduleDetection": "force",
-
     "baseUrl": ".",
-    "paths": { "@/*": ["*"] },
-
+    "paths": { "@/*": ["./*"] },
     "plugins": [{ "name": "next" }]
   },
-  "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "worker/**",
-    "mobile/**"
-  ]
-  
-  "compilerOptions": {
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["*"]
-    }
-  }
-
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules", "worker/**", "mobile/**"]
+}
