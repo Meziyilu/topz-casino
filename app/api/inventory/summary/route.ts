@@ -39,7 +39,8 @@ export async function GET(req: NextRequest) {
       user: { headframe: user?.headframe ?? null },
       pinnedBadges: pinned.map(p => ({ id: p.id, name: p.badge?.name ?? "Badge", iconUrl: p.badge?.iconUrl ?? null })),
       headframes: headframes.map(h => ({ code: h.code, expiresAt: h.expiresAt ? h.expiresAt.toISOString() : null })),
-      counts, recent,
+      counts,
+      recent,
     });
   } catch (e: any) {
     return fail(e.message);

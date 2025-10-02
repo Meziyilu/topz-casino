@@ -1,11 +1,10 @@
 "use client";
 
-// ✅ 全域樣式
+// ✅ 全域樣式（若你的專案限制全域 CSS 只能在 layout 匯入，就把 inventory-dock.css 移到 app/layout.tsx 匯入）
 import "@/public/styles/lobby.css";
 import "@/public/styles/headframes.css";
 import "@/public/styles/lobby-extras.css";
 import "@/public/styles/popup.css";
-// ✅ 新增：背包 Dock 專用樣式
 import "@/public/styles/inventory-dock.css";
 
 import { useEffect, useState } from "react";
@@ -22,7 +21,7 @@ import CheckinCard from "@/components/lobby/CheckinCard";
 import BankLottie from "@/components/bank/BankLottie";
 import SocialEntrances from "@/components/social/SocialEntrances";
 
-// ⭐ 新增：背包 Dock
+// ⭐ 背包 Dock
 import InventoryDock, { type InventorySummary } from "@/components/lobby/InventoryDock";
 
 // ⛑️ 會碰 window/localStorage → 動態載入並停用 SSR
@@ -82,7 +81,7 @@ export default function LobbyPage() {
   const [rlCountdown, setRlCountdown] = useState<number>(0);
   const [rlOnline, setRlOnline] = useState<number>(0);
 
-  // ⭐ 新增：背包摘要（給 InventoryDock）
+  // ⭐ 背包摘要（給 InventoryDock）
   const [invSum, setInvSum] = useState<InventorySummary | null>(null);
 
   useEffect(() => setMounted(true), []);
@@ -143,12 +142,28 @@ export default function LobbyPage() {
     };
   }, []);
 
-  // ⭐ 背包摘要：進大廳就抓一次，之後靠背包頁操作
+  // ⭐ 背包摘要：進大廳就抓一次
   useEffect(() => {
-    fetch("/api/inventory/summary", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
+    fetch("/api/inventory/summary", { cache: "no-store", credentials: "include" })
+      .then(async (r) => {
+        if (!r.ok) {
+          const t = await r.text().catch(() => "");
+          throw new Error(`summary ${r.status}: ${t}`);
+        }
+        return r.json();
+      })
       .then((d) => setInvSum(d.data ?? null))
-      .catch(() => setInvSum(null));
+      .catch((err) => {
+        console.warn("[inv summary] fetch failed:", err);
+        // 備援：給空狀態避免 UI 卡「載入中」
+        setInvSum({
+          user: { headframe: null },
+          pinnedBadges: [],
+          headframes: [],
+          counts: { HEADFRAME: 0, BADGE: 0, COLLECTIBLE: 0, OTHER: 0, TOTAL: 0 },
+          recent: [],
+        } as any);
+      });
   }, []);
 
   async function onLogout() {
@@ -195,7 +210,7 @@ export default function LobbyPage() {
             <span className="lb-beta">大廳</span>
           </div>
 
-          <div className="right" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div className="right" style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <Clock />
             <ThemeToggle />
             <Link href="/profile" className="lb-user-mini">
@@ -313,7 +328,7 @@ export default function LobbyPage() {
             <GameCard title="21點" online={0} disabled href="/casino/blackjack" />
           </div>
 
-          {/* 👇 社交入口卡片（你原本已新增） */}
+          {/* 社交入口卡片 */}
           <SocialEntrances />
 
           <ChatBox room="LOBBY" />

@@ -10,12 +10,28 @@ export type InventorySummary = {
 };
 
 export default function InventoryDock({ data }: { data: InventorySummary | null }) {
+  if (!data) {
+    return (
+      <div className="lb-card inv-dock glass">
+        <div className="lb-card-title">我的背包</div>
+        <div className="lb-muted">載入中…</div>
+      </div>
+    );
+  }
+
+  const isEmpty = (data.counts?.TOTAL ?? 0) === 0;
+
   return (
     <div className="lb-card inv-dock glass">
       <div className="lb-card-title">我的背包</div>
 
-      {!data ? (
-        <div className="lb-muted">載入中…</div>
+      {isEmpty ? (
+        <>
+          <div className="lb-muted">目前背包是空的</div>
+          <div className="inv-dock__actions">
+            <Link href="/inventory" className="lb-btn-mini">開啟完整背包</Link>
+          </div>
+        </>
       ) : (
         <>
           {/* 頭框 + 徽章 */}
