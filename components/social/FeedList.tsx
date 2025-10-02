@@ -1,154 +1,191 @@
-// components/social/FeedList.tsx
-"use client";
+'use client';
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-type Item = {
-  id: string;
-  user: { displayName: string; avatarUrl?: string | null };
-  body: string;
-  imageUrl?: string | null;
-  createdAt: string;
-  liked?: boolean;
-  likeCount?: number;
-  commentCount?: number;
+type RawUser = {
+  id?: string;
+  displayName?: string;
+  avatarUrl?: string | null;
 };
 
-export default function FeedList({ refreshFlag = 0 }: { refreshFlag?: number }) {
-  const [items, setItems] = useState<Item[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const observerRef = useRef<HTMLDivElement | null>(null);
+type RawPost = {
+  id?: string;
+  body?: string | null;
+  createdAt?: string | number | Date | null;
+  images?: string[] | null;          // 你的 API 可能叫 imageUrls / media / files
+  imageUrls?: string[] | null;
+  media?: string[] | null;
+  files?: string[] | null;
+  likeCount?: number | null;
+  commentCount?: number | null;
 
-  async function loadMore(reset = false) {
+  // 可能的作者欄位名稱
+  user?: RawUser | null;
+  author?: RawUser | null;
+  profile?: RawUser | null;
+};
+
+type ListResp = { items?: RawPost[]; nextCursor?: string | null };
+
+const fallbackAvatar = '/img/avatar-fallback.png'; // 沒有這張圖就放一張 1x1 透明圖也可
+
+function normalizeItem(it: RawPost) {
+  const user = it.user ?? it.author ?? it.profile ?? null;
+
+  // 圖片欄位的容錯：挑一個存在的陣列
+  const images =
+    (Array.isArray(it.images) && it.images) ||
+    (Array.isArray(it.imageUrls) && it.imageUrls) ||
+    (Array.isArray(it.media) && it.media) ||
+    (Array.isArray(it.files) && it.files) ||
+    [];
+
+  return {
+    id: it.id ?? crypto.randomUUID(),
+    body: it.body ?? '',
+    createdAt: it.createdAt ? new Date(it.createdAt) : null,
+    images,
+    likeCount: typeof it.likeCount === 'number' ? it.likeCount : 0,
+    commentCount: typeof it.commentCount === 'number' ? it.commentCount : 0,
+    user: user
+      ? {
+          id: user.id ?? '',
+          displayName: user.displayName ?? '用戶',
+          avatarUrl: user.avatarUrl ?? null,
+        }
+      : null,
+  };
+}
+
+async function safeFetch<T>(url: string): Promise<T | null> {
+  try {
+    const r = await fetch(url, { cache: 'no-store' });
+    if (!r.ok) return null;
+    try {
+      return (await r.json()) as T;
+    } catch {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+}
+
+export default function FeedList({ refreshFlag = 0 }: { refreshFlag?: number }) {
+  const [items, setItems] = useState<ReturnType<typeof normalizeItem>[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  const load = useCallback(async (reset = false) => {
     if (loading) return;
     setLoading(true);
-    try {
-      const url = new URL("/api/social/feed/list", window.location.origin);
-      if (!reset && cursor) url.searchParams.set("cursor", cursor);
-      const r = await fetch(url.toString(), { cache: "no-store" });
-      const d = await r.json();
-      setItems((prev) => (reset ? d.items : [...prev, ...d.items]));
-      setCursor(d.nextCursor ?? null);
-    } catch {
-      /* ignore */
-    } finally {
-      setLoading(false);
-    }
-  }
+    const qs = new URLSearchParams();
+    if (!reset && cursor) qs.set('cursor', cursor);
+    const data = await safeFetch<ListResp>('/api/social/feed/list' + (qs.size ? `?${qs}` : ''));
 
+    const raw = Array.isArray(data?.items) ? data!.items! : [];
+    const normalized = raw.map(normalizeItem);
+
+    setItems(prev => (reset ? normalized : [...prev, ...normalized]));
+    setCursor(data?.nextCursor ?? null);
+    setHasMore(Boolean(data?.nextCursor));
+    setLoading(false);
+  }, [cursor, loading]);
+
+  // 初次/手動 refresh
   useEffect(() => {
-    loadMore(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshFlag]);
+    setCursor(null);
+    setHasMore(true);
+    setItems([]);
+    void load(true);
+  }, [refreshFlag]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 無限滾動
   useEffect(() => {
-    if (!observerRef.current) return;
-    const el = observerRef.current;
-    const io = new IntersectionObserver((entries) => {
-      if (entries.some((e) => e.isIntersecting)) {
-        if (cursor) loadMore();
-      }
-    });
-    io.observe(el);
-    return () => io.disconnect();
-  }, [cursor]);
-
-  async function like(id: string) {
-    await fetch("/api/social/feed/like", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ postId: id }),
-    }).catch(() => {});
-    setItems((list) =>
-      list.map((it) =>
-        it.id === id
-          ? {
-              ...it,
-              liked: !it.liked,
-              likeCount: (it.likeCount ?? 0) + (it.liked ? -1 : 1),
-            }
-          : it
-      )
+    if (!sentinelRef.current) return;
+    const io = new IntersectionObserver(
+      entries => {
+        const isIn = entries.some(e => e.isIntersecting);
+        if (isIn && hasMore && !loading) {
+          void load(false);
+        }
+      },
+      { rootMargin: '600px 0px 600px 0px' }
     );
-  }
+    io.observe(sentinelRef.current);
+    return () => io.disconnect();
+  }, [hasMore, loading, load]);
 
   return (
     <div className="feed-list">
-      {items.length === 0 && !loading && <div className="feed-empty">目前還沒有內容</div>}
+      {(items ?? []).length === 0 && !loading && (
+        <div className="feed-empty">目前尚無貼文</div>
+      )}
 
-      {items.map((it) => {
-        const imgs = (it.imageUrl ?? "")
-          .split(/[,\s]+/)
-          .map((s) => s.trim())
-          .filter(Boolean);
-        const cls =
-          imgs.length <= 1 ? "one" : imgs.length === 2 ? "two" : imgs.length === 3 ? "three" : "four";
+      {(items ?? []).map(post => {
+        const u = post.user;
+        const avatar = u?.avatarUrl || fallbackAvatar;
+        const name = u?.displayName || '用戶';
+        const when = post.createdAt ? post.createdAt.toLocaleString() : '';
+
         return (
-          <article key={it.id} className="post-card">
-            {/* 頭部 */}
+          <article key={post.id} className="post-card">
             <header className="post-head">
-              <img className="ph-avatar" src={it.user.avatarUrl ?? "/img/avatar-default.png"} alt="" />
+              <img className="ph-avatar" src={avatar} alt="" />
               <div className="ph-meta">
-                <div className="ph-name">{it.user.displayName}</div>
-                <div className="ph-time">{new Date(it.createdAt).toLocaleString()}</div>
+                <div className="ph-name">{name}</div>
+                <div className="ph-time">{when}</div>
               </div>
-              <button className="ph-more s-icon-btn" aria-label="更多" data-sound>⋯</button>
+              <div className="ph-more">⋯</div>
             </header>
 
-            {/* 文字 */}
-            {it.body && <div className="post-body">{it.body}</div>}
+            {post.body && <div className="post-body">{post.body}</div>}
 
-            {/* 圖片 */}
-            {imgs.length > 0 && (
-              <div className={`post-media-grid ${cls}`}>
-                {imgs.slice(0, 4).map((u) => (
-                  <div className="post-media" key={u}>
-                    <img src={u} alt="" />
+            {Array.isArray(post.images) && post.images.length > 0 && (
+              <div
+                className={`post-media-grid ${
+                  post.images.length === 1
+                    ? 'one'
+                    : post.images.length === 2
+                    ? 'two'
+                    : post.images.length === 3
+                    ? 'three'
+                    : 'four'
+                }`}
+              >
+                {post.images.map((url, i) => (
+                  <div className="post-media" key={i}>
+                    <img src={url} alt="" />
                   </div>
                 ))}
               </div>
             )}
 
-            {/* 動作列 */}
             <div className="post-actions">
-              <button
-                className={`pa-btn ${it.liked ? "active" : ""}`}
-                onClick={() => like(it.id)}
-                data-sound
-              >
-                ❤️ {it.likeCount ?? 0}
+              <button className="pa-btn" data-sound>
+                👍 {post.likeCount}
               </button>
-              <button className="pa-btn" data-sound>💬 {it.commentCount ?? 0}</button>
+              <button className="pa-btn" data-sound>
+                💬 {post.commentCount}
+              </button>
               <button className="pa-btn" data-sound>↗ 分享</button>
             </div>
-
-            {/* （選配）留言區：你已有留言 API 的話就掛在這 */}
-            {/* <div className="comments">
-              <div className="comment-item">
-                <img className="ci-avatar" src="/img/avatar-default.png" alt="" />
-                <div className="ci-bubble">留言內容範例</div>
-              </div>
-              <form className="comment-form">
-                <input placeholder="寫下留言…" />
-                <button type="submit" data-sound>送出</button>
-              </form>
-            </div> */}
           </article>
         );
       })}
 
-      {/* loading / sentinel */}
       {loading && (
-        <div className="feed-loading" role="status" aria-live="polite">
-          <span className="loader-dot"></span>
-          <span className="loader-dot"></span>
-          <span className="loader-dot"></span>
-          載入中…
+        <div className="feed-loading">
+          <span className="loader-dot" />
+          <span className="loader-dot" />
+          <span className="loader-dot" />
         </div>
       )}
-      {/* 無限滾動觸發器 */}
-      <div ref={observerRef} style={{ height: 1 }} />
+
+      {/* 無限滾動觀測點 */}
+      <div ref={sentinelRef} />
     </div>
   );
 }
